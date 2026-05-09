@@ -19,7 +19,7 @@ function adaptSet(s, prevSets = [], idx = 0) {
     _loggedAt:  s.logged_at,
     reps:       s.reps      ?? 8,
     weight:     s.weight_kg ?? 0,
-    done:       !!s.logged_at,
+    done:       false,
     prevReps:   prevSets[idx]?.reps   ?? 0,
     prevWeight: prevSets[idx]?.weight ?? 0,
     rir:        s.rir ?? null,
@@ -302,8 +302,7 @@ export function useLogger(userId) {
     timers.current[setId] = setTimeout(async () => {
       const db = { logged_at: new Date().toISOString() };
       if ('reps'   in updates) db.reps      = updates.reps;
-      if ('weight' in updates) db.weight_kg = updates.weight;
-      if ('done'   in updates) db.logged_at = updates.done ? new Date().toISOString() : null;
+      if ('weight' in updates) db.weight_kg = (updates.weight === '' ? null : updates.weight);
 
       console.log('[useLogger] logSet DB write → set:', setId, db);
       const { error: err } = await supabase.from('sets').update(db).eq('id', setId);
