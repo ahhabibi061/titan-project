@@ -198,18 +198,22 @@ export function useDashboard(userId) {
 
         // ── Workout today ──
         const allWeSets = (workoutRaw?.workout_exercises ?? []).flatMap(we => we.sets ?? []);
+        const exCount   = workoutRaw?.workout_exercises?.length ?? 0;
         const workout = workoutRaw ? {
-          id:           workoutRaw.id,
-          name:         workoutRaw.name,
-          completed:    !!workoutRaw.completed_at,
-          exercises:    (workoutRaw.workout_exercises ?? []).map(we => ({
+          id:               workoutRaw.id,
+          name:             workoutRaw.name,
+          completed:        !!workoutRaw.completed_at,
+          exercises:        (workoutRaw.workout_exercises ?? []).map(we => ({
             name: we.exercises?.name ?? 'Exercise',
             sets: (we.sets ?? []).length,
           })),
-          exerciseCount: workoutRaw.workout_exercises?.length ?? 0,
-          setCount:      allWeSets.length,
-          totalReps:     allWeSets.reduce((s, set) => s + (set.reps ?? 0), 0),
-          duration:      workoutRaw.completed_at
+          exerciseCount:    exCount,
+          setCount:         allWeSets.length,
+          totalReps:        allWeSets.reduce((s, set) => s + (set.reps ?? 0), 0),
+          estimatedMinutes: workoutRaw.completed_at
+            ? Math.round((new Date(workoutRaw.completed_at) - new Date(workoutRaw.created_at)) / 60000)
+            : exCount * 12,
+          duration:         workoutRaw.completed_at
             ? `${Math.round((new Date(workoutRaw.completed_at) - new Date(workoutRaw.created_at)) / 60000)} min`
             : null,
         } : null;
