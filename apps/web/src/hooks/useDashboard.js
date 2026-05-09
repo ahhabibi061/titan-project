@@ -76,9 +76,9 @@ export function useDashboard(userId) {
           biometricsWeekRes,
           recentWorkoutsRes,
         ] = await Promise.all([
-          // 1. Profile — targets + display info
+          // 1. Profile — targets + display info + preferences
           supabase.from('profiles')
-            .select('display_name, subscription_tier, current_macros, goal, goal_weight_kg')
+            .select('display_name, subscription_tier, current_macros, goal, goal_weight_kg, settings')
             .eq('id', userId)
             .single(),
 
@@ -92,7 +92,7 @@ export function useDashboard(userId) {
 
           // 3. Today's workout — match by created_at so Logger workouts (no scheduled_date) appear
           supabase.from('workouts')
-            .select('id, name, created_at, completed_at, workout_exercises(id, exercises(name), sets(id, reps))')
+            .select('id, name, created_at, completed_at, calories_burned, workout_exercises(id, exercises(name), sets(id, reps))')
             .eq('user_id', userId)
             .gte('created_at', todayStr)
             .lt('created_at', tomorrowStr)
@@ -166,6 +166,7 @@ export function useDashboard(userId) {
         // ── Profile ──
         const profile = profileRes.data;
         const targets = profile?.current_macros ?? { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
+        const eatBackCalories = profile?.settings?.eat_back_calories ?? false;
 
         // ── Nutrition today ──
         const nlToday = nutritionTodayRes.data ?? [];
@@ -197,8 +198,14 @@ export function useDashboard(userId) {
         }
 
         // ── Workout today ──
-        const allWeSets = (workoutRaw?.workout_exercises ?? []).flatMap(we => we.sets ?? []);
-        const exCount   = workoutRaw?.workout_exercises?.length ?? 0;
+        const allWeSets   = (workoutRaw?.workout_exercises ?? []).flatMap(we => we.sets ?? []);
+        const exCount     = workoutRaw?.workout_exercises?.length ?? 0;
+        const calsBurned  = workoutRaw?.completed_at ? (workoutRaw?.calories_burned ?? null) : null;
+        const adjustedKcal = eatBackCalories && calsBurned
+          ? targets.kcal + Math.round(calsBurned)
+          : targets.kcal;
+        const adjustedTargets = { ...targets, kcal: adjustedKcal };
+
         const workout = workoutRaw ? {
           id:               workoutRaw.id,
           name:             workoutRaw.name,
@@ -312,6 +319,9 @@ export function useDashboard(userId) {
           setData({
             profile,
             targets,
+            adjustedTargets,
+            calsBurned,
+            eatBackCalories,
             consumed,
             workout,
             coach,

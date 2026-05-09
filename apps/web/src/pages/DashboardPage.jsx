@@ -197,7 +197,10 @@ export default function Dashboard() {
   // Safe derived values — work in both loading and loaded states
   const profile        = data?.profile        ?? {};
   const consumed       = data?.consumed       ?? { kcal: 0, protein: 0, carbs: 0, fat: 0, mealsLogged: 0 };
-  const targets        = data?.targets        ?? { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
+  const targets        = data?.adjustedTargets ?? data?.targets ?? { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
+  const rawTargets     = data?.targets        ?? { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
+  const calsBurned     = data?.calsBurned     ?? null;
+  const eatBackCalories = data?.eatBackCalories ?? false;
   const workout        = data?.workout        ?? null;
   const coach          = data?.coach          ?? null;
   const bio            = data?.biometrics     ?? { current: null, weekAgo: null, goal: null, sparkline: [] };
@@ -362,7 +365,11 @@ export default function Dashboard() {
               ) : consumed.mealsLogged === 0 ? (
                 <>
                   <div className="font-anton text-3xl tabular-nums text-stone-500">{fmt0(targets.kcal)}</div>
-                  <div className="text-[10px] font-mono text-stone-600 mt-0.5 uppercase tracking-wider">no meals logged yet</div>
+                  {eatBackCalories && calsBurned ? (
+                    <div className="text-[10px] font-mono text-orange-400 mt-0.5 tabular-nums">{fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned</div>
+                  ) : (
+                    <div className="text-[10px] font-mono text-stone-600 mt-0.5 uppercase tracking-wider">no meals logged yet</div>
+                  )}
                 </>
               ) : (
                 <>
@@ -471,10 +478,22 @@ export default function Dashboard() {
                   <div className="font-anton text-4xl uppercase tracking-tight text-stone-100 leading-none mb-2">
                     {workout.name}
                   </div>
-                  <div className="text-[11px] font-mono uppercase tracking-wider text-stone-500 mb-5">
-                    {workout.exercises.length} exercises · ~{workout.estimatedMinutes} min
-                    {workout.completed ? ' · completed' : ''}
+                  <div className="flex items-center gap-3 flex-wrap mb-3">
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-stone-500">
+                      {workout.exercises.length} exercises · ~{workout.estimatedMinutes} min
+                      {workout.completed ? ' · completed' : ''}
+                    </span>
+                    {workout.completed && calsBurned != null && (
+                      <span className="text-[10px] font-mono px-2 py-0.5 border border-orange-500/30 bg-orange-500/10 text-orange-300">
+                        {fmt0(calsBurned)} kcal burned
+                      </span>
+                    )}
                   </div>
+                  {workout.completed && calsBurned != null && !eatBackCalories && (
+                    <div className="text-[10px] font-mono text-stone-600 mb-3">
+                      Tip: enable eat-back in <Link to="/settings" className="text-orange-400 no-underline hover:underline">Settings</Link> to add to your daily target
+                    </div>
+                  )}
                   <div className="space-y-2 mb-5 flex-1">
                     {workout.exercises.map((ex, i) => (
                       <div key={i} className="flex items-center gap-3 py-2 border-b border-stone-800/40 last:border-b-0">
@@ -488,7 +507,7 @@ export default function Dashboard() {
                     )}
                   </div>
                   <Link
-                    to="/logger"
+                    to={workout.completed ? `/logger?workoutId=${workout.id}` : '/logger'}
                     className="w-full px-5 py-3 bg-orange-500 text-stone-950 font-anton text-base uppercase tracking-wider hover:bg-orange-400 transition-colors text-center no-underline block"
                   >
                     {workout.completed ? 'View Workout →' : 'Start Workout →'}

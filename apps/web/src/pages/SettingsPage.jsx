@@ -34,7 +34,7 @@ function calcMacros({ weightKg, heightCm, age, sex, activity, goal }) {
   return { kcal, protein, carbs, fat };
 }
 
-const DEFAULT_SETTINGS = { ghost_mode: false, weight_unit: 'kg', coach_alerts: true };
+const DEFAULT_SETTINGS = { ghost_mode: false, weight_unit: 'kg', coach_alerts: true, eat_back_calories: false };
 
 // -------------------- UI PRIMITIVES --------------------
 function SectionHeader({ label }) {
@@ -597,6 +597,15 @@ export default function SettingsPage() {
                   <div className="text-xs text-stone-500 font-mono mt-0.5">Get notified when Oracle has a new recommendation</div>
                 </div>
                 <Toggle enabled={prefs.coach_alerts} onChange={v => savePref('coach_alerts', v)} />
+              </div>
+
+              {/* Eat-Back Calories */}
+              <div className="flex items-center justify-between py-4">
+                <div>
+                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Count Workout Calories</div>
+                  <div className="text-xs text-stone-500 font-mono mt-0.5">Add calories burned in training to your daily kcal target (eat-back)</div>
+                </div>
+                <Toggle enabled={!!prefs.eat_back_calories} onChange={v => savePref('eat_back_calories', v)} />
               </div>
 
             </div>

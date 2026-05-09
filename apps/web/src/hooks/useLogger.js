@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 
 // ─── Schema reference ──────────────────────────────────────────────────────
 // exercises:         id TEXT pk, name, primary_muscle, secondary_muscles text[]
-// workouts:          id uuid pk, user_id, name, completed_at
+// workouts:          id uuid pk, user_id, name, completed_at, calories_burned
 // workout_exercises: id uuid pk, workout_id, exercise_id TEXT fk, order_index int
 // sets:              id uuid pk, workout_exercise_id uuid fk, set_number,
 //                    weight_kg, reps, rir, logged_at timestamptz
@@ -74,22 +74,27 @@ async function fetchPrevSets(exerciseId) {
 }
 
 // ─── Hook ──────────────────────────────────────────────────────────────────
+// workoutId (optional): if provided, loads that specific workout by ID
+// (including completed ones — used when navigating from dashboard "View Workout")
 
-export function useLogger(userId) {
+export function useLogger(userId, workoutId = null) {
   const [workout,      setWorkout]      = useState(null);
   const [exercises,    setExercises]    = useState([]);
   const [allExercises, setAllExercises] = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [completed,    setCompleted]    = useState(false);
+  const [readOnly,     setReadOnly]     = useState(false);
   const [error,        setError]        = useState(null);
 
   const timers            = useRef({});
   const pendingSetWrites  = useRef({});   // setId → db payload, cleared on write
   const workoutRef        = useRef(null);
   const userIdRef         = useRef(null);
+  const exercisesRef      = useRef([]);   // mirrors exercises state for calorie calc
 
-  useEffect(() => { workoutRef.current = workout; }, [workout]);
-  useEffect(() => { userIdRef.current  = userId;  }, [userId]);
+  useEffect(() => { workoutRef.current  = workout;   }, [workout]);
+  useEffect(() => { userIdRef.current   = userId;    }, [userId]);
+  useEffect(() => { exercisesRef.current = exercises; }, [exercises]);
 
   // userId === undefined  → session still resolving; stay loading
   // userId === null       → confirmed no session
@@ -100,12 +105,16 @@ export function useLogger(userId) {
 
     async function init() {
       setLoading(true);
-      await Promise.all([loadAllExercises(), loadTodayWorkout()]);
+      if (workoutId) {
+        await Promise.all([loadAllExercises(), loadWorkoutById(workoutId)]);
+      } else {
+        await Promise.all([loadAllExercises(), loadTodayWorkout()]);
+      }
       setLoading(false);
     }
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId]);
+  }, [userId, workoutId]);
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -134,7 +143,7 @@ export function useLogger(userId) {
 
     const { data: w, error: err } = await supabase
       .from('workouts')
-      .select('id, name, created_at, completed_at')
+      .select('id, name, created_at, completed_at, calories_burned')
       .eq('user_id', userId)
       .gte('created_at', today)
       .lt('created_at', tomorrow)
@@ -149,6 +158,25 @@ export function useLogger(userId) {
     console.log('[useLogger] resuming workout:', w.id, w.name);
     setWorkout(w);
     workoutRef.current = w;
+    await loadExercises(w.id);
+  }
+
+  // Load a specific workout by ID — used when navigating from dashboard
+  async function loadWorkoutById(id) {
+    const { data: w, error: err } = await supabase
+      .from('workouts')
+      .select('id, name, created_at, completed_at, calories_burned')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+
+    if (err) { console.error('[useLogger] loadWorkoutById error:', err); return; }
+    if (!w)  { console.warn('[useLogger] workout not found:', id); return; }
+
+    console.log('[useLogger] loaded workout by ID:', w.id, w.name, w.completed_at ? '(completed)' : '(in-progress)');
+    setWorkout(w);
+    workoutRef.current = w;
+    if (w.completed_at) setReadOnly(true);
     await loadExercises(w.id);
   }
 
@@ -186,7 +214,7 @@ export function useLogger(userId) {
     const { data, error: err } = await supabase
       .from('workouts')
       .insert({ user_id: uid, name })
-      .select('id, name, created_at, completed_at')
+      .select('id, name, created_at, completed_at, calories_burned')
       .single();
 
     if (err) { console.error('[useLogger] workouts insert error:', err); setError('Failed to start workout.'); return; }
@@ -228,9 +256,6 @@ export function useLogger(userId) {
       })),
     }]);
 
-    // workout_exercises.exercise_id is TEXT FK → use ex.id directly (text slug from catalog)
-    // EXERCISE_LIBRARY fallback slugs (e.g. 'bench') won't exist in DB — the insert will fail
-    // with FK violation if exercises table isn't seeded. That error surfaces below.
     const { data: weData, error: weErr } = await supabase
       .from('workout_exercises')
       .insert({ workout_id: workoutId, exercise_id: ex.id, order_index: nextOrder })
@@ -245,8 +270,6 @@ export function useLogger(userId) {
     }
     console.log('[useLogger] workout_exercise created:', weData.id);
 
-    // Insert 3 default sets — NO user_id (sets table has no user_id column;
-    // RLS resolves via workout_exercises → workouts join)
     const { data: setsData, error: setsErr } = await supabase
       .from('sets')
       .insert([1, 2, 3].map(n => ({
@@ -332,7 +355,6 @@ export function useLogger(userId) {
         prevWeight: last?.prevWeight || 0,
       };
 
-      // Only write to DB if weId is a real UUID (not a temp workout_exercise)
       if (!weId.startsWith('opt-')) {
         supabase
           .from('sets')
@@ -376,6 +398,7 @@ export function useLogger(userId) {
     }
   }, []);
 
+  // Returns { success: true, calsBurned } on success, false on failure
   const completeWorkout = useCallback(async () => {
     if (!workoutRef.current?.id) {
       console.error('[useLogger] completeWorkout: no active workout');
@@ -396,14 +419,27 @@ export function useLogger(userId) {
       ));
     }
 
-    // 2. Mark workout complete in Supabase
+    // 2. Calculate calories burned — MET 5.0, 45s active + 90s rest per set
+    const totalSets = exercisesRef.current.reduce((acc, we) => acc + we.sets.length, 0);
+    const durationHours = (totalSets * (45 + 90)) / 3600;
+    let weightKg = 80; // fallback if profile has no weight
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('start_weight_kg')
+      .eq('id', userIdRef.current)
+      .single();
+    if (profileData?.start_weight_kg) weightKg = Number(profileData.start_weight_kg);
+    const calsBurned = Math.round(5.0 * weightKg * durationHours);
+    console.log('[useLogger] calsBurned:', calsBurned, `(${totalSets} sets, ${Math.round(durationHours * 60)} min active+rest, ${weightKg}kg)`);
+
+    // 3. Mark workout complete in Supabase
     const now = new Date().toISOString();
     console.log('[useLogger] completing workout:', workoutRef.current.id);
     const { data, error: err } = await supabase
       .from('workouts')
-      .update({ completed_at: now })
+      .update({ completed_at: now, calories_burned: calsBurned })
       .eq('id', workoutRef.current.id)
-      .select('id, completed_at')
+      .select('id, completed_at, calories_burned')
       .single();
 
     console.log('[useLogger] completeWorkout response →', { data, err });
@@ -414,11 +450,11 @@ export function useLogger(userId) {
       return false;
     }
 
-    // 3. Only update local state and trigger redirect after DB confirms
+    // 4. Only update local state and trigger redirect after DB confirms
     console.log('[useLogger] workout saved ✓', data);
-    setWorkout(w => w ? { ...w, completed_at: now } : w);
+    setWorkout(w => w ? { ...w, completed_at: now, calories_burned: calsBurned } : w);
     setCompleted(true);
-    return true;
+    return { success: true, calsBurned };
   }, []);
 
   const clearError = useCallback(() => setError(null), []);
@@ -429,6 +465,7 @@ export function useLogger(userId) {
     allExercises,
     loading,
     completed,
+    readOnly,
     error,
     clearError,
     startWorkout,

@@ -378,19 +378,12 @@ export default function VisionNutrition() {
     meals, totals, targets, loading,
     addMeal, deleteMeal,
     selectedDate, setSelectedDate,
+    calsBurned, eatBackCalories,
   } = useSentinel(user?.id);
 
   const [scanState, setScanState] = useState('results');
   const [selectedId, setSelectedId] = useState('a');
   const [showAddForm, setShowAddForm] = useState(false);
-
-  // Resolved targets with fallbacks
-  const tgt = {
-    kcal:    targets?.kcal    ?? 2200,
-    protein: targets?.protein ?? 180,
-    carbs:   targets?.carbs   ?? 220,
-    fat:     targets?.fat     ?? 70,
-  };
 
   // Date helpers
   const todayMidnight = new Date();
@@ -398,6 +391,20 @@ export default function VisionNutrition() {
   const selMidnight = new Date(selectedDate);
   selMidnight.setHours(0, 0, 0, 0);
   const isToday = selMidnight.getTime() === todayMidnight.getTime();
+
+  // Resolved targets with fallbacks — adjust kcal if eat-back is enabled and today has a burn
+  const baseTgt = {
+    kcal:    targets?.kcal    ?? 2200,
+    protein: targets?.protein ?? 180,
+    carbs:   targets?.carbs   ?? 220,
+    fat:     targets?.fat     ?? 70,
+  };
+  const tgt = {
+    ...baseTgt,
+    kcal: isToday && eatBackCalories && calsBurned
+      ? baseTgt.kcal + Math.round(calsBurned)
+      : baseTgt.kcal,
+  };
 
   const prevDay = () => {
     const d = new Date(selectedDate);
@@ -513,6 +520,23 @@ export default function VisionNutrition() {
             {scanState === 'idle' ? 'Scan Meal' : scanState === 'results' ? 'Re-scan' : 'Scanning…'}
           </button>
         </header>
+
+        {/* WORKOUT BURN BANNER — shown when today has a completed workout with calories_burned */}
+        {isToday && calsBurned != null && (
+          <div className="flex items-center gap-4 flex-wrap border border-orange-500/30 bg-orange-500/08 px-5 py-3 mb-6">
+            <span className="font-mono text-[10px] uppercase tracking-wider text-orange-400">Today's Workout</span>
+            <span className="font-mono text-sm tabular-nums text-stone-200">{Math.round(calsBurned)} kcal burned</span>
+            {eatBackCalories ? (
+              <span className="font-mono text-[10px] text-stone-500">
+                · Added to daily target → {baseTgt.kcal.toLocaleString()} + {Math.round(calsBurned)} = <span className="text-orange-300">{tgt.kcal.toLocaleString()} kcal available</span>
+              </span>
+            ) : (
+              <span className="font-mono text-[10px] text-stone-600">
+                · Enable eat-back in <a href="/settings" className="text-orange-400 hover:underline">Settings</a> to add to target
+              </span>
+            )}
+          </div>
+        )}
 
         {/* HEADLINE */}
         <div className="mb-10">

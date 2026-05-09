@@ -1,5 +1,5 @@
 ﻿import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSession } from '../hooks/useSession';
 import { useLogger } from '../hooks/useLogger';
 
@@ -197,7 +197,7 @@ function OverloadBadge({ status }) {
 }
 
 // -------------------- SET ROW --------------------
-function SetRow({ set, idx, onChange, onToggle, onRemove, isLast }) {
+function SetRow({ set, idx, onChange, onToggle, onRemove, isLast, readOnly }) {
   const status = overloadStatus(set);
   const vol = setVolume(set);
   const prevVol = setPrevVolume(set);
@@ -218,7 +218,7 @@ function SetRow({ set, idx, onChange, onToggle, onRemove, isLast }) {
           type="number"
           inputMode="numeric"
           value={set.reps}
-          disabled={set.done}
+          disabled={set.done || readOnly}
           onChange={(e) => onChange({ ...set, reps: e.target.value === '' ? '' : Number(e.target.value) })}
           className="w-full bg-stone-950/60 border border-stone-800 px-2 py-1.5 text-stone-100 font-mono text-sm tabular-nums text-right focus:outline-none focus:border-orange-500/60 focus:bg-stone-950 disabled:opacity-60 disabled:cursor-not-allowed"
         />
@@ -230,7 +230,7 @@ function SetRow({ set, idx, onChange, onToggle, onRemove, isLast }) {
             inputMode="decimal"
             step="0.5"
             value={set.weight}
-            disabled={set.done}
+            disabled={set.done || readOnly}
             onChange={(e) => onChange({ ...set, weight: e.target.value === '' ? '' : Number(e.target.value) })}
             className="w-full bg-stone-950/60 border border-stone-800 px-2 py-1.5 pr-7 text-stone-100 font-mono text-sm tabular-nums text-right focus:outline-none focus:border-orange-500/60 focus:bg-stone-950 disabled:opacity-60 disabled:cursor-not-allowed"
           />
@@ -243,33 +243,37 @@ function SetRow({ set, idx, onChange, onToggle, onRemove, isLast }) {
       <td className="px-2 py-2 w-24">
         <OverloadBadge status={status} />
       </td>
-      <td className="px-3 py-2 w-16 text-right">
-        <button
-          onClick={() => onToggle(set.id)}
-          className={`w-7 h-7 inline-flex items-center justify-center border transition-all ${
-            set.done
-              ? 'bg-orange-500 border-orange-500 text-stone-950'
-              : 'border-stone-700 hover:border-orange-500/60 hover:bg-orange-500/10'
-          }`}
-          aria-label={set.done ? 'Mark incomplete' : 'Complete set'}
-        >
-          {set.done ? <CheckIcon /> : null}
-        </button>
-      </td>
-      <td className="px-2 py-2 w-8">
-        <button
-          onClick={onRemove}
-          disabled={isLast}
-          className="text-stone-700 hover:text-red-500 disabled:opacity-20 disabled:hover:text-stone-700 transition-colors text-xs"
-          aria-label="Remove set"
-        >✕</button>
-      </td>
+      {!readOnly && (
+        <td className="px-3 py-2 w-16 text-right">
+          <button
+            onClick={() => onToggle(set.id)}
+            className={`w-7 h-7 inline-flex items-center justify-center border transition-all ${
+              set.done
+                ? 'bg-orange-500 border-orange-500 text-stone-950'
+                : 'border-stone-700 hover:border-orange-500/60 hover:bg-orange-500/10'
+            }`}
+            aria-label={set.done ? 'Mark incomplete' : 'Complete set'}
+          >
+            {set.done ? <CheckIcon /> : null}
+          </button>
+        </td>
+      )}
+      {!readOnly && (
+        <td className="px-2 py-2 w-8">
+          <button
+            onClick={onRemove}
+            disabled={isLast}
+            className="text-stone-700 hover:text-red-500 disabled:opacity-20 disabled:hover:text-stone-700 transition-colors text-xs"
+            aria-label="Remove set"
+          >✕</button>
+        </td>
+      )}
     </tr>
   );
 }
 
 // -------------------- EXERCISE CARD --------------------
-function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index }) {
+function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, readOnly }) {
   const totalVol = exerciseVolume(we, false);
   const doneVol = exerciseVolume(we, true);
   const completedSets = we.sets.filter(s => s.done).length;
@@ -303,13 +307,15 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index }) {
             <div className="text-[9px] uppercase tracking-wider text-stone-600">Vol</div>
             <div className="font-mono text-sm text-orange-300 tabular-nums">{fmt(doneVol)}</div>
           </div>
-          <button
-            onClick={onRemove}
-            className="text-stone-700 hover:text-red-500 transition-colors p-1"
-            aria-label="Remove exercise"
-          >
-            <TrashIcon />
-          </button>
+          {!readOnly && (
+            <button
+              onClick={onRemove}
+              className="text-stone-700 hover:text-red-500 transition-colors p-1"
+              aria-label="Remove exercise"
+            >
+              <TrashIcon />
+            </button>
+          )}
         </div>
       </header>
 
@@ -323,8 +329,8 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index }) {
               <th className="px-2 py-2 text-right font-medium">Weight</th>
               <th className="px-3 py-2 text-left font-medium">Volume</th>
               <th className="px-2 py-2 text-left font-medium">Status</th>
-              <th className="px-3 py-2 text-right font-medium">Done</th>
-              <th className="px-2 py-2"></th>
+              {!readOnly && <th className="px-3 py-2 text-right font-medium">Done</th>}
+              {!readOnly && <th className="px-2 py-2"></th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-900/60">
@@ -333,6 +339,7 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index }) {
                 key={s.id}
                 set={s}
                 idx={idx}
+                readOnly={readOnly}
                 isLast={we.sets.length === 1}
                 onChange={(updated) => onUpdate({
                   ...we,
@@ -353,12 +360,16 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index }) {
       </div>
 
       <footer className="px-3 py-2 border-t border-stone-800/60 bg-stone-950/40 flex justify-between items-center">
-        <button
-          onClick={onAddSet}
-          className="text-[10px] uppercase tracking-wider font-mono text-stone-500 hover:text-orange-300 px-3 py-1 border border-stone-800 hover:border-orange-500/40 transition-colors"
-        >
-          + Add Set
-        </button>
+        {!readOnly ? (
+          <button
+            onClick={onAddSet}
+            className="text-[10px] uppercase tracking-wider font-mono text-stone-500 hover:text-orange-300 px-3 py-1 border border-stone-800 hover:border-orange-500/40 transition-colors"
+          >
+            + Add Set
+          </button>
+        ) : (
+          <div />
+        )}
         <div className="text-[10px] font-mono tabular-nums text-stone-600">
           PROJECTED <span className="text-stone-400">{fmt(totalVol)}</span> KG·REPS
         </div>
@@ -556,7 +567,9 @@ export default function IronLabLogger() {
   // Pass null once confirmed no session, real ID once confirmed logged in.
   const userId  = sessionLoading ? undefined : (session?.user?.id ?? null);
   const navigate = useNavigate();
-  const logger   = useLogger(userId);
+  const [searchParams] = useSearchParams();
+  const workoutId = searchParams.get('workoutId');
+  const logger   = useLogger(userId, workoutId);
 
   const [name, setName]             = useState('New Workout');
   const [seconds, setSeconds]       = useState(0);
@@ -642,8 +655,11 @@ export default function IronLabLogger() {
     );
     const durationMins = Math.round(seconds / 60);
     setSummary({ totalVolume, doneSets, totalReps, prsHit, topMuscle: topEntry?.[0], durationMins });
-    const saved = await logger.completeWorkout();
-    if (saved) setShowComplete(true);
+    const result = await logger.completeWorkout();
+    if (result?.success) {
+      setSummary(prev => ({ ...prev, calsBurned: result.calsBurned }));
+      setShowComplete(true);
+    }
   };
 
   // ---- Loading ----
@@ -663,6 +679,25 @@ export default function IronLabLogger() {
 
   // ---- No active workout ----
   if (!logger.workout) {
+    // If a workoutId was in the URL but not found, show an error state
+    if (workoutId) {
+      return (
+        <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased flex items-center justify-center">
+          <style>{FONT_STYLE}</style>
+          <Backdrop />
+          <div className="relative z-10 text-center space-y-6 px-6 w-full max-w-sm">
+            <div className="font-mono text-xs uppercase tracking-wider text-stone-600">Workout not found</div>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="px-6 py-3 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-200 transition-colors"
+            >
+              ← Back to Dashboard
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased flex items-center justify-center">
         <style>{FONT_STYLE}</style>
@@ -744,6 +779,11 @@ export default function IronLabLogger() {
               <div className="text-stone-400 font-mono text-xs uppercase tracking-wider">
                 Duration: <span className="text-stone-200">{summary.durationMins} min</span>
               </div>
+              {summary.calsBurned != null && (
+                <div className="text-stone-400 font-mono text-xs uppercase tracking-wider">
+                  Burned: <span className="text-orange-300">{summary.calsBurned} kcal</span>
+                </div>
+              )}
             </div>
             <p className="text-stone-600 font-mono text-xs">Redirecting to dashboard…</p>
           </div>
@@ -754,7 +794,7 @@ export default function IronLabLogger() {
 
         {/* HEADER */}
         <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
-          <div className="flex items-baseline gap-4">
+          <div className="flex items-baseline gap-4 flex-wrap">
             <div className="flex items-baseline gap-2">
               <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">IRONLAB</span>
               <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Logger</span>
@@ -762,21 +802,38 @@ export default function IronLabLogger() {
             <span className="hidden md:inline-block w-px h-8 bg-stone-800" />
             <input
               value={name}
+              disabled={logger.readOnly}
               onChange={e => { setName(e.target.value); logger.updateWorkoutName(e.target.value); }}
-              className="hidden md:block bg-transparent text-lg text-stone-300 focus:outline-none focus:text-stone-100 font-mono px-2 py-1 border-b border-transparent focus:border-orange-500/40"
+              className="hidden md:block bg-transparent text-lg text-stone-300 focus:outline-none focus:text-stone-100 font-mono px-2 py-1 border-b border-transparent focus:border-orange-500/40 disabled:opacity-60 disabled:cursor-default"
             />
+            {logger.readOnly && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-orange-500/40 bg-orange-500/10 text-orange-300 font-mono text-[10px] uppercase tracking-wider">
+                ✓ Completed
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3">
-            <div className="text-right">
-              <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono">Session</div>
-              <div className="font-anton text-2xl tabular-nums text-stone-200">{mins}:{secs}</div>
-            </div>
-            <button
-              onClick={handleComplete}
-              className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-lg uppercase tracking-wider hover:bg-orange-400 transition-colors"
-            >
-              Complete Workout
-            </button>
+            {!logger.readOnly && (
+              <div className="text-right">
+                <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono">Session</div>
+                <div className="font-anton text-2xl tabular-nums text-stone-200">{mins}:{secs}</div>
+              </div>
+            )}
+            {logger.readOnly ? (
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="px-5 py-2.5 border border-stone-700 text-stone-300 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-100 transition-colors"
+              >
+                ← Dashboard
+              </button>
+            ) : (
+              <button
+                onClick={handleComplete}
+                className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-lg uppercase tracking-wider hover:bg-orange-400 transition-colors"
+              >
+                Complete Workout
+              </button>
+            )}
           </div>
         </header>
 
@@ -801,13 +858,16 @@ export default function IronLabLogger() {
                   index={idx}
                   we={we}
                   exercise={ex}
+                  readOnly={logger.readOnly}
                   onUpdate={(updated) => updateExercise(we.id, () => updated)}
                   onRemove={() => hookRemove(we.id)}
                   onAddSet={() => addSetToExercise(we.id)}
                 />
               );
             })}
-            <AddExercisePicker library={library} onAdd={hookAdd} used={usedIds} />
+            {!logger.readOnly && (
+              <AddExercisePicker library={library} onAdd={hookAdd} used={usedIds} />
+            )}
           </main>
 
           {/* RIGHT — MUSCLE MAP + BREAKDOWN */}

@@ -6,21 +6,41 @@ function toDateStr(d) {
 }
 
 export function useSentinel(userId) {
-  const [meals, setMeals]           = useState([]);
-  const [targets, setTargets]       = useState({ kcal: 2200, protein: 180, carbs: 220, fat: 70 });
-  const [loading, setLoading]       = useState(true);
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [meals, setMeals]                   = useState([]);
+  const [targets, setTargets]               = useState({ kcal: 2200, protein: 180, carbs: 220, fat: 70 });
+  const [loading, setLoading]               = useState(true);
+  const [selectedDate, setSelectedDate]     = useState(new Date());
+  const [calsBurned, setCalsBurned]         = useState(null);
+  const [eatBackCalories, setEatBackCalories] = useState(false);
 
-  // Fetch profile targets once on mount
+  // Fetch profile targets + preferences once on mount
   useEffect(() => {
     if (!userId) return;
     supabase
       .from('profiles')
-      .select('current_macros')
+      .select('current_macros, settings')
       .eq('id', userId)
       .single()
       .then(({ data }) => {
         if (data?.current_macros) setTargets(data.current_macros);
+        setEatBackCalories(data?.settings?.eat_back_calories ?? false);
+      });
+
+    // Fetch today's completed workout calories_burned
+    const today    = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    supabase
+      .from('workouts')
+      .select('calories_burned')
+      .eq('user_id', userId)
+      .gte('created_at', today)
+      .lt('created_at', tomorrow)
+      .not('completed_at', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.calories_burned != null) setCalsBurned(Number(data.calories_burned));
       });
   }, [userId]);
 
@@ -83,5 +103,5 @@ export function useSentinel(userId) {
     await supabase.from('nutrition_logs').delete().eq('id', id);
   };
 
-  return { meals, totals, targets, loading, addMeal, deleteMeal, selectedDate, setSelectedDate };
+  return { meals, totals, targets, loading, addMeal, deleteMeal, selectedDate, setSelectedDate, calsBurned, eatBackCalories };
 }
