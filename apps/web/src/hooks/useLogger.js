@@ -19,7 +19,7 @@ function adaptSet(s, prevSets = [], idx = 0) {
     _loggedAt:  s.logged_at,
     reps:       s.reps      ?? 8,
     weight:     s.weight_kg ?? 0,
-    done:       false,
+    done:       s.completed ?? false,   // persisted from DB
     prevReps:   prevSets[idx]?.reps   ?? 0,
     prevWeight: prevSets[idx]?.weight ?? 0,
     rir:        s.rir ?? null,
@@ -186,7 +186,7 @@ export function useLogger(userId, workoutId = null) {
       .select(`
         id, exercise_id, order_index,
         exercises(id, name, primary_muscle, secondary_muscles),
-        sets(id, set_number, weight_kg, reps, rir, logged_at)
+        sets(id, set_number, weight_kg, reps, rir, logged_at, completed)
       `)
       .eq('workout_id', workoutId)
       .order('order_index', { ascending: true });
@@ -325,6 +325,7 @@ export function useLogger(userId, workoutId = null) {
     const db = { logged_at: new Date().toISOString() };
     if ('reps'   in updates) db.reps      = updates.reps;
     if ('weight' in updates) db.weight_kg = (updates.weight === '' ? null : updates.weight);
+    if ('done'   in updates) db.completed = updates.done ?? false;
 
     // Track the latest payload so completeWorkout can flush immediately
     pendingSetWrites.current[setId] = db;
@@ -428,9 +429,11 @@ export function useLogger(userId, workoutId = null) {
       .select('start_weight_kg')
       .eq('id', userIdRef.current)
       .single();
+    console.log('[useLogger] completeWorkout: start_weight_kg from profile =', profileData?.start_weight_kg);
     if (profileData?.start_weight_kg) weightKg = Number(profileData.start_weight_kg);
+    if (!weightKg || weightKg <= 0) weightKg = 80;
     const calsBurned = Math.round(5.0 * weightKg * durationHours);
-    console.log('[useLogger] calsBurned:', calsBurned, `(${totalSets} sets, ${Math.round(durationHours * 60)} min active+rest, ${weightKg}kg)`);
+    console.log('[useLogger] completeWorkout: totalSets =', totalSets, '| weightKg =', weightKg, '| durationHours =', durationHours.toFixed(4), '| calsBurned =', calsBurned);
 
     // 3. Mark workout complete in Supabase
     const now = new Date().toISOString();
@@ -459,19 +462,57 @@ export function useLogger(userId, workoutId = null) {
 
   const clearError = useCallback(() => setError(null), []);
 
-  // Flush pending set writes and return to read-only — used by "Save Changes" in edit mode
+  // Write all current set states to DB, re-fetch to confirm, then return to read-only
   const saveChanges = useCallback(async () => {
-    const pending = Object.entries(pendingSetWrites.current);
-    if (pending.length) {
-      pending.forEach(([id]) => clearTimeout(timers.current[id]));
-      pendingSetWrites.current = {};
-      await Promise.all(pending.map(([setId, db]) =>
-        supabase.from('sets').update(db).eq('id', setId).then(({ error: err }) => {
-          if (err) console.error('[useLogger] saveChanges flush error for set', setId, err);
-          else     console.log('[useLogger] saveChanges flushed set', setId, db);
+    // Cancel all pending debounce timers — we're writing everything now
+    Object.keys(timers.current).forEach(id => {
+      if (id !== '_name') clearTimeout(timers.current[id]);
+    });
+    pendingSetWrites.current = {};
+
+    // Build full payload for every real (non-temp) set in current state
+    const allSets = exercisesRef.current.flatMap(we =>
+      we.sets
+        .filter(s => !s.id.startsWith('opt-'))
+        .map(s => ({
+          setId: s.id,
+          payload: {
+            reps:      s.reps   ?? 8,
+            weight_kg: s.weight ?? 0,
+            completed: s.done   ?? false,
+            logged_at: new Date().toISOString(),
+          },
+        }))
+    );
+
+    console.log('[useLogger] saveChanges: writing', allSets.length, 'sets to Supabase');
+
+    const results = await Promise.all(allSets.map(({ setId, payload }) =>
+      supabase.from('sets')
+        .update(payload)
+        .eq('id', setId)
+        .select('id, reps, weight_kg, completed, logged_at')
+        .single()
+        .then(({ data, error: err }) => {
+          if (err) console.error('[useLogger] saveChanges: FAILED set', setId, err);
+          else     console.log('[useLogger] saveChanges: ✓ set', setId, '→', data);
+          return { setId, error: err };
         })
-      ));
+    ));
+
+    const anyError = results.find(r => r.error);
+    if (anyError) {
+      console.error('[useLogger] saveChanges: some writes failed — not switching to read-only');
+      return { success: false };
     }
+
+    // Re-fetch from DB to confirm persistence before switching UI to read-only
+    const wId = workoutRef.current?.id;
+    if (wId) {
+      console.log('[useLogger] saveChanges: re-fetching exercises from DB to confirm persistence');
+      await loadExercises(wId);
+    }
+
     setReadOnly(true);
     return { success: true };
   }, []);

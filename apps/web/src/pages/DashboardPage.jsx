@@ -485,22 +485,18 @@ export default function Dashboard() {
                   <div className="font-anton text-4xl uppercase tracking-tight text-stone-100 leading-none mb-2">
                     {workout.name}
                   </div>
-                  <div className="flex items-center gap-3 flex-wrap mb-3">
+                  <div className="flex items-center gap-3 flex-wrap mb-1">
                     <span className="text-[11px] font-mono uppercase tracking-wider text-stone-500">
                       {workout.exercises.length} exercises · ~{workout.estimatedMinutes} min
                       {workout.completed ? ' · completed' : ''}
                     </span>
-                    {workout.completed && calsBurned != null && (
-                      <span className="text-[10px] font-mono px-2 py-0.5 border border-orange-500/30 bg-orange-500/10 text-orange-300">
-                        {fmt0(calsBurned)} kcal burned
-                      </span>
-                    )}
                   </div>
-                  {workout.completed && calsBurned != null && !eatBackCalories && (
-                    <div className="text-[10px] font-mono text-stone-600 mb-3">
-                      Tip: enable eat-back in <Link to="/settings" className="text-orange-400 no-underline hover:underline">Settings</Link> to add to your daily target
+                  {workout.completed && calsBurned > 0 && (
+                    <div className="font-mono text-[11px] text-orange-400 mb-3 tabular-nums">
+                      🔥 {fmt0(calsBurned)} cal burned
                     </div>
                   )}
+                  {!(workout.completed && calsBurned > 0) && <div className="mb-3" />}
                   <div className="space-y-2 mb-5 flex-1">
                     {workout.exercises.map((ex, i) => (
                       <div key={i} className="flex items-center gap-3 py-2 border-b border-stone-800/40 last:border-b-0">
@@ -705,7 +701,7 @@ export default function Dashboard() {
                 <WeeklyGrid days={weeklyAdherence} />
               )}
 
-              <div className="mt-5 pt-5 border-t border-stone-800/60 grid grid-cols-3 gap-4">
+              <div className="mt-5 pt-5 border-t border-stone-800/60 grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
                   <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">Total Sets</div>
                   {loading
@@ -729,6 +725,15 @@ export default function Dashboard() {
                     : weeklyStats.avgProtein === 0
                       ? <div className="font-anton text-2xl text-stone-700">—</div>
                       : <div className="font-anton text-2xl text-stone-100 tabular-nums">{weeklyStats.avgProtein}<span className="text-stone-500 text-sm ml-1">g</span></div>
+                  }
+                </div>
+                <div>
+                  <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">Cal Burned</div>
+                  {loading
+                    ? <Sk className="h-7 w-16 mt-1" />
+                    : calsBurned > 0
+                      ? <div className="font-anton text-2xl text-orange-300 tabular-nums">{fmt0(calsBurned)}<span className="text-stone-500 text-sm ml-1">kcal</span></div>
+                      : <div className="font-anton text-2xl text-stone-700">—</div>
                   }
                 </div>
               </div>
