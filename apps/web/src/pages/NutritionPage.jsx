@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useSession } from '../hooks/useSession';
 import { useSentinel } from '../hooks/useSentinel';
 import { FoodSearch } from '../components/FoodSearch';
+import AppNav from '../components/AppNav';
 
 /* =========================================================================
  * SENTINEL — Module 1
@@ -475,6 +476,8 @@ export default function VisionNutrition() {
           to   { opacity: 1; transform: scale(1); }
         }
       `}</style>
+
+      <AppNav />
 
       <div className="fixed inset-0 pointer-events-none" aria-hidden>
         <div className="absolute inset-0 opacity-[0.025]" style={{

@@ -1,4 +1,5 @@
 ﻿import React, { useState, useMemo, useEffect } from 'react';
+import AppNav from '../components/AppNav';
 
 /* =========================================================================
  * COACH ENGINE — Module 5 Proof-of-Concept
@@ -443,6 +444,8 @@ export default function CoachEngine() {
         @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
         .reveal { animation: fadeUp 600ms ease-out both; }
       `}</style>
+
+      <AppNav />
 
       {/* AMBIENT BACKDROP */}
       <div className="fixed inset-0 pointer-events-none" aria-hidden>

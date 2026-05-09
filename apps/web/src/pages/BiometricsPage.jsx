@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from 'react';
+import AppNav from '../components/AppNav';
 
 /* =========================================================================
  * BIOMETRIC VAULT — Module 4 Proof-of-Concept
@@ -460,6 +461,8 @@ export default function BiometricVault() {
         .font-anton { font-family: 'Anton', sans-serif; letter-spacing: 0.01em; }
         body { background: #0a0908; }
       `}</style>
+
+      <AppNav />
 
       <div className="fixed inset-0 pointer-events-none" aria-hidden>
         <div className="absolute inset-0 opacity-[0.025]" style={{

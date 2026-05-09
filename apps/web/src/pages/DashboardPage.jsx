@@ -4,12 +4,12 @@ import { useSession } from '../hooks/useSession';
 import { useDashboard } from '../hooks/useDashboard';
 
 const NAV_MODULES = [
-  { id: 'home',    label: 'Home',    active: true  },
-  { id: 'logger',  label: 'IRONLAB', active: false },
-  { id: 'vision',  label: 'Sentinel', active: false },
-  { id: 'vault',   label: 'Vault',   active: false },
-  { id: 'library', label: 'Codex',   active: false },
-  { id: 'coach',   label: 'Oracle',  active: false },
+  { id: 'home',       label: 'Home',       path: '/dashboard'  },
+  { id: 'logger',     label: 'IRONLAB',    path: '/logger'     },
+  { id: 'vision',     label: 'Sentinel',   path: '/nutrition'  },
+  { id: 'biometrics', label: 'Biometrics', path: '/biometrics' },
+  { id: 'library',    label: 'Codex',      path: '/exercises'  },
+  { id: 'coach',      label: 'Oracle',     path: '/coach'      },
 ];
 
 // -------------------- HELPERS --------------------
@@ -248,16 +248,17 @@ export default function Dashboard() {
               </div>
               <div className="hidden md:flex items-center gap-1">
                 {NAV_MODULES.map(m => (
-                  <button
+                  <Link
                     key={m.id}
-                    className={`px-3 py-1.5 text-xs uppercase tracking-wider font-mono transition-colors ${
-                      m.active
+                    to={m.path}
+                    className={`px-3 py-1.5 text-xs uppercase tracking-wider font-mono transition-colors no-underline ${
+                      m.path === '/dashboard'
                         ? 'text-orange-300 bg-orange-500/10 border border-orange-500/30'
                         : 'text-stone-500 hover:text-stone-200 border border-transparent hover:border-stone-700'
                     }`}
                   >
                     {m.label}
-                  </button>
+                  </Link>
                 ))}
               </div>
             </div>

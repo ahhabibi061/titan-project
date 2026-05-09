@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import AppNav from '../components/AppNav';
 
 /* =========================================================================
  * EXERCISE LIBRARY — Module 2 Proof-of-Concept
@@ -460,6 +461,8 @@ export default function ExerciseLibrary() {
         .font-anton { font-family: 'Anton', sans-serif; letter-spacing: 0.01em; }
         body { background: #0a0908; }
       `}</style>
+
+      <AppNav />
 
       <div className="fixed inset-0 pointer-events-none" aria-hidden>
         <div className="absolute inset-0 opacity-[0.025]" style={{
