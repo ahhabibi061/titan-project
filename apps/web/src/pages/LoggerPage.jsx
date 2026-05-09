@@ -85,10 +85,8 @@ const INITIAL_WORKOUT = [
 const setVolume = (s) => (Number(s.reps) || 0) * (Number(s.weight) || 0);
 const setPrevVolume = (s) => (Number(s.prevReps) || 0) * (Number(s.prevWeight) || 0);
 
-function exerciseVolume(we, completedOnly = true) {
-  return we.sets
-    .filter(s => !completedOnly || s.done)
-    .reduce((acc, s) => acc + setVolume(s), 0);
+function exerciseVolume(we) {
+  return we.sets.reduce((acc, s) => acc + setVolume(s), 0);
 }
 
 function muscleVolumes(workout, library) {
@@ -96,7 +94,7 @@ function muscleVolumes(workout, library) {
   for (const we of workout) {
     const ex = we._ex || library.find(e => e.id === we.exerciseId);
     if (!ex) continue;
-    const vol = exerciseVolume(we, true);
+    const vol = exerciseVolume(we);
     if (vol === 0) continue;
     ex.primary.forEach(m   => { v[m] = (v[m] || 0) + vol; });
     ex.secondary.forEach(m => { v[m] = (v[m] || 0) + vol * 0.5; });
@@ -197,13 +195,13 @@ function OverloadBadge({ status }) {
 }
 
 // -------------------- SET ROW --------------------
-function SetRow({ set, idx, onChange, onToggle, onRemove, isLast, readOnly }) {
+function SetRow({ set, idx, onChange, onRemove, isLast }) {
   const status = overloadStatus(set);
   const vol = setVolume(set);
   const prevVol = setPrevVolume(set);
 
   return (
-    <tr className={`group transition-colors ${set.done ? 'bg-orange-950/20' : 'hover:bg-stone-900/40'}`}>
+    <tr className="group transition-colors hover:bg-stone-900/40">
       <td className="px-3 py-2 w-10">
         <span className="font-mono text-[11px] text-stone-500 tabular-nums">{String(idx + 1).padStart(2,'0')}</span>
       </td>
@@ -218,9 +216,8 @@ function SetRow({ set, idx, onChange, onToggle, onRemove, isLast, readOnly }) {
           type="number"
           inputMode="numeric"
           value={set.reps}
-          disabled={set.done || readOnly}
           onChange={(e) => onChange({ ...set, reps: e.target.value === '' ? '' : Number(e.target.value) })}
-          className="w-full bg-stone-950/60 border border-stone-800 px-2 py-1.5 text-stone-100 font-mono text-sm tabular-nums text-right focus:outline-none focus:border-orange-500/60 focus:bg-stone-950 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full bg-stone-950/60 border border-stone-800 px-2 py-1.5 text-stone-100 font-mono text-sm tabular-nums text-right focus:outline-none focus:border-orange-500/60 focus:bg-stone-950"
         />
       </td>
       <td className="px-2 py-2 w-24">
@@ -230,9 +227,8 @@ function SetRow({ set, idx, onChange, onToggle, onRemove, isLast, readOnly }) {
             inputMode="decimal"
             step="0.5"
             value={set.weight}
-            disabled={set.done || readOnly}
             onChange={(e) => onChange({ ...set, weight: e.target.value === '' ? '' : Number(e.target.value) })}
-            className="w-full bg-stone-950/60 border border-stone-800 px-2 py-1.5 pr-7 text-stone-100 font-mono text-sm tabular-nums text-right focus:outline-none focus:border-orange-500/60 focus:bg-stone-950 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full bg-stone-950/60 border border-stone-800 px-2 py-1.5 pr-7 text-stone-100 font-mono text-sm tabular-nums text-right focus:outline-none focus:border-orange-500/60 focus:bg-stone-950"
           />
           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-600 font-mono pointer-events-none">kg</span>
         </div>
@@ -243,41 +239,21 @@ function SetRow({ set, idx, onChange, onToggle, onRemove, isLast, readOnly }) {
       <td className="px-2 py-2 w-24">
         <OverloadBadge status={status} />
       </td>
-      {!readOnly && (
-        <td className="px-3 py-2 w-16 text-right">
-          <button
-            onClick={() => onToggle(set.id)}
-            className={`w-7 h-7 inline-flex items-center justify-center border transition-all ${
-              set.done
-                ? 'bg-orange-500 border-orange-500 text-stone-950'
-                : 'border-stone-700 hover:border-orange-500/60 hover:bg-orange-500/10'
-            }`}
-            aria-label={set.done ? 'Mark incomplete' : 'Complete set'}
-          >
-            {set.done ? <CheckIcon /> : null}
-          </button>
-        </td>
-      )}
-      {!readOnly && (
-        <td className="px-2 py-2 w-8">
-          <button
-            onClick={onRemove}
-            disabled={isLast}
-            className="text-stone-700 hover:text-red-500 disabled:opacity-20 disabled:hover:text-stone-700 transition-colors text-xs"
-            aria-label="Remove set"
-          >✕</button>
-        </td>
-      )}
+      <td className="px-2 py-2 w-8">
+        <button
+          onClick={onRemove}
+          disabled={isLast}
+          className="text-stone-700 hover:text-red-500 disabled:opacity-20 disabled:hover:text-stone-700 transition-colors text-xs"
+          aria-label="Remove set"
+        >✕</button>
+      </td>
     </tr>
   );
 }
 
 // -------------------- EXERCISE CARD --------------------
-function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, readOnly }) {
-  const totalVol = exerciseVolume(we, false);
-  const doneVol = exerciseVolume(we, true);
-  const completedSets = we.sets.filter(s => s.done).length;
-  const allMuscles = [...exercise.primary, ...exercise.secondary];
+function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index }) {
+  const totalVol = exerciseVolume(we);
 
   return (
     <article className="border border-stone-800/80 bg-stone-950/40 backdrop-blur-sm">
@@ -301,21 +277,19 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, readO
         <div className="flex items-baseline gap-4 shrink-0">
           <div className="text-right">
             <div className="text-[9px] uppercase tracking-wider text-stone-600">Sets</div>
-            <div className="font-mono text-sm text-stone-300 tabular-nums">{completedSets}/{we.sets.length}</div>
+            <div className="font-mono text-sm text-stone-300 tabular-nums">{we.sets.length}</div>
           </div>
           <div className="text-right">
             <div className="text-[9px] uppercase tracking-wider text-stone-600">Vol</div>
-            <div className="font-mono text-sm text-orange-300 tabular-nums">{fmt(doneVol)}</div>
+            <div className="font-mono text-sm text-orange-300 tabular-nums">{fmt(totalVol)}</div>
           </div>
-          {!readOnly && (
-            <button
-              onClick={onRemove}
-              className="text-stone-700 hover:text-red-500 transition-colors p-1"
-              aria-label="Remove exercise"
-            >
-              <TrashIcon />
-            </button>
-          )}
+          <button
+            onClick={onRemove}
+            className="text-stone-700 hover:text-red-500 transition-colors p-1"
+            aria-label="Remove exercise"
+          >
+            <TrashIcon />
+          </button>
         </div>
       </header>
 
@@ -329,8 +303,7 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, readO
               <th className="px-2 py-2 text-right font-medium">Weight</th>
               <th className="px-3 py-2 text-left font-medium">Volume</th>
               <th className="px-2 py-2 text-left font-medium">Status</th>
-              {!readOnly && <th className="px-3 py-2 text-right font-medium">Done</th>}
-              {!readOnly && <th className="px-2 py-2"></th>}
+              <th className="px-2 py-2"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-900/60">
@@ -339,15 +312,10 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, readO
                 key={s.id}
                 set={s}
                 idx={idx}
-                readOnly={readOnly}
                 isLast={we.sets.length === 1}
                 onChange={(updated) => onUpdate({
                   ...we,
                   sets: we.sets.map(x => x.id === s.id ? updated : x),
-                })}
-                onToggle={(id) => onUpdate({
-                  ...we,
-                  sets: we.sets.map(x => x.id === id ? { ...x, done: !x.done } : x),
                 })}
                 onRemove={() => onUpdate({
                   ...we,
@@ -360,18 +328,14 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, readO
       </div>
 
       <footer className="px-3 py-2 border-t border-stone-800/60 bg-stone-950/40 flex justify-between items-center">
-        {!readOnly ? (
-          <button
-            onClick={onAddSet}
-            className="text-[10px] uppercase tracking-wider font-mono text-stone-500 hover:text-orange-300 px-3 py-1 border border-stone-800 hover:border-orange-500/40 transition-colors"
-          >
-            + Add Set
-          </button>
-        ) : (
-          <div />
-        )}
+        <button
+          onClick={onAddSet}
+          className="text-[10px] uppercase tracking-wider font-mono text-stone-500 hover:text-orange-300 px-3 py-1 border border-stone-800 hover:border-orange-500/40 transition-colors"
+        >
+          + Add Set
+        </button>
         <div className="text-[10px] font-mono tabular-nums text-stone-600">
-          PROJECTED <span className="text-stone-400">{fmt(totalVol)}</span> KG·REPS
+          TOTAL <span className="text-stone-400">{fmt(totalVol)}</span> KG·REPS
         </div>
       </footer>
     </article>
@@ -575,7 +539,7 @@ export default function IronLabLogger() {
   const [seconds, setSeconds]       = useState(0);
   const [showComplete, setShowComplete] = useState(false);
   const [summary, setSummary]       = useState(null);
-  const [savedConfirm, setSavedConfirm] = useState(false);
+  const [savedToast, setSavedToast] = useState(false);
 
   // Sync workout name from Supabase into local input
   useEffect(() => {
@@ -599,6 +563,14 @@ export default function IronLabLogger() {
     return () => clearTimeout(t);
   }, [logger.error]);
 
+  // Show "Saved" toast for 2 s after each successful set write
+  useEffect(() => {
+    if (!logger.savedAt) return;
+    setSavedToast(true);
+    const t = setTimeout(() => setSavedToast(false), 2000);
+    return () => clearTimeout(t);
+  }, [logger.savedAt]);
+
   // Redirect 3 s after complete
   useEffect(() => {
     if (!logger.completed) return;
@@ -612,12 +584,11 @@ export default function IronLabLogger() {
   const workout    = logger.exercises;
   const volumes    = useMemo(() => muscleVolumes(workout, library), [workout, library]);
   const maxVol     = useMemo(() => Math.max(800, ...Object.values(volumes)), [volumes]);
-  const totalVolume = useMemo(() => workout.reduce((acc, we) => acc + exerciseVolume(we, true), 0), [workout]);
+  const totalVolume = useMemo(() => workout.reduce((acc, we) => acc + exerciseVolume(we), 0), [workout]);
 
-  const doneSets  = workout.reduce((a, we) => a + we.sets.filter(s => s.done).length, 0);
   const totalSets = workout.reduce((a, we) => a + we.sets.length, 0);
   const totalReps = workout.reduce(
-    (a, we) => a + we.sets.filter(s => s.done).reduce((b, s) => b + (Number(s.reps) || 0), 0), 0
+    (a, we) => a + we.sets.reduce((b, s) => b + (Number(s.reps) || 0), 0), 0
   );
 
   // Diff-based updateExercise — routes changes to hook mutation functions
@@ -639,8 +610,8 @@ export default function IronLabLogger() {
     for (const [id, ns] of newMap) {
       const os = oldMap.get(id);
       if (!os) continue;
-      if (os.reps !== ns.reps || os.weight !== ns.weight || os.done !== ns.done) {
-        logSet(weId, id, { reps: ns.reps, weight: ns.weight, done: ns.done });
+      if (os.reps !== ns.reps || os.weight !== ns.weight) {
+        logSet(weId, id, { reps: ns.reps, weight: ns.weight });
       }
     }
   }, [logger.exercises, logSet, removeSetFromExercise]);
@@ -649,21 +620,13 @@ export default function IronLabLogger() {
   const mins    = String(Math.floor(seconds / 60)).padStart(2, '0');
   const secs    = String(seconds % 60).padStart(2, '0');
 
-  const handleSaveChanges = async () => {
-    const result = await logger.saveChanges();
-    if (result?.success) {
-      setSavedConfirm(true);
-      setTimeout(() => setSavedConfirm(false), 2000);
-    }
-  };
-
   const handleComplete = async () => {
     const topEntry    = Object.entries(volumes).sort(([, a], [, b]) => b - a)[0];
     const prsHit      = workout.reduce(
-      (acc, we) => acc + we.sets.filter(s => s.done && overloadStatus(s).kind === 'pr').length, 0
+      (acc, we) => acc + we.sets.filter(s => overloadStatus(s).kind === 'pr').length, 0
     );
     const durationMins = Math.round(seconds / 60);
-    setSummary({ totalVolume, doneSets, totalReps, prsHit, topMuscle: topEntry?.[0], durationMins });
+    setSummary({ totalVolume, totalSets, totalReps, prsHit, topMuscle: topEntry?.[0], durationMins });
     const result = await logger.completeWorkout();
     if (result?.success) {
       setSummary(prev => ({ ...prev, calsBurned: result.calsBurned }));
@@ -753,6 +716,13 @@ export default function IronLabLogger() {
         </div>
       )}
 
+      {/* SAVED TOAST */}
+      {savedToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 border border-orange-500/30 px-5 py-2.5 backdrop-blur-sm pointer-events-none">
+          <span className="text-orange-300 font-mono text-xs uppercase tracking-wider">Saved ✓</span>
+        </div>
+      )}
+
       {/* COMPLETION OVERLAY */}
       {showComplete && summary && (
         <div className="fixed inset-0 z-50 bg-stone-950/96 flex items-center justify-center backdrop-blur-sm">
@@ -767,8 +737,8 @@ export default function IronLabLogger() {
                 <div className="text-[10px] text-stone-600 font-mono">kg · reps</div>
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-1">Sets Done</div>
-                <div className="font-anton text-4xl text-stone-100 tabular-nums">{summary.doneSets}</div>
+                <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-1">Sets</div>
+                <div className="font-anton text-4xl text-stone-100 tabular-nums">{summary.totalSets}</div>
               </div>
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-1">Total Reps</div>
@@ -811,56 +781,24 @@ export default function IronLabLogger() {
             <span className="hidden md:inline-block w-px h-8 bg-stone-800" />
             <input
               value={name}
-              disabled={logger.readOnly}
               onChange={e => { setName(e.target.value); logger.updateWorkoutName(e.target.value); }}
-              className="hidden md:block bg-transparent text-lg text-stone-300 focus:outline-none focus:text-stone-100 font-mono px-2 py-1 border-b border-transparent focus:border-orange-500/40 disabled:opacity-60 disabled:cursor-default"
+              className="hidden md:block bg-transparent text-lg text-stone-300 focus:outline-none focus:text-stone-100 font-mono px-2 py-1 border-b border-transparent focus:border-orange-500/40"
             />
-            {logger.readOnly && (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 border border-orange-500/40 bg-orange-500/10 text-orange-300 font-mono text-[10px] uppercase tracking-wider">
-                ✓ Completed
-              </span>
-            )}
           </div>
           <div className="flex items-center gap-3">
-            {!logger.readOnly && !workoutId && (
+            {!workoutId && (
               <div className="text-right">
                 <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono">Session</div>
                 <div className="font-anton text-2xl tabular-nums text-stone-200">{mins}:{secs}</div>
               </div>
             )}
-            {logger.readOnly ? (
-              <>
-                <button
-                  onClick={() => logger.setReadOnly(false)}
-                  className="px-5 py-2.5 border border-stone-700 text-stone-300 font-mono text-xs uppercase tracking-wider hover:border-orange-500/60 hover:text-stone-100 transition-colors"
-                >
-                  Edit Workout
-                </button>
-                <button
-                  onClick={() => navigate('/dashboard')}
-                  className="px-5 py-2.5 border border-stone-700 text-stone-300 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-100 transition-colors"
-                >
-                  ← Dashboard
-                </button>
-              </>
-            ) : workoutId ? (
-              <>
-                {savedConfirm && (
-                  <span className="font-mono text-xs text-orange-300 uppercase tracking-wider">Saved ✓</span>
-                )}
-                <button
-                  onClick={() => logger.setReadOnly(true)}
-                  className="px-5 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-200 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveChanges}
-                  className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-lg uppercase tracking-wider hover:bg-orange-400 transition-colors"
-                >
-                  Save Changes
-                </button>
-              </>
+            {workoutId ? (
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="px-5 py-2.5 border border-stone-700 text-stone-300 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-100 transition-colors"
+              >
+                ← Dashboard
+              </button>
             ) : (
               <button
                 onClick={handleComplete}
@@ -874,10 +812,10 @@ export default function IronLabLogger() {
 
         {/* STATS BAR */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-0 mb-8 border border-stone-800/60 bg-stone-950/40">
-          <StatBlock label="Total Volume"    value={fmt(totalVolume)}          sub="kg · reps"                                       accent="text-orange-300" />
-          <StatBlock label="Sets Completed"  value={`${doneSets}/${totalSets}`} sub={`${Math.round((doneSets / Math.max(totalSets, 1)) * 100)}% complete`} />
-          <StatBlock label="Reps Logged"     value={fmt(totalReps)}            sub="working sets" />
-          <StatBlock label="Muscles Hit"     value={Object.keys(volumes).length} sub={`/ ${Object.keys(MUSCLES).length} total`} />
+          <StatBlock label="Total Volume"  value={fmt(totalVolume)}            sub="kg · reps"                         accent="text-orange-300" />
+          <StatBlock label="Sets"          value={totalSets}                   sub="logged" />
+          <StatBlock label="Reps"          value={fmt(totalReps)}              sub="working sets" />
+          <StatBlock label="Muscles Hit"   value={Object.keys(volumes).length} sub={`/ ${Object.keys(MUSCLES).length} total`} />
         </div>
 
         {/* MAIN GRID */}
@@ -893,16 +831,13 @@ export default function IronLabLogger() {
                   index={idx}
                   we={we}
                   exercise={ex}
-                  readOnly={logger.readOnly}
                   onUpdate={(updated) => updateExercise(we.id, () => updated)}
                   onRemove={() => hookRemove(we.id)}
                   onAddSet={() => addSetToExercise(we.id)}
                 />
               );
             })}
-            {!logger.readOnly && (
-              <AddExercisePicker library={library} onAdd={hookAdd} used={usedIds} />
-            )}
+            <AddExercisePicker library={library} onAdd={hookAdd} used={usedIds} />
           </main>
 
           {/* RIGHT — MUSCLE MAP + BREAKDOWN */}
