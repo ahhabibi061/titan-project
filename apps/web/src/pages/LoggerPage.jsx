@@ -636,11 +636,12 @@ export default function IronLabLogger() {
   const secs    = String(seconds % 60).padStart(2, '0');
 
   const handleComplete = async () => {
-    const topEntry = Object.entries(volumes).sort(([, a], [, b]) => b - a)[0];
-    const prsHit   = workout.reduce(
+    const topEntry    = Object.entries(volumes).sort(([, a], [, b]) => b - a)[0];
+    const prsHit      = workout.reduce(
       (acc, we) => acc + we.sets.filter(s => s.done && overloadStatus(s).kind === 'pr').length, 0
     );
-    setSummary({ totalVolume, doneSets, prsHit, topMuscle: topEntry?.[0], duration: seconds });
+    const durationMins = Math.round(seconds / 60);
+    setSummary({ totalVolume, doneSets, totalReps, prsHit, topMuscle: topEntry?.[0], durationMins });
     const saved = await logger.completeWorkout();
     if (saved) setShowComplete(true);
   };
@@ -715,7 +716,7 @@ export default function IronLabLogger() {
             <div className="font-anton text-6xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">
               Workout Complete
             </div>
-            <div className="grid grid-cols-3 gap-8">
+            <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
               <div>
                 <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-1">Volume</div>
                 <div className="font-anton text-4xl text-orange-300 tabular-nums">{fmt(summary.totalVolume)}</div>
@@ -726,15 +727,24 @@ export default function IronLabLogger() {
                 <div className="font-anton text-4xl text-stone-100 tabular-nums">{summary.doneSets}</div>
               </div>
               <div>
+                <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-1">Total Reps</div>
+                <div className="font-anton text-4xl text-stone-100 tabular-nums">{summary.totalReps}</div>
+              </div>
+              <div>
                 <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-1">PRs Hit</div>
                 <div className="font-anton text-4xl text-orange-300 tabular-nums">{summary.prsHit}</div>
               </div>
             </div>
-            {summary.topMuscle && (
+            <div className="flex items-center justify-center gap-8 flex-wrap">
+              {summary.topMuscle && (
+                <div className="text-stone-400 font-mono text-xs uppercase tracking-wider">
+                  Top muscle: <span className="text-orange-300">{MUSCLES[summary.topMuscle]}</span>
+                </div>
+              )}
               <div className="text-stone-400 font-mono text-xs uppercase tracking-wider">
-                Top muscle: <span className="text-orange-300">{MUSCLES[summary.topMuscle]}</span>
+                Duration: <span className="text-stone-200">{summary.durationMins} min</span>
               </div>
-            )}
+            </div>
             <p className="text-stone-600 font-mono text-xs">Redirecting to dashboard…</p>
           </div>
         </div>

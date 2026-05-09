@@ -92,7 +92,7 @@ export function useDashboard(userId) {
 
           // 3. Today's workout — match by created_at so Logger workouts (no scheduled_date) appear
           supabase.from('workouts')
-            .select('id, name, completed_at, workout_exercises(id, sets_target, exercises(name))')
+            .select('id, name, created_at, completed_at, workout_exercises(id, exercises(name), sets(id, reps))')
             .eq('user_id', userId)
             .gte('created_at', todayStr)
             .lt('created_at', tomorrowStr)
@@ -197,15 +197,21 @@ export function useDashboard(userId) {
         }
 
         // ── Workout today ──
+        const allWeSets = (workoutRaw?.workout_exercises ?? []).flatMap(we => we.sets ?? []);
         const workout = workoutRaw ? {
-          id:        workoutRaw.id,
-          name:      workoutRaw.name,
-          completed: !!workoutRaw.completed_at,
-          exercises: (workoutRaw.workout_exercises ?? []).map(we => ({
+          id:           workoutRaw.id,
+          name:         workoutRaw.name,
+          completed:    !!workoutRaw.completed_at,
+          exercises:    (workoutRaw.workout_exercises ?? []).map(we => ({
             name: we.exercises?.name ?? 'Exercise',
-            sets: we.sets_target ?? 0,
+            sets: (we.sets ?? []).length,
           })),
-          estimatedMinutes: Math.round((workoutRaw.workout_exercises?.length ?? 0) * 12),
+          exerciseCount: workoutRaw.workout_exercises?.length ?? 0,
+          setCount:      allWeSets.length,
+          totalReps:     allWeSets.reduce((s, set) => s + (set.reps ?? 0), 0),
+          duration:      workoutRaw.completed_at
+            ? `${Math.round((new Date(workoutRaw.completed_at) - new Date(workoutRaw.created_at)) / 60000)} min`
+            : null,
         } : null;
 
         // ── Coach recommendation ──
