@@ -523,16 +523,16 @@ export default function VisionNutrition() {
 
         {/* WORKOUT BURN BANNER — shown when today has a completed workout with calories_burned */}
         {isToday && calsBurned != null && (
-          <div className="flex items-center gap-4 flex-wrap border border-orange-500/30 bg-orange-500/08 px-5 py-3 mb-6">
-            <span className="font-mono text-[10px] uppercase tracking-wider text-orange-400">Today's Workout</span>
-            <span className="font-mono text-sm tabular-nums text-stone-200">{Math.round(calsBurned)} kcal burned</span>
+          <div className="flex items-center gap-3 flex-wrap border border-orange-500/30 bg-orange-500/08 px-5 py-3 mb-6">
+            <span className="text-base">🔥</span>
+            <span className="font-mono text-sm tabular-nums text-stone-200">
+              {Math.round(calsBurned)} cal burned today
+            </span>
             {eatBackCalories ? (
-              <span className="font-mono text-[10px] text-stone-500">
-                · Added to daily target → {baseTgt.kcal.toLocaleString()} + {Math.round(calsBurned)} = <span className="text-orange-300">{tgt.kcal.toLocaleString()} kcal available</span>
-              </span>
+              <span className="font-mono text-[10px] text-orange-300">— eating back included</span>
             ) : (
               <span className="font-mono text-[10px] text-stone-600">
-                · Enable eat-back in <a href="/settings" className="text-orange-400 hover:underline">Settings</a> to add to target
+                · <a href="/settings" className="text-orange-400 hover:underline">Enable eat-back</a> to add to target
               </span>
             )}
           </div>

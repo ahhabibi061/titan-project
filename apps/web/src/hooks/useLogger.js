@@ -459,6 +459,23 @@ export function useLogger(userId, workoutId = null) {
 
   const clearError = useCallback(() => setError(null), []);
 
+  // Flush pending set writes and return to read-only — used by "Save Changes" in edit mode
+  const saveChanges = useCallback(async () => {
+    const pending = Object.entries(pendingSetWrites.current);
+    if (pending.length) {
+      pending.forEach(([id]) => clearTimeout(timers.current[id]));
+      pendingSetWrites.current = {};
+      await Promise.all(pending.map(([setId, db]) =>
+        supabase.from('sets').update(db).eq('id', setId).then(({ error: err }) => {
+          if (err) console.error('[useLogger] saveChanges flush error for set', setId, err);
+          else     console.log('[useLogger] saveChanges flushed set', setId, db);
+        })
+      ));
+    }
+    setReadOnly(true);
+    return { success: true };
+  }, []);
+
   return {
     workout,
     exercises,
@@ -466,6 +483,7 @@ export function useLogger(userId, workoutId = null) {
     loading,
     completed,
     readOnly,
+    setReadOnly,
     error,
     clearError,
     startWorkout,
@@ -476,5 +494,6 @@ export function useLogger(userId, workoutId = null) {
     addSetToExercise,
     removeSetFromExercise,
     completeWorkout,
+    saveChanges,
   };
 }

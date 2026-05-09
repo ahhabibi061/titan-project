@@ -575,6 +575,7 @@ export default function IronLabLogger() {
   const [seconds, setSeconds]       = useState(0);
   const [showComplete, setShowComplete] = useState(false);
   const [summary, setSummary]       = useState(null);
+  const [savedConfirm, setSavedConfirm] = useState(false);
 
   // Sync workout name from Supabase into local input
   useEffect(() => {
@@ -647,6 +648,14 @@ export default function IronLabLogger() {
   const usedIds = new Set(workout.map(we => we.exerciseId));
   const mins    = String(Math.floor(seconds / 60)).padStart(2, '0');
   const secs    = String(seconds % 60).padStart(2, '0');
+
+  const handleSaveChanges = async () => {
+    const result = await logger.saveChanges();
+    if (result?.success) {
+      setSavedConfirm(true);
+      setTimeout(() => setSavedConfirm(false), 2000);
+    }
+  };
 
   const handleComplete = async () => {
     const topEntry    = Object.entries(volumes).sort(([, a], [, b]) => b - a)[0];
@@ -813,19 +822,45 @@ export default function IronLabLogger() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            {!logger.readOnly && (
+            {!logger.readOnly && !workoutId && (
               <div className="text-right">
                 <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono">Session</div>
                 <div className="font-anton text-2xl tabular-nums text-stone-200">{mins}:{secs}</div>
               </div>
             )}
             {logger.readOnly ? (
-              <button
-                onClick={() => navigate('/dashboard')}
-                className="px-5 py-2.5 border border-stone-700 text-stone-300 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-100 transition-colors"
-              >
-                ← Dashboard
-              </button>
+              <>
+                <button
+                  onClick={() => logger.setReadOnly(false)}
+                  className="px-5 py-2.5 border border-stone-700 text-stone-300 font-mono text-xs uppercase tracking-wider hover:border-orange-500/60 hover:text-stone-100 transition-colors"
+                >
+                  Edit Workout
+                </button>
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="px-5 py-2.5 border border-stone-700 text-stone-300 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-100 transition-colors"
+                >
+                  ← Dashboard
+                </button>
+              </>
+            ) : workoutId ? (
+              <>
+                {savedConfirm && (
+                  <span className="font-mono text-xs text-orange-300 uppercase tracking-wider">Saved ✓</span>
+                )}
+                <button
+                  onClick={() => logger.setReadOnly(true)}
+                  className="px-5 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveChanges}
+                  className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-lg uppercase tracking-wider hover:bg-orange-400 transition-colors"
+                >
+                  Save Changes
+                </button>
+              </>
             ) : (
               <button
                 onClick={handleComplete}

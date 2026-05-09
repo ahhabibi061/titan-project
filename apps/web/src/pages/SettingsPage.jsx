@@ -602,8 +602,8 @@ export default function SettingsPage() {
               {/* Eat-Back Calories */}
               <div className="flex items-center justify-between py-4">
                 <div>
-                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Count Workout Calories</div>
-                  <div className="text-xs text-stone-500 font-mono mt-0.5">Add calories burned in training to your daily kcal target (eat-back)</div>
+                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Count Workout Calories Toward Daily Goal</div>
+                  <div className="text-xs text-stone-500 font-mono mt-0.5">Eat back calories burned during training</div>
                 </div>
                 <Toggle enabled={!!prefs.eat_back_calories} onChange={v => savePref('eat_back_calories', v)} />
               </div>
