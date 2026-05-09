@@ -300,7 +300,7 @@ export function useLogger(userId) {
 
     clearTimeout(timers.current[setId]);
     timers.current[setId] = setTimeout(async () => {
-      const db = {};
+      const db = { logged_at: new Date().toISOString() };
       if ('reps'   in updates) db.reps      = updates.reps;
       if ('weight' in updates) db.weight_kg = updates.weight;
       if ('done'   in updates) db.logged_at = updates.done ? new Date().toISOString() : null;
