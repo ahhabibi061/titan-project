@@ -15,7 +15,7 @@ export function useProfile() {
     if (!userId) return;
     supabase
       .from('profiles')
-      .select('display_name, subscription_tier, current_macros, goal, goal_weight_kg, weight_kg, settings, height_cm, age, sex, activity_level, created_at')
+      .select('display_name, subscription_tier, current_macros, goal, goal_weight_kg, weight_kg, height_cm, age, sex, activity_level, created_at, onboarding_complete')
       .eq('id', userId)
       .single()
       .then(({ data, error }) => {
