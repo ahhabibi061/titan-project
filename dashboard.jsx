@@ -74,10 +74,10 @@ const TODAY = {
 const NAV_MODULES = [
   { id: 'home',     label: 'Home',     active: true },
   { id: 'IRONLAB',    label: 'IRONLAB',    active: false },
-  { id: 'vision',   label: 'Vision',   active: false },
+  { id: 'vision',   label: 'Sentinel', active: false },
   { id: 'vault',    label: 'Vault',    active: false },
-  { id: 'library',  label: 'Library',  active: false },
-  { id: 'coach',    label: 'Coach',    active: false },
+  { id: 'library',  label: 'Codex',    active: false },
+  { id: 'coach',    label: 'Oracle',   active: false },
 ];
 
 // -------------------- HELPERS --------------------
@@ -557,10 +557,10 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
                 { name: 'IRONLAB',   sub: 'Logger',     accent: 'from-orange-300 to-orange-600' },
-                { name: 'Vision',  sub: 'Nutrition',  accent: 'from-amber-300 to-orange-500' },
-                { name: 'Vault',   sub: 'Biometric',  accent: 'from-orange-300 to-red-500' },
-                { name: 'Library', sub: 'Exercises',  accent: 'from-stone-300 to-stone-500' },
-                { name: 'Coach',   sub: 'Engine',     accent: 'from-orange-400 to-orange-700' },
+                { name: 'Sentinel', sub: 'Nutrition',  accent: 'from-amber-300 to-orange-500' },
+                { name: 'Vault',    sub: 'Biometric',  accent: 'from-orange-300 to-red-500' },
+                { name: 'Codex',    sub: 'Exercises',  accent: 'from-stone-300 to-stone-500' },
+                { name: 'Oracle',   sub: 'Engine',     accent: 'from-orange-400 to-orange-700' },
               ].map(m => (
                 <button
                   key={m.name}

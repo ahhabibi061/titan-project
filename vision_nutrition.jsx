@@ -465,7 +465,7 @@ export default function VisionNutrition() {
         <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
           <div>
             <div className="flex items-baseline gap-3 mb-2">
-              <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Vision</span>
+              <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Sentinel</span>
               <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-amber-300 to-orange-500 bg-clip-text text-transparent">Nutrition</span>
             </div>
             <div className="flex items-center gap-3 text-xs font-mono text-stone-500">
@@ -557,7 +557,7 @@ export default function VisionNutrition() {
         <div className="border border-stone-800/60 bg-stone-950/40 mb-8">
           <div className="flex items-baseline justify-between p-6 pb-4 border-b border-stone-800/60">
             <div>
-              <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Vision Scan</h2>
+              <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Sentinel Scan</h2>
               <div className="text-[10px] font-mono uppercase tracking-wider text-stone-600 mt-1">vendor: logmeal · response 1.4s · cost $0.008/scan</div>
             </div>
             <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">edge function · pro tier</span>
@@ -626,7 +626,7 @@ export default function VisionNutrition() {
         </div>
 
         <footer className="mt-12 pt-6 border-t border-stone-800/60 flex items-center justify-between text-[10px] uppercase tracking-wider text-stone-600 font-mono">
-          <span>Vision-Nutrition v0.4 · Module 1 · Camera-driven macro logging</span>
+          <span>Sentinel v0.4 · Module 1 · Camera-driven macro logging</span>
           <span>Provider: LogMeal · Fallback: Bite AI · Manual: anytime</span>
         </footer>
       </div>

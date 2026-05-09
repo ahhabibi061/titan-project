@@ -586,7 +586,7 @@ export default function BiometricVault() {
               </div>
             </div>
             <div className="mt-5 pt-4 border-t border-stone-800/60 text-[10px] font-mono text-stone-600 leading-relaxed">
-              These metrics feed the Coach Engine every 7 days. Aggressive pace triggers macro adjustments; flat slope flags the cut as stalled.
+              These metrics feed Oracle every 7 days. Aggressive pace triggers macro adjustments; flat slope flags the cut as stalled.
             </div>
           </div>
         </div>

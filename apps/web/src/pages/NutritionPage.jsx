@@ -1,31 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useSession } from '../hooks/useSession';
+import { useSentinel } from '../hooks/useSentinel';
+import { FoodSearch } from '../components/FoodSearch';
 
 /* =========================================================================
- * VISION-NUTRITION — Module 1 Proof-of-Concept
- * Demonstrates: camera scan flow, vision-API result handling with
- *               ranked candidates + confidence scores, manual override
- *               path, daily macro dashboard, today's meal log.
- *
- * Production notes:
- *   - Image uploads go to Supabase Storage (private bucket, signed URLs).
- *   - Edge Function `analyze-meal-image` proxies to LogMeal/Bite AI
- *     with a server-held API key (NEVER client-side).
- *   - Confirmed selection writes to `nutrition_logs` with source='vision_api'
- *     and the confidence score stored alongside macros for audit.
- *   - PRO TIER GATE: this entire module is gated to Pro subscribers via RLS.
+ * SENTINEL — Module 1
+ * Camera scan flow + live meal log wired to Supabase nutrition_logs.
+ * Manual entry, date navigation, delete with inline confirm.
  * ========================================================================= */
 
-// -------------------- TARGETS & DATA --------------------
-const DAILY_TARGET = { kcal: 2200, protein: 180, carbs: 220, fat: 70 };
-
-const TODAY_LOG = [
-  { id: 1, time: '08:14', name: 'Oatmeal & Blueberries',  macros: { kcal: 380, protein: 14, carbs: 62, fat: 8  }, source: 'vision', confidence: 88 },
-  { id: 2, time: '12:38', name: 'Greek Yogurt & Walnuts', macros: { kcal: 240, protein: 22, carbs: 14, fat: 12 }, source: 'manual' },
-  { id: 3, time: '15:02', name: 'Whey Protein Shake',     macros: { kcal: 150, protein: 30, carbs: 6,  fat: 2  }, source: 'manual' },
-  { id: 4, time: '18:45', name: 'Salmon & Sweet Potato',  macros: { kcal: 540, protein: 38, carbs: 48, fat: 18 }, source: 'vision', confidence: 94 },
-];
-
-// Vision-API candidates returned for the demo meal
+// Vision-API scan demo candidates (UI demo only — scan writes via addMeal)
 const SCAN_CANDIDATES = [
   {
     id: 'a',
@@ -53,7 +37,6 @@ const SCAN_CANDIDATES = [
   },
 ];
 
-// Bounding boxes laid over the meal image (% of frame)
 const DETECTED_REGIONS = [
   { x: 28, y: 18, w: 30, h: 28, label: 'Grilled Chicken', conf: 94 },
   { x: 56, y: 32, w: 30, h: 36, label: 'Brown Rice',      conf: 89 },
@@ -64,18 +47,13 @@ const DETECTED_REGIONS = [
 
 // -------------------- HELPERS --------------------
 const fmt0 = (n) => Math.round(n).toLocaleString('en-US');
-const sumMacros = (entries) => entries.reduce(
-  (acc, m) => ({
-    kcal: acc.kcal + m.macros.kcal,
-    protein: acc.protein + m.macros.protein,
-    carbs: acc.carbs + m.macros.carbs,
-    fat: acc.fat + m.macros.fat,
-  }),
-  { kcal: 0, protein: 0, carbs: 0, fat: 0 }
+
+// -------------------- SKELETON --------------------
+const Sk = ({ w = 'w-16', h = 'h-3' }) => (
+  <div className={`${w} ${h} bg-stone-800 animate-pulse rounded-sm`} />
 );
 
 // -------------------- FOOD ILLUSTRATION --------------------
-// Top-down stylized bowl — placeholder for the actual user photo.
 function MealIllustration() {
   return (
     <svg viewBox="0 0 400 400" className="w-full h-full">
@@ -98,12 +76,8 @@ function MealIllustration() {
           <stop offset="100%" stopColor="#5a7c3a" />
         </radialGradient>
       </defs>
-
-      {/* Bowl */}
       <circle cx="200" cy="200" r="178" fill="url(#bowl-grad)" stroke="#2a2622" strokeWidth="2" />
       <circle cx="200" cy="200" r="160" fill="none" stroke="#3a342e" strokeWidth="1" opacity="0.6" />
-
-      {/* Rice base — cluster of small ellipses */}
       <g opacity="0.95">
         {Array.from({ length: 32 }).map((_, i) => {
           const angle = (i / 32) * Math.PI * 2;
@@ -113,53 +87,36 @@ function MealIllustration() {
           return <ellipse key={i} cx={cx} cy={cy} rx="6" ry="3.2" fill="url(#rice-grad)" transform={`rotate(${(i * 23) % 180} ${cx} ${cy})`} />;
         })}
       </g>
-
-      {/* Chicken — 4 oblong pieces */}
       <ellipse cx="148" cy="148" rx="34" ry="22" fill="url(#chicken-grad)" transform="rotate(-25 148 148)" />
       <ellipse cx="172" cy="120" rx="30" ry="18" fill="url(#chicken-grad)" transform="rotate(20 172 120)" />
       <ellipse cx="120" cy="178" rx="28" ry="18" fill="url(#chicken-grad)" transform="rotate(-50 120 178)" />
       <ellipse cx="200" cy="148" rx="26" ry="16" fill="url(#chicken-grad)" transform="rotate(45 200 148)" />
-
-      {/* Avocado — half-moons */}
       <path d="M 84,260 Q 100,234 132,250 Q 124,288 88,288 Z" fill="url(#avo-grad)" />
       <path d="M 96,266 Q 108,258 122,266" fill="none" stroke="#3a5028" strokeWidth="1" opacity="0.5" />
-
-      {/* Black beans — scattered dots */}
       <g fill="#2a1a14">
-        {[
-          [220, 280], [240, 270], [260, 282], [232, 296], [252, 300],
-          [276, 286], [212, 296], [248, 266]
-        ].map(([cx, cy], i) => (
+        {[[220,280],[240,270],[260,282],[232,296],[252,300],[276,286],[212,296],[248,266]].map(([cx,cy],i) => (
           <ellipse key={i} cx={cx} cy={cy} rx="6" ry="4.5" />
         ))}
       </g>
-
-      {/* Salsa — small red bits */}
       <g fill="#c83a28" opacity="0.85">
-        {[[280, 138], [290, 154], [272, 156], [296, 130], [306, 144], [284, 124]].map(([cx, cy], i) => (
+        {[[280,138],[290,154],[272,156],[296,130],[306,144],[284,124]].map(([cx,cy],i) => (
           <circle key={i} cx={cx} cy={cy} r="3.5" />
         ))}
       </g>
-
-      {/* Lime wedge */}
       <path d="M 138,238 Q 120,238 122,256 Q 138,254 144,244 Z" fill="#b8c84a" />
       <path d="M 138,240 L 138,254" stroke="#7a8a2a" strokeWidth="0.5" />
     </svg>
   );
 }
 
-// -------------------- CAMERA VIEWFINDER + DETECTION --------------------
-function CameraView({ state, selectedId }) {
+// -------------------- CAMERA VIEW --------------------
+function CameraView({ state }) {
   const showBoxes = state === 'results' || state === 'confirmed';
-
   return (
     <div className="relative aspect-square w-full max-w-md mx-auto bg-stone-950 overflow-hidden">
-      {/* Meal image */}
       <div className={`absolute inset-0 transition-all duration-500 ${state === 'capturing' ? 'brightness-150' : ''} ${state === 'analyzing' ? 'brightness-75' : ''}`}>
         <MealIllustration />
       </div>
-
-      {/* Scanning shimmer */}
       {state === 'analyzing' && (
         <>
           <div className="absolute inset-0 pointer-events-none" style={{
@@ -171,17 +128,13 @@ function CameraView({ state, selectedId }) {
           }} />
         </>
       )}
-
-      {/* Capture flash */}
       {state === 'capturing' && (
         <div className="absolute inset-0 bg-white pointer-events-none animate-pulse" style={{ opacity: 0.7 }} />
       )}
-
-      {/* Corner brackets — viewfinder */}
       <div className="absolute inset-0 pointer-events-none">
         {[
-          { top: 12, left: 12,  rot: 0 },
-          { top: 12, right: 12, rot: 90 },
+          { top: 12, left: 12,   rot: 0   },
+          { top: 12, right: 12,  rot: 90  },
           { bottom: 12, right: 12, rot: 180 },
           { bottom: 12, left: 12,  rot: 270 },
         ].map((p, i) => (
@@ -191,17 +144,12 @@ function CameraView({ state, selectedId }) {
           </div>
         ))}
       </div>
-
-      {/* Bounding boxes after analysis */}
       {showBoxes && DETECTED_REGIONS.map((r, i) => (
         <div
           key={i}
           className="absolute border-2 border-orange-400/80 transition-all duration-300"
           style={{
-            left: `${r.x}%`,
-            top: `${r.y}%`,
-            width: `${r.w}%`,
-            height: `${r.h}%`,
+            left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%`,
             animation: `boxIn 400ms ${i * 80}ms ease-out both`,
             backgroundColor: 'rgba(237,122,42,0.06)',
           }}
@@ -211,20 +159,16 @@ function CameraView({ state, selectedId }) {
           </div>
         </div>
       ))}
-
-      {/* Status overlay */}
       <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.2em]">
         <span className="bg-stone-950/80 backdrop-blur-sm border border-orange-500/40 px-2 py-1 text-orange-300">
-          {state === 'idle' && '● ready'}
+          {state === 'idle'      && '● ready'}
           {state === 'capturing' && '◉ capture'}
           {state === 'analyzing' && '◌ analyzing'}
-          {state === 'results' && `▣ ${DETECTED_REGIONS.length} items`}
+          {state === 'results'   && `▣ ${DETECTED_REGIONS.length} items`}
           {state === 'confirmed' && '✓ logged'}
         </span>
         <span className="bg-stone-950/80 backdrop-blur-sm border border-stone-700 px-2 py-1 text-stone-500">logmeal v3</span>
       </div>
-
-      {/* Idle CTA */}
       {state === 'idle' && (
         <div className="absolute inset-0 bg-stone-950/70 backdrop-blur-sm flex items-center justify-center">
           <div className="text-center">
@@ -233,8 +177,6 @@ function CameraView({ state, selectedId }) {
           </div>
         </div>
       )}
-
-      {/* Analyzing label */}
       {state === 'analyzing' && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-stone-950/90 border border-orange-500/40 px-4 py-2 backdrop-blur-sm">
           <div className="font-anton text-sm uppercase tracking-wider text-orange-300">Analyzing Meal…</div>
@@ -249,7 +191,6 @@ function CameraView({ state, selectedId }) {
 function CandidateRow({ candidate, selected, onSelect, isTop }) {
   const { name, portion, confidence, macros, detected } = candidate;
   const ringColor = confidence >= 90 ? 'text-orange-400' : confidence >= 75 ? 'text-stone-300' : 'text-stone-500';
-
   return (
     <button
       onClick={() => onSelect(candidate.id)}
@@ -260,24 +201,16 @@ function CandidateRow({ candidate, selected, onSelect, isTop }) {
       }`}
     >
       <div className="flex items-start gap-4">
-        {/* Confidence ring */}
         <div className="relative w-14 h-14 shrink-0">
           <svg viewBox="0 0 56 56" className="w-full h-full -rotate-90">
             <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
-            <circle
-              cx="28" cy="28" r="24" fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeDasharray={`${(confidence / 100) * 150.8} 150.8`}
-              strokeLinecap="square"
-              className={ringColor}
-            />
+            <circle cx="28" cy="28" r="24" fill="none" stroke="currentColor" strokeWidth="3"
+              strokeDasharray={`${(confidence / 100) * 150.8} 150.8`} strokeLinecap="square" className={ringColor} />
           </svg>
           <div className="absolute inset-0 flex items-center justify-center">
             <span className={`font-anton text-base tabular-nums ${ringColor}`}>{confidence}</span>
           </div>
         </div>
-
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2 mb-1">
             <span className="font-anton text-lg uppercase tracking-tight text-stone-100">{name}</span>
@@ -302,8 +235,6 @@ function CandidateRow({ candidate, selected, onSelect, isTop }) {
             ))}
           </div>
         </div>
-
-        {/* Selection indicator */}
         <div className={`w-5 h-5 border-2 shrink-0 flex items-center justify-center mt-1 ${
           selected ? 'border-orange-500 bg-orange-500' : 'border-stone-600'
         }`}>
@@ -320,25 +251,17 @@ function CandidateRow({ candidate, selected, onSelect, isTop }) {
 
 // -------------------- CALORIE RING --------------------
 function CalorieRing({ consumed, target }) {
-  const pct = Math.min(consumed / target, 1);
+  const pct = Math.min(consumed / Math.max(target, 1), 1);
   const radius = 76;
-  const stroke = 10;
   const c = 2 * Math.PI * radius;
-  const remaining = target - consumed;
-
+  const remaining = Math.max(target - consumed, 0);
   return (
     <div className="relative w-48 h-48">
       <svg viewBox="0 0 200 200" className="w-full h-full -rotate-90">
-        <circle cx="100" cy="100" r={radius} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={stroke} />
-        <circle
-          cx="100" cy="100" r={radius}
-          fill="none"
-          stroke="url(#ring-grad)"
-          strokeWidth={stroke}
-          strokeDasharray={`${pct * c} ${c}`}
-          strokeLinecap="round"
-          style={{ transition: 'stroke-dasharray 800ms ease' }}
-        />
+        <circle cx="100" cy="100" r={radius} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="10" />
+        <circle cx="100" cy="100" r={radius} fill="none" stroke="url(#ring-grad)" strokeWidth="10"
+          strokeDasharray={`${pct * c} ${c}`} strokeLinecap="round"
+          style={{ transition: 'stroke-dasharray 800ms ease' }} />
         <defs>
           <linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor="#fbbf24" />
@@ -360,14 +283,17 @@ function CalorieRing({ consumed, target }) {
 
 // -------------------- MACRO BAR --------------------
 function MacroBar({ label, consumed, target, color }) {
-  const pct = Math.min((consumed / target) * 100, 100);
+  const pct = Math.min((consumed / Math.max(target, 1)) * 100, 100);
+  const remaining = Math.max(target - consumed, 0);
   return (
     <div>
-      <div className="flex items-baseline justify-between mb-1.5">
+      <div className="flex items-baseline justify-between mb-1">
         <span className="text-[10px] uppercase tracking-wider text-stone-500 font-mono">{label}</span>
         <span className="font-mono text-[11px] tabular-nums text-stone-400">
           <span className="text-stone-200">{fmt0(consumed)}</span>
           <span className="text-stone-600"> / {fmt0(target)} g</span>
+          <span className="text-stone-700"> · </span>
+          <span className="text-stone-500">{fmt0(remaining)} left</span>
         </span>
       </div>
       <div className="relative h-1.5 bg-stone-900/80">
@@ -377,36 +303,133 @@ function MacroBar({ label, consumed, target, color }) {
   );
 }
 
-// -------------------- MEAL LOG ENTRY --------------------
-function MealEntry({ meal }) {
+// -------------------- MEAL ENTRY --------------------
+function MealEntry({ meal, onDelete }) {
+  const [confirming, setConfirming] = useState(false);
+  const time = new Date(meal.logged_at).toLocaleTimeString('en-US', {
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+
   return (
     <div className="flex items-center gap-3 py-3 border-b border-stone-800/40 last:border-b-0">
-      <span className="font-mono text-[10px] tabular-nums text-stone-600 w-12 shrink-0">{meal.time}</span>
+      <span className="font-mono text-[10px] tabular-nums text-stone-600 w-12 shrink-0">{time}</span>
       <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-baseline gap-2 flex-wrap">
           <span className="text-stone-200 text-sm truncate">{meal.name}</span>
-          {meal.source === 'vision' && (
+          {meal.source === 'vision_api' && (
             <span className="text-[8px] uppercase tracking-wider px-1 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25 font-mono shrink-0">
               ◌ vision
             </span>
           )}
+          {meal.source === 'barcode' && (
+            <span className="text-[8px] uppercase tracking-wider px-1 py-0.5 bg-stone-700/40 text-stone-400 border border-stone-700/50 font-mono shrink-0">
+              ▣ barcode
+            </span>
+          )}
+          {meal.source === 'manual' && (
+            <span className="text-[8px] uppercase tracking-wider px-1 py-0.5 bg-stone-900/60 text-stone-600 border border-stone-800/60 font-mono shrink-0">
+              ✎ manual
+            </span>
+          )}
         </div>
         <div className="flex gap-3 text-[10px] font-mono tabular-nums mt-0.5">
-          <span className="text-stone-500">{meal.macros.kcal} kcal</span>
-          <span className="text-stone-600">{meal.macros.protein}p · {meal.macros.carbs}c · {meal.macros.fat}f</span>
+          <span className="text-stone-500">{meal.kcal} kcal</span>
+          <span className="text-stone-600">{meal.protein_g}p · {meal.carbs_g}c · {meal.fat_g}f</span>
         </div>
       </div>
+      {confirming ? (
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[9px] font-mono text-stone-500 uppercase tracking-wider">Delete?</span>
+          <button
+            onClick={() => onDelete(meal.id)}
+            className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-colors"
+          >
+            Yes
+          </button>
+          <button
+            onClick={() => setConfirming(false)}
+            className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border border-stone-700 text-stone-500 hover:bg-stone-800 transition-colors"
+          >
+            No
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setConfirming(true)}
+          className="shrink-0 text-stone-700 hover:text-stone-400 transition-colors p-1"
+          aria-label="Delete meal"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M2 3.5h10M5.5 3.5V2.5h3v1M11 3.5l-.75 8.5H3.75L3 3.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
 
+// -------------------- ADD MEAL FORM --------------------
+// AddMealForm replaced by FoodSearch component (Open Food Facts + barcode)
+
 // -------------------- MAIN --------------------
 export default function VisionNutrition() {
-  const [scanState, setScanState] = useState('results'); // start in results so the demo lands on the wow
-  const [selectedId, setSelectedId] = useState('a');
-  const [log, setLog] = useState(TODAY_LOG);
+  const { user } = useSession();
+  const {
+    meals, totals, targets, loading,
+    addMeal, deleteMeal,
+    selectedDate, setSelectedDate,
+  } = useSentinel(user?.id);
 
-  const totals = useMemo(() => sumMacros(log), [log]);
+  const [scanState, setScanState] = useState('results');
+  const [selectedId, setSelectedId] = useState('a');
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  // Resolved targets with fallbacks
+  const tgt = {
+    kcal:    targets?.kcal    ?? 2200,
+    protein: targets?.protein ?? 180,
+    carbs:   targets?.carbs   ?? 220,
+    fat:     targets?.fat     ?? 70,
+  };
+
+  // Date helpers
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+  const selMidnight = new Date(selectedDate);
+  selMidnight.setHours(0, 0, 0, 0);
+  const isToday = selMidnight.getTime() === todayMidnight.getTime();
+
+  const prevDay = () => {
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() - 1);
+    setSelectedDate(d);
+  };
+  const nextDay = () => {
+    if (isToday) return;
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + 1);
+    setSelectedDate(d);
+  };
+  const fmtDate = () => {
+    if (isToday) return 'Today';
+    const yest = new Date(todayMidnight);
+    yest.setDate(yest.getDate() - 1);
+    if (selMidnight.getTime() === yest.getTime()) return 'Yesterday';
+    return selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const visionCount = meals.filter(m => m.source === 'vision_api').length;
+  const remaining   = Math.max(0, tgt.kcal - totals.kcal);
+  const kcalPct     = Math.round((remaining / Math.max(tgt.kcal, 1)) * 100);
+
+  const macroSplit = useMemo(() => {
+    const t = totals.kcal || 1;
+    return {
+      p: Math.round((totals.protein * 4 / t) * 100),
+      c: Math.round((totals.carbs   * 4 / t) * 100),
+      f: Math.round((totals.fat     * 9 / t) * 100),
+    };
+  }, [totals]);
 
   const startScan = () => {
     setScanState('capturing');
@@ -417,17 +440,13 @@ export default function VisionNutrition() {
   const confirmSelection = () => {
     const c = SCAN_CANDIDATES.find(x => x.id === selectedId);
     if (!c) return;
-    setLog(prev => [
-      ...prev,
-      {
-        id: Date.now(),
-        time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-        name: c.name,
-        macros: c.macros,
-        source: 'vision',
-        confidence: c.confidence,
-      },
-    ]);
+    addMeal({
+      name:      c.name,
+      kcal:      c.macros.kcal,
+      protein_g: c.macros.protein,
+      carbs_g:   c.macros.carbs,
+      fat_g:     c.macros.fat,
+    });
     setScanState('confirmed');
     setTimeout(() => setScanState('idle'), 1800);
   };
@@ -465,16 +484,25 @@ export default function VisionNutrition() {
         <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
           <div>
             <div className="flex items-baseline gap-3 mb-2">
-              <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Vision</span>
+              <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Sentinel</span>
               <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-amber-300 to-orange-500 bg-clip-text text-transparent">Nutrition</span>
             </div>
             <div className="flex items-center gap-3 text-xs font-mono text-stone-500">
               <span className="px-2 py-1 bg-orange-500/15 text-orange-300 border border-orange-500/30 uppercase tracking-wider">PRO</span>
-              <span>{log.length} meals today</span>
-              <span className="text-stone-700">·</span>
-              <span>{log.filter(m => m.source === 'vision').length} via vision</span>
-              <span className="text-stone-700">·</span>
-              <span>{Math.round(((DAILY_TARGET.kcal - totals.kcal) / DAILY_TARGET.kcal) * 100)}% under target</span>
+              {loading ? (
+                <>
+                  <Sk w="w-20" h="h-3" />
+                  <Sk w="w-16" h="h-3" />
+                </>
+              ) : (
+                <>
+                  <span>{meals.length} meals {isToday ? 'today' : fmtDate()}</span>
+                  <span className="text-stone-700">·</span>
+                  <span>{visionCount} via vision</span>
+                  <span className="text-stone-700">·</span>
+                  <span>{kcalPct}% under target</span>
+                </>
+              )}
             </div>
           </div>
           <button
@@ -488,18 +516,33 @@ export default function VisionNutrition() {
 
         {/* HEADLINE */}
         <div className="mb-10">
-          <div className="text-[10px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-2">Today's intake</div>
-          <h1 className="font-anton text-5xl md:text-6xl uppercase tracking-tight leading-[0.95] text-stone-100 max-w-4xl">
-            <span className="text-orange-400 tabular-nums">{fmt0(totals.kcal)}</span> <span className="text-stone-500">/</span> {fmt0(DAILY_TARGET.kcal)} <span className="text-stone-500">kcal</span>
-            <span className="text-stone-600"> — {fmt0(DAILY_TARGET.kcal - totals.kcal)} remaining for the day.</span>
-          </h1>
+          <div className="text-[10px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-2">
+            {isToday ? "Today's intake" : `${fmtDate()}'s intake`}
+          </div>
+          {loading ? (
+            <Sk w="w-2/3" h="h-14" />
+          ) : (
+            <h1 className="font-anton text-5xl md:text-6xl uppercase tracking-tight leading-[0.95] text-stone-100 max-w-4xl">
+              <span className="text-orange-400 tabular-nums">{fmt0(totals.kcal)}</span>{' '}
+              <span className="text-stone-500">/</span>{' '}
+              {fmt0(tgt.kcal)} <span className="text-stone-500">kcal</span>
+              <span className="text-stone-600"> — {fmt0(remaining)} remaining for the day.</span>
+            </h1>
+          )}
         </div>
 
-        {/* TOP — DAILY DASHBOARD */}
+        {/* TOP DASHBOARD */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-10">
+
           {/* Calorie ring */}
           <div className="md:col-span-4 border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col items-center justify-center">
-            <CalorieRing consumed={totals.kcal} target={DAILY_TARGET.kcal} />
+            {loading ? (
+              <div className="w-48 h-48 flex items-center justify-center">
+                <Sk w="w-40" h="h-40" />
+              </div>
+            ) : (
+              <CalorieRing consumed={totals.kcal} target={tgt.kcal} />
+            )}
             <div className="mt-4 grid grid-cols-3 gap-2 w-full">
               <div className="text-center border border-stone-800/60 py-2">
                 <div className="text-[9px] font-mono uppercase text-stone-600 tracking-wider">Goal</div>
@@ -511,7 +554,7 @@ export default function VisionNutrition() {
               </div>
               <div className="text-center border border-stone-800/60 py-2">
                 <div className="text-[9px] font-mono uppercase text-stone-600 tracking-wider">Streak</div>
-                <div className="font-anton text-stone-300 text-sm tabular-nums">23d</div>
+                <div className="font-anton text-stone-300 text-sm tabular-nums">—</div>
               </div>
             </div>
           </div>
@@ -522,58 +565,119 @@ export default function VisionNutrition() {
               <h2 className="font-anton text-xl uppercase tracking-tight text-stone-100">Macros</h2>
               <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">target split</span>
             </div>
-            <div className="space-y-4">
-              <MacroBar label="Protein" consumed={totals.protein} target={DAILY_TARGET.protein} color="rgb(237, 122, 42)" />
-              <MacroBar label="Carbs"   consumed={totals.carbs}   target={DAILY_TARGET.carbs}   color="rgb(126, 182, 255)" />
-              <MacroBar label="Fat"     consumed={totals.fat}     target={DAILY_TARGET.fat}     color="rgb(251, 191, 36)" />
-            </div>
+            {loading ? (
+              <div className="space-y-5">
+                <Sk w="w-full" h="h-7" />
+                <Sk w="w-full" h="h-7" />
+                <Sk w="w-full" h="h-7" />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <MacroBar label="Protein" consumed={totals.protein} target={tgt.protein} color="rgb(237, 122, 42)" />
+                <MacroBar label="Carbs"   consumed={totals.carbs}   target={tgt.carbs}   color="rgb(126, 182, 255)" />
+                <MacroBar label="Fat"     consumed={totals.fat}     target={tgt.fat}     color="rgb(251, 191, 36)" />
+              </div>
+            )}
             <div className="mt-5 pt-4 border-t border-stone-800/60 grid grid-cols-3 gap-2 text-center">
               {[
-                { l: 'P', v: Math.round((totals.protein * 4 / Math.max(totals.kcal, 1)) * 100) },
-                { l: 'C', v: Math.round((totals.carbs * 4 / Math.max(totals.kcal, 1)) * 100) },
-                { l: 'F', v: Math.round((totals.fat * 9 / Math.max(totals.kcal, 1)) * 100) },
+                { l: 'P', v: macroSplit.p },
+                { l: 'C', v: macroSplit.c },
+                { l: 'F', v: macroSplit.f },
               ].map(x => (
                 <div key={x.l}>
                   <div className="text-[9px] font-mono uppercase text-stone-600 tracking-wider">{x.l}</div>
-                  <div className="font-anton text-stone-300 text-base tabular-nums">{x.v}%</div>
+                  {loading
+                    ? <Sk w="w-8 mx-auto" h="h-4" />
+                    : <div className="font-anton text-stone-300 text-base tabular-nums">{x.v}%</div>
+                  }
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Today's log */}
+          {/* Meal log with date nav */}
           <div className="md:col-span-4 border border-stone-800/60 bg-stone-950/40 p-6">
-            <div className="flex items-baseline justify-between mb-3">
-              <h2 className="font-anton text-xl uppercase tracking-tight text-stone-100">Today</h2>
-              <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">{log.length} entries</span>
+            {/* Date nav */}
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-anton text-xl uppercase tracking-tight text-stone-100">{fmtDate()}</h2>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={prevDay}
+                  className="p-1.5 text-stone-500 hover:text-stone-300 border border-stone-800 hover:border-stone-700 transition-colors"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M8 2L4 6L8 10" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {!isToday && (
+                  <button
+                    onClick={() => setSelectedDate(new Date())}
+                    className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 border border-stone-800 text-stone-600 hover:text-stone-400 transition-colors"
+                  >
+                    today
+                  </button>
+                )}
+                <button
+                  onClick={nextDay}
+                  disabled={isToday}
+                  className="p-1.5 text-stone-500 hover:text-stone-300 border border-stone-800 hover:border-stone-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M4 2L8 6L4 10" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <div className="space-y-0">
-              {log.map(m => <MealEntry key={m.id} meal={m} />)}
-            </div>
+
+            {loading ? (
+              <div className="space-y-3 mt-2">
+                <Sk w="w-full" h="h-10" />
+                <Sk w="w-full" h="h-10" />
+                <Sk w="w-4/5"  h="h-10" />
+              </div>
+            ) : meals.length === 0 ? (
+              <div className="py-8 flex flex-col items-center text-center">
+                <div className="text-stone-700 mb-1">
+                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1">
+                    <rect x="6" y="10" width="20" height="16" rx="2" />
+                    <path d="M11 10V8a5 5 0 0110 0v2" />
+                    <circle cx="16" cy="18" r="2" />
+                  </svg>
+                </div>
+                <div className="text-[10px] uppercase tracking-[0.2em] text-stone-700 font-mono mb-1">Nothing logged yet</div>
+                <div className="text-stone-600 text-xs leading-relaxed">
+                  {isToday
+                    ? 'Scan a meal or add one manually below.'
+                    : 'Nothing was logged on this day.'}
+                </div>
+              </div>
+            ) : (
+              <div>
+                {meals.map(m => (
+                  <MealEntry key={m.id} meal={m} onDelete={deleteMeal} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* SCAN AREA */}
+        {/* SCAN SECTION */}
         <div className="border border-stone-800/60 bg-stone-950/40 mb-8">
           <div className="flex items-baseline justify-between p-6 pb-4 border-b border-stone-800/60">
             <div>
-              <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Vision Scan</h2>
+              <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Sentinel Scan</h2>
               <div className="text-[10px] font-mono uppercase tracking-wider text-stone-600 mt-1">vendor: logmeal · response 1.4s · cost $0.008/scan</div>
             </div>
             <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">edge function · pro tier</span>
           </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-6">
-            {/* Camera view */}
             <div className="lg:col-span-5">
-              <CameraView state={scanState} selectedId={selectedId} />
+              <CameraView state={scanState} />
               <div className="mt-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-stone-600">
                 <span>{DETECTED_REGIONS.length} components detected</span>
                 <span>conf avg {Math.round(DETECTED_REGIONS.reduce((a, r) => a + r.conf, 0) / DETECTED_REGIONS.length)}%</span>
               </div>
             </div>
-
-            {/* Candidates */}
             <div className="lg:col-span-7">
               <div className="flex items-baseline justify-between mb-3">
                 <h3 className="font-anton text-lg uppercase tracking-tight text-stone-200">Match Candidates</h3>
@@ -590,10 +694,12 @@ export default function VisionNutrition() {
                   />
                 ))}
               </div>
-
               <div className="mt-5 flex items-center justify-between gap-3">
-                <button className="text-[10px] uppercase tracking-wider font-mono text-stone-500 hover:text-stone-300 px-3 py-2 border border-stone-800 hover:border-stone-700 transition-colors">
-                  None of these — log manually
+                <button
+                  onClick={() => setShowAddForm(true)}
+                  className="text-[10px] uppercase tracking-wider font-mono text-stone-500 hover:text-stone-300 px-3 py-2 border border-stone-800 hover:border-stone-700 transition-colors"
+                >
+                  None of these — search database
                 </button>
                 <button
                   onClick={confirmSelection}
@@ -607,7 +713,32 @@ export default function VisionNutrition() {
           </div>
         </div>
 
-        {/* SAFETY / FALLBACK NOTE */}
+        {/* FOOD DATABASE */}
+        <div className="border border-stone-800/60 bg-stone-950/40 mb-8">
+          <div className="flex items-baseline justify-between p-6 pb-4 border-b border-stone-800/60">
+            <div>
+              <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Add Meal</h2>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-stone-600 mt-1">search 3M+ products · open food facts · barcode scan</div>
+            </div>
+            {!showAddForm && (
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="px-4 py-2 border border-orange-500/40 text-orange-400 font-anton text-sm uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+              >
+                + Add Meal
+              </button>
+            )}
+          </div>
+          {showAddForm ? (
+            <FoodSearch onAdd={addMeal} onCancel={() => setShowAddForm(false)} />
+          ) : (
+            <div className="p-6 text-center text-stone-700 text-[11px] font-mono uppercase tracking-[0.18em]">
+              Search food database or scan a barcode to log a meal
+            </div>
+          )}
+        </div>
+
+        {/* SAFETY NOTE */}
         <div className="border border-stone-800/60 bg-stone-950/40 p-5 mb-8">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-[11px] font-mono text-stone-500 leading-relaxed">
             <div>
@@ -620,13 +751,13 @@ export default function VisionNutrition() {
             </div>
             <div>
               <div className="text-orange-300 uppercase tracking-wider text-[10px] mb-1">Cost gating</div>
-              Vision API is Pro-only. Each scan ~$0.008. Free tier = manual log.
+              Sentinel is Pro-only. Each scan ~$0.008. Free tier = manual log.
             </div>
           </div>
         </div>
 
         <footer className="mt-12 pt-6 border-t border-stone-800/60 flex items-center justify-between text-[10px] uppercase tracking-wider text-stone-600 font-mono">
-          <span>Vision-Nutrition v0.4 · Module 1 · Camera-driven macro logging</span>
+          <span>Sentinel v0.4 · Module 1 · Camera-driven macro logging</span>
           <span>Provider: LogMeal · Fallback: Bite AI · Manual: anytime</span>
         </footer>
       </div>

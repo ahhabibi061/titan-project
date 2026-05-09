@@ -15,11 +15,17 @@ Full project context in HANDOFF.md. Full technical spec in PRD.md.
 - Tiers: Free / Pro $9.99 / Elite $19.99
 - AI pattern: Rule gate decides, Claude narrates. AI never makes the decision.
 
+## MODULE NAMES (display text only — routes/filenames unchanged)
+- Vision / Vision Nutrition → **Sentinel**
+- Library / Exercise Library → **Codex**
+- Coach / Coach Engine → **Oracle**
+
 ## CURRENT BUILD STATUS
 - 10 prototype artifacts migrated into apps/web/src/pages/
 - Auth flow complete (UI + SQL schema with RLS)
-- Supabase client configured via env vars
-- Next: wire auth screens to Supabase signUp/signIn
+- Supabase client + Stripe checkout + webhook Edge Functions live
+- Dashboard wired to real Supabase data via useDashboard hook
+- Next: add Supabase secrets, run pending migrations
 
 ## WORKING WITH THIS FOUNDER
 - Non-technical, visionary. Plain English always.

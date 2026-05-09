@@ -593,8 +593,8 @@ export default function SettingsPage() {
               {/* Coach Alerts */}
               <div className="flex items-center justify-between py-4">
                 <div>
-                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Coach Alerts</div>
-                  <div className="text-xs text-stone-500 font-mono mt-0.5">Get notified when the Coach Engine has a new recommendation</div>
+                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Oracle Alerts</div>
+                  <div className="text-xs text-stone-500 font-mono mt-0.5">Get notified when Oracle has a new recommendation</div>
                 </div>
                 <Toggle enabled={prefs.coach_alerts} onChange={v => savePref('coach_alerts', v)} />
               </div>
@@ -674,7 +674,7 @@ export default function SettingsPage() {
                         </span>
                         <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 20, color: '#ed7a2a' }}>$9.99</span>
                       </div>
-                      <div className="text-[10px] font-mono text-stone-500 uppercase tracking-wider">/ month · Vision scan · Coach Engine · Unlimited history</div>
+                      <div className="text-[10px] font-mono text-stone-500 uppercase tracking-wider">/ month · Sentinel scan · Oracle · Unlimited history</div>
                     </button>
                   )}
 

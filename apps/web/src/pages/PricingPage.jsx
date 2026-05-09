@@ -34,8 +34,8 @@ const TIERS = [
       'Community support',
     ],
     notIncluded: [
-      'Vision-API meal scanning',
-      'Coach Engine recommendations',
+      'Sentinel meal scanning',
+      'Oracle recommendations',
       'Progress photos',
       'Advanced analytics',
     ],
@@ -53,7 +53,7 @@ const TIERS = [
     features: [
       'Everything in Basic, plus:',
       'AI vision-scan for meals (unlimited)',
-      'Coach Engine — weekly macro recommendations',
+      'Oracle — weekly macro recommendations',
       'Biometric Vault with progress photos',
       'Full exercise library (100+ exercises)',
       'Unlimited history & data export',
@@ -79,7 +79,7 @@ const TIERS = [
       'Everything in Pro, plus:',
       'AI form-check video reviews (unlimited)',
       'Custom programming based on your data',
-      'Real-time Coach Engine adjustments',
+      'Real-time Oracle adjustments',
       'Monthly 30-min call with a strength coach',
       'Priority support (4hr response)',
       'Advanced analytics & exports',
@@ -103,9 +103,9 @@ const COMPARISON = [
     ],
   },
   {
-    section: 'AI Coaching',
+    section: 'Oracle',
     rows: [
-      { feature: 'Coach Engine analysis',     basic: '—',         pro: 'Weekly',      elite: 'Real-time' },
+      { feature: 'Oracle analysis',     basic: '—',         pro: 'Weekly',      elite: 'Real-time' },
       { feature: 'Macro recommendations',     basic: '—',         pro: '✓',           elite: '✓' },
       { feature: 'Volume regression alerts',  basic: '—',         pro: '✓',           elite: '✓' },
       { feature: 'AI form-check video',       basic: '—',         pro: '—',           elite: 'Unlimited' },
@@ -114,7 +114,7 @@ const COMPARISON = [
     ],
   },
   {
-    section: 'Library & Content',
+    section: 'Codex & Content',
     rows: [
       { feature: 'Free exercises',          basic: '30',          pro: '100+',        elite: '100+' },
       { feature: 'Form cues',               basic: 'Basic',       pro: 'Detailed',    elite: 'Detailed' },
@@ -149,7 +149,7 @@ const FAQ = [
   },
   {
     q: 'What happens to my data if I downgrade?',
-    a: 'Nothing is deleted. If you drop from Pro to Basic, your historical data stays accessible in read-only mode. Pro features (vision scan, Coach Engine) stop generating new outputs, but everything already logged remains visible.',
+    a: 'Nothing is deleted. If you drop from Pro to Basic, your historical data stays accessible in read-only mode. Pro features (Sentinel scan, Oracle) stop generating new outputs, but everything already logged remains visible.',
   },
   {
     q: 'Is the 14-day Pro trial really free?',

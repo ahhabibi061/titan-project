@@ -460,7 +460,7 @@ export default function CoachEngine() {
         <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
           <div>
             <div className="flex items-baseline gap-3 mb-2">
-              <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Coach</span>
+              <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Oracle</span>
               <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">Engine</span>
             </div>
             <PhaseStripe ctx={ctx} />
@@ -617,7 +617,7 @@ export default function CoachEngine() {
 
         {/* FOOTER */}
         <footer className="mt-12 pt-6 border-t border-stone-800/60 flex items-center justify-between text-[10px] uppercase tracking-wider text-stone-600 font-mono">
-          <span>Coach Engine v0.4 · Module 5 · Cross-module synthesis</span>
+          <span>Oracle v0.4 · Module 5 · Cross-module synthesis</span>
           <span>Inputs: vault · nutrition · IRONLAB · 14d window</span>
         </footer>
       </div>

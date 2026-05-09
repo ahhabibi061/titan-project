@@ -376,7 +376,7 @@ export default function Onboarding() {
                 Where you're <span className="text-orange-400">headed.</span>
               </h2>
               <p className="text-stone-400 text-base mb-8">
-                Pick a goal weight and a realistic timeline. The Coach Engine will keep you on pace.
+                Pick a goal weight and a realistic timeline. Oracle will keep you on pace.
               </p>
 
               <div className="flex gap-3 mb-6">
@@ -399,7 +399,7 @@ export default function Onboarding() {
                       const abs = Math.abs(pace);
                       if (abs < 0.3) return '✓ Very conservative — easy to sustain';
                       if (abs < 0.7) return '✓ Sustainable — typical recommendation';
-                      if (abs < 1.0) return '⚠ Aggressive — Coach will watch closely';
+                      if (abs < 1.0) return '⚠ Aggressive — Oracle will watch closely';
                       return '⚠ Very aggressive — high risk of muscle loss';
                     })()}
                   </div>
@@ -464,7 +464,7 @@ export default function Onboarding() {
               <h2 className="font-anton text-4xl md:text-5xl uppercase tracking-tight text-stone-100 mb-2 leading-[0.95]">
                 Your <span className="bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">starting plan.</span>
               </h2>
-              <p className="text-stone-400 text-base mb-8">Coach Engine takes over from here. Macros adjust every 7 days based on real data.</p>
+              <p className="text-stone-400 text-base mb-8">Oracle takes over from here. Macros adjust every 7 days based on real data.</p>
 
               {/* MACROS HERO */}
               <div className="border border-orange-500/40 bg-gradient-to-b from-orange-500/10 to-stone-950/40 p-6 mb-6">
@@ -532,7 +532,7 @@ export default function Onboarding() {
                     'We pre-fill your first 4 weeks of workouts based on your split.',
                     "Log your first session today — even if it's a deload.",
                     'Weigh in daily and scan meals when convenient.',
-                    'In 7 days, the Coach Engine runs its first analysis and recommends adjustments.',
+                    'In 7 days, Oracle runs its first analysis and recommends adjustments.',
                   ].map((line, i) => (
                     <li key={i} className="flex gap-3 text-sm text-stone-300">
                       <span className="font-mono text-[10px] tabular-nums text-orange-500/60 shrink-0 mt-1">{String(i + 1).padStart(2, '0')}</span>

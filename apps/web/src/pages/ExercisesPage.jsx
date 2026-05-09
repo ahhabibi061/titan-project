@@ -477,7 +477,7 @@ export default function ExerciseLibrary() {
           <div>
             <div className="flex items-baseline gap-3 mb-2">
               <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Exercise</span>
-              <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">Library</span>
+              <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">Codex</span>
             </div>
             <div className="flex items-center gap-3 text-xs font-mono text-stone-500">
               <span>{EXERCISES.length} exercises</span>
@@ -603,7 +603,7 @@ export default function ExerciseLibrary() {
         )}
 
         <footer className="mt-12 pt-6 border-t border-stone-800/60 flex items-center justify-between text-[10px] uppercase tracking-wider text-stone-600 font-mono">
-          <span>Exercise Library v0.4 · Module 2 · Curated database</span>
+          <span>Exercise Codex v0.4 · Module 2 · Curated database</span>
           <span>{EXERCISES.length} entries · global · read-only · {EXERCISES.filter(e => e.premium).length} pro</span>
         </footer>
       </div>

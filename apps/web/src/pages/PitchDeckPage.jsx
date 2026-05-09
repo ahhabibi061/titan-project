@@ -69,7 +69,7 @@ function SlideWhyNow() {
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 flex-1">
         {[
-          { num: '01', title: 'Vision AI matured', body: 'Meal-image-to-macros went from research project to $0.008/scan in 18 months.' },
+          { num: '01', title: 'Sentinel AI matured', body: 'Meal-image-to-macros went from research project to $0.008/scan in 18 months.' },
           { num: '02', title: 'LLMs ate explanation', body: 'GPT-class models now write Coach-quality narrative for fractions of a cent.' },
           { num: '03', title: 'Wearables hit ubiquity', body: '~60% of US athletes now wear a smartwatch daily.' },
         ].map(p => (
@@ -92,13 +92,13 @@ function SlideSolution() {
         A <span className="bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">closed feedback loop</span>
       </h2>
       <p className="text-stone-400 text-lg max-w-2xl mb-12">
-        IRONLAB turns daily logs into weekly intelligence. Five modules feed one Coach Engine that adapts the plan in real time.
+        IRONLAB turns daily logs into weekly intelligence. Five modules feed Oracle that adapts the plan in real time.
       </p>
       <div className="flex-1 flex items-center justify-center">
         <div className="grid grid-cols-3 gap-3 max-w-3xl w-full items-center">
           <div className="border border-orange-500/30 bg-orange-500/5 p-4 text-center">
             <div className="text-[9px] uppercase tracking-wider text-orange-400 font-mono">Input</div>
-            <div className="font-anton text-lg uppercase tracking-tight text-stone-100">Vision · Logger · Vault</div>
+            <div className="font-anton text-lg uppercase tracking-tight text-stone-100">Sentinel · Logger · Vault</div>
             <div className="text-[10px] text-stone-500 mt-1">3 capture modules</div>
           </div>
           <div className="flex justify-center">
@@ -108,7 +108,7 @@ function SlideSolution() {
           </div>
           <div className="border-2 border-orange-500/60 bg-orange-500/10 p-4 text-center">
             <div className="text-[9px] uppercase tracking-wider text-orange-400 font-mono">Synthesis</div>
-            <div className="font-anton text-lg uppercase tracking-tight text-stone-100">Coach Engine</div>
+            <div className="font-anton text-lg uppercase tracking-tight text-stone-100">Oracle</div>
             <div className="text-[10px] text-stone-500 mt-1">deterministic + AI</div>
           </div>
         </div>
@@ -123,11 +123,11 @@ function SlideSolution() {
 // 5. PRODUCT
 function SlideProduct() {
   const modules = [
-    { num: '01', name: 'Vision', sub: 'Nutrition',  body: 'Camera-scan meal logging via vision AI. 1.4s response.', accent: 'from-amber-300 to-orange-500' },
-    { num: '02', name: 'Library', sub: 'Exercises', body: '100+ curated exercises with form cues + video.',         accent: 'from-stone-300 to-stone-500' },
+    { num: '01', name: 'Sentinel', sub: 'Nutrition',  body: 'Camera-scan meal logging via vision AI. 1.4s response.', accent: 'from-amber-300 to-orange-500' },
+    { num: '02', name: 'Codex', sub: 'Exercises', body: '100+ curated exercises with form cues + video.',         accent: 'from-stone-300 to-stone-500' },
     { num: '03', name: 'IRONLAB',   sub: 'Logger',    body: 'Excel-grid workout logger with PR detection.',           accent: 'from-orange-300 to-orange-600' },
     { num: '04', name: 'Vault',   sub: 'Biometric', body: '90-day weight regression + private photo timeline.',     accent: 'from-orange-300 to-red-500' },
-    { num: '05', name: 'Coach',   sub: 'Engine',    body: 'Weekly macro adjustments via rule gate + Claude.',       accent: 'from-orange-400 to-orange-700' },
+    { num: '05', name: 'Oracle',   sub: 'Engine',    body: 'Weekly macro adjustments via rule gate + Claude.',       accent: 'from-orange-400 to-orange-700' },
   ];
   return (
     <SlideShell label="04 · Product">
@@ -175,7 +175,7 @@ function SlideMoat() {
         <div className="border border-orange-500/40 bg-gradient-to-b from-orange-500/10 to-stone-950/40 p-6">
           <div className="text-[10px] uppercase tracking-[0.2em] text-orange-400 font-mono mb-3">What IRONLAB offers</div>
           <ul className="space-y-3 text-stone-200 text-sm">
-            {['All four data streams in one schema', 'Coach Engine that synthesizes them', '60+ days of integrated history per user', 'Switching cost grows weekly'].map((t,i) => (
+            {['All four data streams in one schema', 'Oracle that synthesizes them', '60+ days of integrated history per user', 'Switching cost grows weekly'].map((t,i) => (
               <li key={i} className="flex gap-3"><span className="text-orange-400">→</span> {t}</li>
             ))}
           </ul>

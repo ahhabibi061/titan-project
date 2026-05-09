@@ -1,89 +1,20 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-
-/* =========================================================================
- * DASHBOARD — Daily Home Screen
- * The unifying surface. First view on app open. Pulls a snapshot from
- * every module so the user can see the whole picture at once and drill
- * into any module from here.
- *
- * Production notes:
- *   - All snapshot data is fetched in a single edge-function call:
- *     `get-daily-dashboard` joins biometric_entries, nutrition_logs,
- *     workouts, coach_recommendations and returns a single object.
- *   - Cached for 60s on the client via TanStack Query.
- *   - Each card is a navigable link to its parent module.
- * ========================================================================= */
-
-// -------------------- DATA --------------------
-const TODAY = {
-  date: new Date('2026-05-08'),
-  user: { name: 'Marcus', tier: 'Pro', initials: 'M' },
-  program: { week: 5, duration: 12, phase: 'cut' },
-  streak: 23,
-
-  weight: { current: 80.4, yesterday: 80.6, weekAgo: 81.5, goal: 80.0 },
-
-  nutrition: {
-    consumed: { kcal: 1310, protein: 104, carbs: 130, fat: 38 },
-    target:   { kcal: 2200, protein: 180, carbs: 220, fat: 70 },
-    mealsLogged: 4,
-  },
-
-  workout: {
-    name: 'Push Day',
-    exercises: [
-      { name: 'Barbell Bench Press', sets: 4 },
-      { name: 'Incline DB Press',    sets: 4 },
-      { name: 'Cable Crossover',     sets: 3 },
-      { name: 'OHP',                 sets: 3 },
-      { name: 'Tricep Pushdown',     sets: 3 },
-    ],
-    estimatedMinutes: 65,
-    completed: false,
-    lastSession: '2 days ago',
-  },
-
-  coach: {
-    headline: 'Add 100 kcal',
-    summary: 'Cut too aggressive — protect muscle',
-    daysAgo: 0,
-    fresh: true,
-  },
-
-  // 7 days, Monday → Sunday
-  weeklyAdherence: [
-    { day: 'M', label: 'May 4', workout: true,  meals: true,  weight: true },
-    { day: 'T', label: 'May 5', workout: true,  meals: true,  weight: true },
-    { day: 'W', label: 'May 6', workout: null,  meals: true,  weight: true,  rest: true },
-    { day: 'T', label: 'May 7', workout: true,  meals: true,  weight: true },
-    { day: 'F', label: 'May 8', workout: false, meals: true,  weight: true,  today: true },
-    { day: 'S', label: 'May 9', workout: false, meals: false, weight: false, future: true },
-    { day: 'S', label: 'May 10', workout: false, meals: false, weight: false, future: true },
-  ],
-
-  recentActivity: [
-    { time: '06:14', type: 'coach',  text: 'New macros recommended (+100 kcal)' },
-    { time: '07:42', type: 'weight', text: '80.4 kg logged' },
-    { time: '08:14', type: 'meal',   text: 'Oatmeal & Blueberries · 380 kcal' },
-    { time: '12:38', type: 'meal',   text: 'Greek Yogurt & Walnuts · 240 kcal' },
-    { time: '15:02', type: 'meal',   text: 'Whey Protein Shake · 150 kcal' },
-    { time: '15:20', type: 'photo',  text: 'Progress photos uploaded · week 5' },
-  ],
-};
+import { useSession } from '../hooks/useSession';
+import { useDashboard } from '../hooks/useDashboard';
 
 const NAV_MODULES = [
-  { id: 'home',     label: 'Home',     active: true },
-  { id: 'IRONLAB',    label: 'IRONLAB',    active: false },
-  { id: 'vision',   label: 'Vision',   active: false },
-  { id: 'vault',    label: 'Vault',    active: false },
-  { id: 'library',  label: 'Library',  active: false },
-  { id: 'coach',    label: 'Coach',    active: false },
+  { id: 'home',    label: 'Home',    active: true  },
+  { id: 'logger',  label: 'IRONLAB', active: false },
+  { id: 'vision',  label: 'Sentinel', active: false },
+  { id: 'vault',   label: 'Vault',   active: false },
+  { id: 'library', label: 'Codex',   active: false },
+  { id: 'coach',   label: 'Oracle',  active: false },
 ];
 
 // -------------------- HELPERS --------------------
 const fmt0 = (n) => Math.round(n).toLocaleString('en-US');
-const fmt1 = (n) => n.toFixed(1);
+const fmt1 = (n) => (n ?? 0).toFixed(1);
 const greeting = () => {
   const h = new Date().getHours();
   if (h < 12) return 'Good morning';
@@ -91,6 +22,11 @@ const greeting = () => {
   return 'Good evening';
 };
 const fmtDate = (d) => d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+// -------------------- SKELETON --------------------
+function Sk({ className = '' }) {
+  return <div className={`bg-stone-800 animate-pulse rounded-sm ${className}`} />;
+}
 
 // -------------------- ACTIVITY ICONS --------------------
 function ActivityIcon({ type }) {
@@ -138,7 +74,7 @@ function ActivityIcon({ type }) {
 
 // -------------------- MINI CALORIE RING --------------------
 function MiniCalorieRing({ consumed, target }) {
-  const pct = Math.min(consumed / target, 1);
+  const pct = Math.min(consumed / (target || 1), 1);
   const r = 36;
   const c = 2 * Math.PI * r;
   return (
@@ -167,8 +103,9 @@ function MiniCalorieRing({ consumed, target }) {
 
 // -------------------- SPARKLINE --------------------
 function MiniSparkline({ values }) {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  if (!values || values.length < 2) return <Sk className="w-full h-8" />;
+  const min   = Math.min(...values);
+  const max   = Math.max(...values);
   const range = max - min || 1;
   const w = 100;
   const h = 30;
@@ -190,11 +127,11 @@ function MiniSparkline({ values }) {
 function WeeklyGrid({ days }) {
   const Cell = ({ status, label }) => {
     const colors = {
-      done:  'bg-orange-500',
+      done:   'bg-orange-500',
       missed: 'bg-red-500/20 border border-red-500/40',
-      rest:  'bg-stone-800 border border-stone-700',
+      rest:   'bg-stone-800 border border-stone-700',
       future: 'bg-stone-900/40 border border-stone-800/40',
-      empty: 'bg-stone-900/40 border border-stone-800/40',
+      empty:  'bg-stone-900/40 border border-stone-800/40',
     };
     return (
       <div className="flex flex-col items-center gap-1">
@@ -203,9 +140,12 @@ function WeeklyGrid({ days }) {
     );
   };
 
+  if (!days.length) {
+    return <Sk className="w-full h-32" />;
+  }
+
   return (
     <div className="space-y-3">
-      {/* Day labels */}
       <div className="grid grid-cols-7 gap-2">
         {days.map((d, i) => (
           <div key={i} className="text-center">
@@ -219,11 +159,10 @@ function WeeklyGrid({ days }) {
         ))}
       </div>
 
-      {/* Rows: Workout, Meals, Weight */}
       {[
-        { key: 'workout', label: 'Workout', getter: d => d.future ? 'future' : d.rest ? 'rest' : d.workout === true ? 'done' : d.workout === false ? (d.today ? 'future' : 'missed') : 'rest' },
+        { key: 'workout', label: 'Workout',   getter: d => d.future ? 'future' : d.rest ? 'rest' : d.workout === true ? 'done' : d.workout === false ? (d.today ? 'future' : 'missed') : 'rest' },
         { key: 'meals',   label: 'Nutrition', getter: d => d.future ? 'future' : d.meals ? 'done' : 'missed' },
-        { key: 'weight',  label: 'Weight',  getter: d => d.future ? 'future' : d.weight ? 'done' : 'missed' },
+        { key: 'weight',  label: 'Weight',    getter: d => d.future ? 'future' : d.weight ? 'done' : 'missed' },
       ].map(row => (
         <div key={row.key}>
           <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono mb-1.5">{row.label}</div>
@@ -235,7 +174,6 @@ function WeeklyGrid({ days }) {
         </div>
       ))}
 
-      {/* Legend */}
       <div className="flex items-center gap-4 pt-3 border-t border-stone-800/60 text-[9px] uppercase tracking-wider text-stone-600 font-mono">
         <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 bg-orange-500" />Done</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-1.5 bg-red-500/20 border border-red-500/40" />Missed</span>
@@ -247,23 +185,36 @@ function WeeklyGrid({ days }) {
 
 // -------------------- MAIN --------------------
 export default function Dashboard() {
-  const t = TODAY;
-  const remaining = t.nutrition.target.kcal - t.nutrition.consumed.kcal;
+  const { user } = useSession();
+  const { data, loading } = useDashboard(user?.id);
   const [searchParams, setSearchParams] = useSearchParams();
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(searchParams.get('upgraded') === 'true');
 
   useEffect(() => {
-    if (showUpgradeBanner) {
-      // Remove the query param from the URL without a page reload
-      setSearchParams({}, { replace: true });
-    }
+    if (showUpgradeBanner) setSearchParams({}, { replace: true });
   }, []);
-  const weightDelta = t.weight.current - t.weight.weekAgo;
-  const completedDays = t.weeklyAdherence.filter(d => d.workout === true).length;
-  const totalWorkoutDays = t.weeklyAdherence.filter(d => !d.rest && !d.future).length;
 
-  // Mini sparkline data — last 7 days of weights
-  const weightSparkline = [81.5, 81.4, 81.2, 81.0, 80.8, 80.6, 80.4];
+  // Safe derived values — work in both loading and loaded states
+  const profile        = data?.profile        ?? {};
+  const consumed       = data?.consumed       ?? { kcal: 0, protein: 0, carbs: 0, fat: 0, mealsLogged: 0 };
+  const targets        = data?.targets        ?? { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
+  const workout        = data?.workout        ?? null;
+  const coach          = data?.coach          ?? null;
+  const bio            = data?.biometrics     ?? { current: null, weekAgo: null, goal: null, sparkline: [] };
+  const weeklyStats    = data?.weeklyStats    ?? { totalSets: 0, avgKcal: 0, avgProtein: 0, streak: 0 };
+  const weeklyAdherence = data?.weeklyAdherence ?? [];
+  const activityFeed   = data?.activityFeed   ?? [];
+
+  const remaining    = targets.kcal - consumed.kcal;
+  const weightDelta  = bio.current != null && bio.weekAgo != null ? bio.current - bio.weekAgo : null;
+  const completedDays    = weeklyAdherence.filter(d => d.workout === true).length;
+  const totalWorkoutDays = weeklyAdherence.filter(d => !d.rest && !d.future).length;
+
+  const displayName = profile?.display_name || 'Athlete';
+  const initials    = (displayName[0] ?? 'A').toUpperCase();
+  const tier        = profile?.subscription_tier ?? 'basic';
+  const tierLabel   = tier.toUpperCase();
+  const goalLabel   = profile?.goal ? `goal: ${profile.goal}` : 'loading';
 
   return (
     <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
@@ -310,10 +261,10 @@ export default function Dashboard() {
             <div className="flex items-center gap-3">
               <span className="hidden sm:flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-stone-500 font-mono">
                 <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
-                {t.streak}d streak
+                {loading ? '—' : `${weeklyStats.streak}d streak`}
               </span>
               <span className="text-[10px] uppercase tracking-wider px-2 py-1 bg-orange-500/15 text-orange-300 border border-orange-500/30 font-mono">
-                {t.user.tier}
+                {loading ? '…' : tierLabel}
               </span>
               <Link
                 to="/settings"
@@ -326,7 +277,7 @@ export default function Dashboard() {
                 </svg>
               </Link>
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center font-anton text-stone-950 text-base">
-                {t.user.initials}
+                {initials}
               </div>
             </div>
           </div>
@@ -359,52 +310,118 @@ export default function Dashboard() {
           <header className="mb-8">
             <div className="flex items-baseline gap-3 mb-2">
               <h1 className="font-anton text-4xl md:text-5xl uppercase tracking-tight text-stone-100">
-                {greeting()}, <span className="bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">{t.user.name}</span>.
+                {greeting()},{' '}
+                {loading
+                  ? <Sk className="inline-block w-32 h-10 align-bottom" />
+                  : <span className="bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">{displayName}</span>
+                }.
               </h1>
             </div>
             <div className="flex items-center gap-3 text-xs font-mono text-stone-500">
-              <span>{fmtDate(t.date)}</span>
+              <span>{fmtDate(new Date())}</span>
               <span className="text-stone-700">·</span>
               <span className="px-2 py-1 bg-orange-500/15 text-orange-300 border border-orange-500/30 uppercase tracking-wider">
-                Week {t.program.week} / {t.program.duration} · {t.program.phase}
+                {loading ? '…' : goalLabel}
               </span>
             </div>
           </header>
 
           {/* TOP STATS STRIP */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-0 mb-8 border border-stone-800/60 bg-stone-950/40">
+
+            {/* Weight */}
             <div className="px-5 py-4 border-r border-stone-800/60">
               <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-1">Weight</div>
-              <div className="font-anton text-3xl tabular-nums text-stone-100">{fmt1(t.weight.current)}<span className="text-stone-500 text-lg ml-1">kg</span></div>
-              <div className="text-[10px] font-mono tabular-nums text-orange-300 mt-0.5">
-                {weightDelta < 0 ? '↓' : '↑'} {fmt1(Math.abs(weightDelta))} kg / 7d
-              </div>
+              {loading || bio.current == null ? (
+                <>
+                  <Sk className="h-8 w-24 mb-1" />
+                  <Sk className="h-3 w-16" />
+                </>
+              ) : (
+                <>
+                  <div className="font-anton text-3xl tabular-nums text-stone-100">
+                    {fmt1(bio.current)}<span className="text-stone-500 text-lg ml-1">kg</span>
+                  </div>
+                  <div className="text-[10px] font-mono tabular-nums text-orange-300 mt-0.5">
+                    {weightDelta != null
+                      ? `${weightDelta < 0 ? '↓' : '↑'} ${fmt1(Math.abs(weightDelta))} kg / 7d`
+                      : 'No prior data'}
+                  </div>
+                </>
+              )}
             </div>
+
+            {/* Calories Left */}
             <div className="px-5 py-4 border-r border-stone-800/60">
               <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-1">Calories Left</div>
-              <div className="font-anton text-3xl tabular-nums text-orange-300">{fmt0(remaining)}</div>
-              <div className="text-[10px] font-mono tabular-nums text-stone-500 mt-0.5">
-                {fmt0(t.nutrition.consumed.kcal)} / {fmt0(t.nutrition.target.kcal)}
-              </div>
+              {loading ? (
+                <>
+                  <Sk className="h-8 w-20 mb-1" />
+                  <Sk className="h-3 w-28" />
+                </>
+              ) : consumed.mealsLogged === 0 ? (
+                <>
+                  <div className="font-anton text-3xl tabular-nums text-stone-500">{fmt0(targets.kcal)}</div>
+                  <div className="text-[10px] font-mono text-stone-600 mt-0.5 uppercase tracking-wider">no meals logged yet</div>
+                </>
+              ) : (
+                <>
+                  <div className="font-anton text-3xl tabular-nums text-orange-300">{fmt0(remaining)}</div>
+                  <div className="text-[10px] font-mono tabular-nums text-stone-500 mt-0.5">
+                    {fmt0(consumed.kcal)} / {fmt0(targets.kcal)}
+                  </div>
+                </>
+              )}
             </div>
+
+            {/* Workout */}
             <div className="px-5 py-4 border-r border-stone-800/60">
               <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-1">Workout</div>
-              <div className="font-anton text-3xl text-stone-100 leading-none mt-1">{t.workout.name}</div>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-stone-500 mt-1">
-                {t.workout.exercises.length} exercises · ~{t.workout.estimatedMinutes}m
-              </div>
+              {loading ? (
+                <>
+                  <Sk className="h-8 w-28 mb-1" />
+                  <Sk className="h-3 w-20" />
+                </>
+              ) : workout ? (
+                <>
+                  <div className="font-anton text-3xl text-stone-100 leading-none mt-1">{workout.name}</div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-stone-500 mt-1">
+                    {workout.exercises.length} exercises · ~{workout.estimatedMinutes}m
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="font-anton text-3xl text-stone-700 leading-none mt-1">Rest Day</div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-stone-600 mt-1">
+                    no workout scheduled
+                  </div>
+                </>
+              )}
             </div>
+
+            {/* Streak */}
             <div className="px-5 py-4">
               <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-1">Streak</div>
-              <div className="font-anton text-3xl tabular-nums text-stone-100">{t.streak}<span className="text-stone-500 text-lg ml-1">days</span></div>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-stone-500 mt-0.5">
-                personal best · keep going
-              </div>
+              {loading ? (
+                <>
+                  <Sk className="h-8 w-20 mb-1" />
+                  <Sk className="h-3 w-28" />
+                </>
+              ) : (
+                <>
+                  <div className="font-anton text-3xl tabular-nums text-stone-100">
+                    {weeklyStats.streak}<span className="text-stone-500 text-lg ml-1">days</span>
+                  </div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-stone-500 mt-0.5">
+                    {weeklyStats.streak === 0 ? 'start your streak today' : 'keep going'}
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
-          {/* COACH ALERT (if fresh) */}
-          {t.coach.fresh && (
+          {/* COACH ALERT — only shown when an unapplied recommendation exists */}
+          {!loading && coach && (
             <div className="border border-orange-500/40 bg-gradient-to-r from-orange-500/10 to-orange-500/5 p-4 mb-8 flex items-center gap-4">
               <div className="w-10 h-10 rounded-full bg-orange-500/20 border border-orange-500/40 flex items-center justify-center shrink-0">
                 <svg width="18" height="18" viewBox="0 0 14 14" fill="none" stroke="#ed7a2a" strokeWidth="1.5">
@@ -414,17 +431,20 @@ export default function Dashboard() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-baseline gap-2 flex-wrap">
-                  <span className="text-[9px] uppercase tracking-[0.2em] text-orange-400 font-mono">New from Coach</span>
+                  <span className="text-[9px] uppercase tracking-[0.2em] text-orange-400 font-mono">New from Oracle</span>
                   <span className="text-[9px] text-stone-700 font-mono">just now</span>
                 </div>
                 <div className="font-anton text-xl uppercase tracking-tight text-stone-100 leading-tight">
-                  {t.coach.headline}
+                  {coach.headline}
                 </div>
-                <div className="text-xs text-stone-400">{t.coach.summary}</div>
+                <div className="text-xs text-stone-400">{coach.summary}</div>
               </div>
-              <button className="shrink-0 px-4 py-2 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors">
+              <Link
+                to="/coach"
+                className="shrink-0 px-4 py-2 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors no-underline"
+              >
                 Review →
-              </button>
+              </Link>
             </div>
           )}
 
@@ -437,69 +457,147 @@ export default function Dashboard() {
                 <span className="text-[10px] uppercase tracking-[0.2em] text-stone-500 font-mono">Today's Workout</span>
                 <span className="text-[9px] text-stone-700 font-mono">→ IRONLAB</span>
               </div>
-              <div className="font-anton text-4xl uppercase tracking-tight text-stone-100 leading-none mb-2">
-                {t.workout.name}
-              </div>
-              <div className="text-[11px] font-mono uppercase tracking-wider text-stone-500 mb-5">
-                {t.workout.exercises.length} exercises · ~{t.workout.estimatedMinutes} min · last done {t.workout.lastSession}
-              </div>
-              <div className="space-y-2 mb-5 flex-1">
-                {t.workout.exercises.map((ex, i) => (
-                  <div key={i} className="flex items-center gap-3 py-2 border-b border-stone-800/40 last:border-b-0">
-                    <span className="font-mono text-[10px] tabular-nums text-stone-600 w-5">{String(i + 1).padStart(2, '0')}</span>
-                    <span className="flex-1 text-stone-300 text-sm">{ex.name}</span>
-                    <span className="font-mono text-[10px] tabular-nums text-stone-500">{ex.sets} × sets</span>
+
+              {loading ? (
+                <div className="flex-1 space-y-3">
+                  <Sk className="h-10 w-48" />
+                  <Sk className="h-3 w-36" />
+                  <div className="space-y-2 mt-4">
+                    {[1,2,3,4,5].map(i => <Sk key={i} className="h-9 w-full" />)}
                   </div>
-                ))}
-              </div>
-              <button className="w-full px-5 py-3 bg-orange-500 text-stone-950 font-anton text-base uppercase tracking-wider hover:bg-orange-400 transition-colors">
-                Start Workout →
-              </button>
+                </div>
+              ) : workout ? (
+                <>
+                  <div className="font-anton text-4xl uppercase tracking-tight text-stone-100 leading-none mb-2">
+                    {workout.name}
+                  </div>
+                  <div className="text-[11px] font-mono uppercase tracking-wider text-stone-500 mb-5">
+                    {workout.exercises.length} exercises · ~{workout.estimatedMinutes} min
+                    {workout.completed ? ' · completed' : ''}
+                  </div>
+                  <div className="space-y-2 mb-5 flex-1">
+                    {workout.exercises.map((ex, i) => (
+                      <div key={i} className="flex items-center gap-3 py-2 border-b border-stone-800/40 last:border-b-0">
+                        <span className="font-mono text-[10px] tabular-nums text-stone-600 w-5">{String(i + 1).padStart(2, '0')}</span>
+                        <span className="flex-1 text-stone-300 text-sm">{ex.name}</span>
+                        <span className="font-mono text-[10px] tabular-nums text-stone-500">{ex.sets} × sets</span>
+                      </div>
+                    ))}
+                    {workout.exercises.length === 0 && (
+                      <p className="text-xs font-mono text-stone-600 py-4">No exercises added yet. Open the Logger to build this workout.</p>
+                    )}
+                  </div>
+                  <Link
+                    to="/logger"
+                    className="w-full px-5 py-3 bg-orange-500 text-stone-950 font-anton text-base uppercase tracking-wider hover:bg-orange-400 transition-colors text-center no-underline block"
+                  >
+                    {workout.completed ? 'View Workout →' : 'Start Workout →'}
+                  </Link>
+                </>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center py-10 text-center">
+                  <div className="text-stone-700 font-mono text-5xl mb-4">—</div>
+                  <div className="font-anton text-3xl uppercase text-stone-700 mb-2">Rest Day</div>
+                  <div className="text-xs text-stone-600 font-mono uppercase tracking-wider mb-6">No workout scheduled today</div>
+                  <Link
+                    to="/logger"
+                    className="px-5 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-200 transition-colors no-underline"
+                  >
+                    Schedule a workout →
+                  </Link>
+                </div>
+              )}
             </div>
 
             {/* TODAY'S MACROS */}
             <div className="lg:col-span-4 border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col">
               <div className="flex items-baseline justify-between mb-4">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-stone-500 font-mono">Today's Macros</span>
-                <span className="text-[9px] text-stone-700 font-mono">→ vision</span>
+                <span className="text-[9px] text-stone-700 font-mono">→ sentinel</span>
               </div>
-              <div className="flex items-center gap-4 mb-5">
-                <MiniCalorieRing consumed={t.nutrition.consumed.kcal} target={t.nutrition.target.kcal} />
-                <div className="flex-1 min-w-0">
-                  <div className="font-anton text-2xl tabular-nums text-orange-300 leading-none">{fmt0(remaining)}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mt-1">kcal remaining</div>
-                  <div className="text-[10px] font-mono tabular-nums text-stone-600 mt-2">
-                    {t.nutrition.mealsLogged} meals logged
+
+              {loading ? (
+                <div className="space-y-4 flex-1">
+                  <div className="flex items-center gap-4">
+                    <Sk className="w-24 h-24 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <Sk className="h-7 w-20" />
+                      <Sk className="h-3 w-28" />
+                    </div>
                   </div>
+                  {[1,2,3].map(i => <Sk key={i} className="h-7 w-full" />)}
                 </div>
-              </div>
-              <div className="space-y-2.5 flex-1">
-                {[
-                  { l: 'Protein', c: t.nutrition.consumed.protein, t: t.nutrition.target.protein, color: 'rgb(237, 122, 42)' },
-                  { l: 'Carbs',   c: t.nutrition.consumed.carbs,   t: t.nutrition.target.carbs,   color: 'rgb(126, 182, 255)' },
-                  { l: 'Fat',     c: t.nutrition.consumed.fat,     t: t.nutrition.target.fat,     color: 'rgb(251, 191, 36)' },
-                ].map(m => (
-                  <div key={m.l}>
-                    <div className="flex items-baseline justify-between mb-1">
-                      <span className="text-[10px] uppercase tracking-wider text-stone-500 font-mono">{m.l}</span>
-                      <span className="font-mono text-[10px] tabular-nums">
-                        <span className="text-stone-300">{m.c}</span>
-                        <span className="text-stone-600"> / {m.t}g</span>
-                      </span>
-                    </div>
-                    <div className="relative h-1 bg-stone-900">
-                      <div className="absolute inset-y-0 left-0" style={{ width: `${Math.min((m.c / m.t) * 100, 100)}%`, background: m.color }} />
+              ) : consumed.mealsLogged === 0 ? (
+                <div className="flex-1 flex flex-col">
+                  <div className="flex items-center gap-4 mb-5">
+                    <MiniCalorieRing consumed={0} target={targets.kcal} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-anton text-2xl tabular-nums text-stone-600 leading-none">{fmt0(targets.kcal)}</div>
+                      <div className="text-[10px] uppercase tracking-wider text-stone-600 font-mono mt-1">kcal remaining</div>
+                      <div className="text-[10px] font-mono text-stone-700 mt-2">no meals logged yet</div>
                     </div>
                   </div>
-                ))}
-              </div>
-              <button className="mt-5 w-full px-5 py-3 border border-stone-700 text-stone-300 font-anton text-base uppercase tracking-wider hover:bg-stone-800 hover:text-stone-100 transition-colors flex items-center justify-center gap-2">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="2" y="3" width="10" height="8" rx="1" />
-                  <circle cx="7" cy="7" r="2" />
-                </svg>
-                Scan Meal
-              </button>
+                  <div className="flex-1 flex items-center justify-center py-4">
+                    <p className="text-xs font-mono text-stone-600 text-center">
+                      Log your first meal today.<br />
+                      <span className="text-stone-700">Use the Sentinel scanner or manual entry.</span>
+                    </p>
+                  </div>
+                  <Link
+                    to="/nutrition"
+                    className="mt-4 w-full px-5 py-3 border border-stone-700 text-stone-300 font-anton text-base uppercase tracking-wider hover:bg-stone-800 hover:text-stone-100 transition-colors flex items-center justify-center gap-2 no-underline"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <rect x="2" y="3" width="10" height="8" rx="1" />
+                      <circle cx="7" cy="7" r="2" />
+                    </svg>
+                    Log First Meal
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-4 mb-5">
+                    <MiniCalorieRing consumed={consumed.kcal} target={targets.kcal} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-anton text-2xl tabular-nums text-orange-300 leading-none">{fmt0(remaining)}</div>
+                      <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mt-1">kcal remaining</div>
+                      <div className="text-[10px] font-mono tabular-nums text-stone-600 mt-2">
+                        {consumed.mealsLogged} meal{consumed.mealsLogged !== 1 ? 's' : ''} logged
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2.5 flex-1">
+                    {[
+                      { l: 'Protein', c: consumed.protein, t: targets.protein, color: 'rgb(237, 122, 42)' },
+                      { l: 'Carbs',   c: consumed.carbs,   t: targets.carbs,   color: 'rgb(126, 182, 255)' },
+                      { l: 'Fat',     c: consumed.fat,     t: targets.fat,     color: 'rgb(251, 191, 36)' },
+                    ].map(m => (
+                      <div key={m.l}>
+                        <div className="flex items-baseline justify-between mb-1">
+                          <span className="text-[10px] uppercase tracking-wider text-stone-500 font-mono">{m.l}</span>
+                          <span className="font-mono text-[10px] tabular-nums">
+                            <span className="text-stone-300">{m.c}</span>
+                            <span className="text-stone-600"> / {m.t}g</span>
+                          </span>
+                        </div>
+                        <div className="relative h-1 bg-stone-900">
+                          <div className="absolute inset-y-0 left-0" style={{ width: `${Math.min((m.c / (m.t || 1)) * 100, 100)}%`, background: m.color }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <Link
+                    to="/nutrition"
+                    className="mt-5 w-full px-5 py-3 border border-stone-700 text-stone-300 font-anton text-base uppercase tracking-wider hover:bg-stone-800 hover:text-stone-100 transition-colors flex items-center justify-center gap-2 no-underline"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <rect x="2" y="3" width="10" height="8" rx="1" />
+                      <circle cx="7" cy="7" r="2" />
+                    </svg>
+                    Scan Meal
+                  </Link>
+                </>
+              )}
             </div>
 
             {/* WEIGHT TREND */}
@@ -508,28 +606,58 @@ export default function Dashboard() {
                 <span className="text-[10px] uppercase tracking-[0.2em] text-stone-500 font-mono">Body Comp</span>
                 <span className="text-[9px] text-stone-700 font-mono">→ vault</span>
               </div>
-              <div className="font-anton text-5xl tabular-nums text-stone-100 leading-none mb-2">
-                {fmt1(t.weight.current)}
-                <span className="text-stone-500 text-2xl ml-1">kg</span>
-              </div>
-              <div className="flex items-baseline gap-2 mb-4">
-                <span className="text-[11px] font-mono tabular-nums text-orange-300">
-                  ↓ {fmt1(Math.abs(weightDelta))} kg
-                </span>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-stone-600">last 7d</span>
-              </div>
-              <div className="flex-1">
-                <MiniSparkline values={weightSparkline} />
-              </div>
-              <div className="mt-4 pt-4 border-t border-stone-800/60">
-                <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">Goal</div>
-                <div className="flex items-baseline justify-between mt-1">
-                  <span className="font-anton text-lg text-orange-300 tabular-nums">{t.weight.goal} kg</span>
-                  <span className="text-[10px] font-mono tabular-nums text-stone-500">
-                    {fmt1(t.weight.current - t.weight.goal)} to go
-                  </span>
+
+              {loading ? (
+                <div className="flex-1 space-y-3">
+                  <Sk className="h-12 w-32" />
+                  <Sk className="h-3 w-24" />
+                  <Sk className="h-8 w-full mt-4" />
                 </div>
-              </div>
+              ) : bio.current == null ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-6 text-center">
+                  <div className="text-stone-700 font-mono text-3xl mb-3">—</div>
+                  <p className="text-xs font-mono text-stone-600 uppercase tracking-wider mb-4">No weight data yet</p>
+                  <Link
+                    to="/biometrics"
+                    className="px-4 py-2 border border-stone-700 text-stone-500 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-300 transition-colors no-underline"
+                  >
+                    Log today's weight →
+                  </Link>
+                </div>
+              ) : (
+                <>
+                  <div className="font-anton text-5xl tabular-nums text-stone-100 leading-none mb-2">
+                    {fmt1(bio.current)}
+                    <span className="text-stone-500 text-2xl ml-1">kg</span>
+                  </div>
+                  <div className="flex items-baseline gap-2 mb-4">
+                    {weightDelta != null ? (
+                      <>
+                        <span className="text-[11px] font-mono tabular-nums text-orange-300">
+                          {weightDelta < 0 ? '↓' : '↑'} {fmt1(Math.abs(weightDelta))} kg
+                        </span>
+                        <span className="text-[10px] font-mono uppercase tracking-wider text-stone-600">last 7d</span>
+                      </>
+                    ) : (
+                      <span className="text-[10px] font-mono text-stone-600">logging…</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <MiniSparkline values={bio.sparkline} />
+                  </div>
+                  {bio.goal != null && (
+                    <div className="mt-4 pt-4 border-t border-stone-800/60">
+                      <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">Goal</div>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className="font-anton text-lg text-orange-300 tabular-nums">{bio.goal} kg</span>
+                        <span className="text-[10px] font-mono tabular-nums text-stone-500">
+                          {fmt1(Math.abs(bio.current - bio.goal))} to go
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
@@ -541,22 +669,41 @@ export default function Dashboard() {
               <div className="flex items-baseline justify-between mb-5">
                 <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">This Week</h2>
                 <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">
-                  {completedDays}/{totalWorkoutDays} workouts · 5/5 logged
+                  {loading ? '…' : `${completedDays}/${totalWorkoutDays} workouts`}
                 </span>
               </div>
-              <WeeklyGrid days={t.weeklyAdherence} />
+
+              {loading ? (
+                <Sk className="w-full h-40" />
+              ) : (
+                <WeeklyGrid days={weeklyAdherence} />
+              )}
+
               <div className="mt-5 pt-5 border-t border-stone-800/60 grid grid-cols-3 gap-4">
                 <div>
-                  <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">Volume</div>
-                  <div className="font-anton text-2xl text-stone-100 tabular-nums">42.8<span className="text-stone-500 text-sm ml-1">k kg</span></div>
+                  <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">Total Sets</div>
+                  {loading
+                    ? <Sk className="h-7 w-16 mt-1" />
+                    : <div className="font-anton text-2xl text-stone-100 tabular-nums">{weeklyStats.totalSets}<span className="text-stone-500 text-sm ml-1">sets</span></div>
+                  }
                 </div>
                 <div>
                   <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">Avg Daily</div>
-                  <div className="font-anton text-2xl text-stone-100 tabular-nums">2,178<span className="text-stone-500 text-sm ml-1">kcal</span></div>
+                  {loading
+                    ? <Sk className="h-7 w-20 mt-1" />
+                    : weeklyStats.avgKcal === 0
+                      ? <div className="font-anton text-2xl text-stone-700">—</div>
+                      : <div className="font-anton text-2xl text-stone-100 tabular-nums">{weeklyStats.avgKcal.toLocaleString()}<span className="text-stone-500 text-sm ml-1">kcal</span></div>
+                  }
                 </div>
                 <div>
                   <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">Avg Protein</div>
-                  <div className="font-anton text-2xl text-stone-100 tabular-nums">181<span className="text-stone-500 text-sm ml-1">g</span></div>
+                  {loading
+                    ? <Sk className="h-7 w-16 mt-1" />
+                    : weeklyStats.avgProtein === 0
+                      ? <div className="font-anton text-2xl text-stone-700">—</div>
+                      : <div className="font-anton text-2xl text-stone-100 tabular-nums">{weeklyStats.avgProtein}<span className="text-stone-500 text-sm ml-1">g</span></div>
+                  }
                 </div>
               </div>
             </div>
@@ -566,26 +713,36 @@ export default function Dashboard() {
               <div className="flex items-baseline justify-between mb-5">
                 <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Today's Activity</h2>
                 <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">
-                  {t.recentActivity.length} events
+                  {loading ? '…' : `${activityFeed.length} events`}
                 </span>
               </div>
-              <div className="space-y-0">
-                {[...t.recentActivity].sort((a, b) => a.time.localeCompare(b.time)).map((a, i) => (
-                  <div key={i} className="flex items-center gap-3 py-2.5 border-b border-stone-800/40 last:border-b-0">
-                    <span className="font-mono text-[10px] tabular-nums text-stone-600 w-10 shrink-0">{a.time}</span>
-                    <span className={`shrink-0 w-7 h-7 border flex items-center justify-center ${
-                      a.type === 'coach' ? 'text-orange-300 border-orange-500/30 bg-orange-500/5' :
-                      a.type === 'meal'  ? 'text-stone-400 border-stone-700/60' :
-                      a.type === 'weight' ? 'text-stone-400 border-stone-700/60' :
-                      a.type === 'photo' ? 'text-stone-400 border-stone-700/60' :
-                      'text-stone-400 border-stone-700/60'
-                    }`}>
-                      <ActivityIcon type={a.type} />
-                    </span>
-                    <span className="flex-1 text-stone-300 text-sm truncate">{a.text}</span>
-                  </div>
-                ))}
-              </div>
+
+              {loading ? (
+                <div className="space-y-2">
+                  {[1,2,3,4].map(i => <Sk key={i} className="h-10 w-full" />)}
+                </div>
+              ) : activityFeed.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center">
+                  <div className="text-stone-700 font-mono text-3xl mb-3">—</div>
+                  <p className="text-xs font-mono text-stone-600 uppercase tracking-wider">No activity logged today yet.</p>
+                  <p className="text-xs font-mono text-stone-700 mt-1">Log a meal or start a workout to see it here.</p>
+                </div>
+              ) : (
+                <div className="space-y-0">
+                  {activityFeed.map((a, i) => (
+                    <div key={i} className="flex items-center gap-3 py-2.5 border-b border-stone-800/40 last:border-b-0">
+                      <span className="font-mono text-[10px] tabular-nums text-stone-600 w-10 shrink-0">{a.time}</span>
+                      <span className={`shrink-0 w-7 h-7 border flex items-center justify-center ${
+                        a.type === 'coach'  ? 'text-orange-300 border-orange-500/30 bg-orange-500/5' :
+                        'text-stone-400 border-stone-700/60'
+                      }`}>
+                        <ActivityIcon type={a.type} />
+                      </span>
+                      <span className="flex-1 text-stone-300 text-sm truncate">{a.text}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -597,15 +754,16 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
-                { name: 'IRONLAB',   sub: 'Logger',     accent: 'from-orange-300 to-orange-600' },
-                { name: 'Vision',  sub: 'Nutrition',  accent: 'from-amber-300 to-orange-500' },
-                { name: 'Vault',   sub: 'Biometric',  accent: 'from-orange-300 to-red-500' },
-                { name: 'Library', sub: 'Exercises',  accent: 'from-stone-300 to-stone-500' },
-                { name: 'Coach',   sub: 'Engine',     accent: 'from-orange-400 to-orange-700' },
+                { name: 'IRONLAB', sub: 'Logger',    accent: 'from-orange-300 to-orange-600', to: '/logger' },
+                { name: 'Sentinel', sub: 'Nutrition', accent: 'from-amber-300 to-orange-500',  to: '/nutrition' },
+                { name: 'Vault',   sub: 'Biometric', accent: 'from-orange-300 to-red-500',    to: '/biometrics' },
+                { name: 'Codex',   sub: 'Exercises', accent: 'from-stone-300 to-stone-500',   to: '/exercises' },
+                { name: 'Oracle',  sub: 'Engine',    accent: 'from-orange-400 to-orange-700', to: '/coach' },
               ].map(m => (
-                <button
+                <Link
                   key={m.name}
-                  className="group relative overflow-hidden border border-stone-800/60 bg-stone-950/40 hover:border-orange-500/40 transition-all p-4 text-left"
+                  to={m.to}
+                  className="group relative overflow-hidden border border-stone-800/60 bg-stone-950/40 hover:border-orange-500/40 transition-all p-4 text-left no-underline block"
                 >
                   <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1">
                     {m.sub}
@@ -616,14 +774,14 @@ export default function Dashboard() {
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" className="absolute top-3 right-3 text-stone-700 group-hover:text-orange-400 transition-colors">
                     <path d="M3 11L11 3M11 3H5M11 3V9" strokeLinecap="round" />
                   </svg>
-                </button>
+                </Link>
               ))}
             </div>
           </div>
 
           <footer className="pt-6 border-t border-stone-800/60 flex items-center justify-between text-[10px] uppercase tracking-wider text-stone-600 font-mono">
             <span>IRONLAB v0.4 · Dashboard · Daily snapshot</span>
-            <span>5 modules unified · synced 2s ago</span>
+            <span>{loading ? 'loading…' : '5 modules unified'}</span>
           </footer>
         </div>
       </div>

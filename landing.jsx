@@ -307,7 +307,7 @@ export default function Landing() {
               num="03"
               title="Adapt"
               accent={{ from: '#fbbf24', to: '#7a2410' }}
-              body="The Coach Engine reviews your last 14 days every Sunday and adjusts your macros. Cutting too fast? Add 100 kcal. Volume regressing? Schedule a deload. No static plans."
+              body="Oracle reviews your last 14 days every Sunday and adjusts your macros. Cutting too fast? Add 100 kcal. Volume regressing? Schedule a deload. No static plans."
             />
           </div>
         </div>
@@ -323,18 +323,18 @@ export default function Landing() {
               One unified athlete.
             </h2>
             <p className="text-stone-400 text-base mt-6 max-w-2xl mx-auto">
-              Each module is sharp on its own. Together, they share data — and that's where the magic is. Your training stress, nutrition intake, and body composition all feed the Coach Engine.
+              Each module is sharp on its own. Together, they share data — and that's where the magic is. Your training stress, nutrition intake, and body composition all feed Oracle.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <ModuleTile
-              name="Vision" sub="Module 1 · Nutrition"
+              name="Sentinel" sub="Module 1 · Nutrition"
               accent={{ from: '#fbbf24', to: '#ed7a2a' }}
               icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3"/><path d="M8 6l1-2h6l1 2"/></svg>}
               desc="Point your camera at any meal. The vision model identifies food, estimates portion, returns macros — all in 1.4 seconds."
             />
             <ModuleTile
-              name="Library" sub="Module 2 · Exercises"
+              name="Codex" sub="Module 2 · Exercises"
               accent={{ from: '#94a3b8', to: '#475569' }}
               icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg>}
               desc="100+ curated exercises with form cues, video demos, and split tagging. PPL, Upper/Lower, Bro split — filter for whatever program you run."
@@ -352,7 +352,7 @@ export default function Landing() {
               desc="90-day weight timeline with linear regression projection, body comp split, and a private photo timeline encrypted at rest."
             />
             <ModuleTile
-              name="Coach" sub="Module 5 · Engine"
+              name="Oracle" sub="Module 5 · Engine"
               accent={{ from: '#ff5a2a', to: '#7a2410' }}
               icon={<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>}
               desc="Reads from every other module. Deterministic rule-gate makes the call, AI explains the reasoning. Macros adjust weekly, automatically."
@@ -382,13 +382,13 @@ export default function Landing() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             <Testimonial
-              quote="I've been lifting for 12 years. The Coach Engine caught my cut was too aggressive a week before I would have noticed myself. Saved me from another stalled cut."
+              quote="I've been lifting for 12 years. Oracle caught my cut was too aggressive a week before I would have noticed myself. Saved me from another stalled cut."
               name="Marcus T."
               role="Powerlifter · 220 club"
               initials="MT"
             />
             <Testimonial
-              quote="Vision scan is borderline magic. Logged a curry I would have skipped because it was too annoying to break down. Macros came back in under 2 seconds."
+              quote="Sentinel scan is borderline magic. Logged a curry I would have skipped because it was too annoying to break down. Macros came back in under 2 seconds."
               name="Aisha K."
               role="CrossFit athlete · L1 coach"
               initials="AK"
@@ -448,7 +448,7 @@ export default function Landing() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto mb-10">
             {[
               { name: 'Basic',  price: 'Free',     sub: 'forever',                  feat: 'Manual logging · 30 exercises · 30d history' },
-              { name: 'Pro',    price: '$9.99',    sub: '/ month',                  feat: 'Vision scan · Coach Engine · full library', popular: true },
+              { name: 'Pro',    price: '$9.99',    sub: '/ month',                  feat: 'Sentinel scan · Oracle · full Codex', popular: true },
               { name: 'Elite',  price: '$19.99',   sub: '/ month',                  feat: 'Pro + AI form check · custom programming · monthly call' },
             ].map(p => (
               <div key={p.name} className={`border p-5 ${p.popular ? 'border-orange-500/60 bg-orange-500/5' : 'border-stone-800/60 bg-stone-950/40'}`}>
