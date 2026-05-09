@@ -2,6 +2,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSession } from '../hooks/useSession';
 import { useLogger } from '../hooks/useLogger';
+import { supabase } from '../lib/supabase';
 
 /* =========================================================================
  * IRONLAB LOGGER — Module 3 Proof-of-Concept
@@ -533,7 +534,24 @@ export default function IronLabLogger() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const workoutId = searchParams.get('workoutId');
-  const logger   = useLogger(userId, workoutId);
+
+  const [userWeightKg, setUserWeightKg] = useState(80);
+
+  // Fetch profile weight once when userId is known
+  useEffect(() => {
+    if (!userId) return;
+    supabase
+      .from('profiles')
+      .select('weight_kg')
+      .eq('id', userId)
+      .single()
+      .then(({ data }) => {
+        const w = Number(data?.weight_kg || 0);
+        if (w > 0) setUserWeightKg(w);
+      });
+  }, [userId]);
+
+  const logger   = useLogger(userId, workoutId, userWeightKg);
 
   const [name, setName]             = useState('New Workout');
   const [seconds, setSeconds]       = useState(0);

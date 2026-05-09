@@ -77,7 +77,9 @@ async function fetchPrevSets(exerciseId) {
 // Queries DB for real set count, fetches profile weight, writes calories_burned.
 // Returns the calculated calories so completeWorkout can use it in its return value.
 
-async function recalcCalories(workoutId, userId) {
+// weightKg is passed in from the component — avoids an extra profiles query
+// with RLS timing issues inside the hook.
+async function recalcCalories(workoutId, weightKg) {
   // Step 1: get workout_exercise IDs for this workout
   const { data: weRows, error: weErr } = await supabase
     .from('workout_exercises')
@@ -96,16 +98,7 @@ async function recalcCalories(workoutId, userId) {
     totalSets = count ?? 0;
   }
 
-  // Step 2: fetch profile weight
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('weight_kg')
-    .eq('id', userId)
-    .single();
-  const rawWeight = Number(profile?.weight_kg || 0);
-  const weightKg  = rawWeight > 0 ? rawWeight : 80;
-
-  // Step 3: calculate — MET 5.0, 135 s per set (45 s active + 90 s rest)
+  // Step 2: calculate — MET 5.0, 135 s per set (45 s active + 90 s rest)
   const activeSeconds  = totalSets * 135;
   const durationHours  = activeSeconds / 3600;
   const calories       = Math.round(5.0 * weightKg * durationHours);
@@ -115,13 +108,13 @@ async function recalcCalories(workoutId, userId) {
   console.log('[useLogger] recalcCalories: duration hours:', durationHours.toFixed(4));
   console.log('[useLogger] recalcCalories: calories result:', calories);
 
-  // Step 4: save to DB
+  // Step 3: save to DB
   await supabase
     .from('workouts')
     .update({ calories_burned: calories })
     .eq('id', workoutId);
 
-  // Step 5: verify read-back
+  // Step 4: verify read-back
   const { data: updated } = await supabase
     .from('workouts')
     .select('calories_burned')
@@ -136,7 +129,7 @@ async function recalcCalories(workoutId, userId) {
 // workoutId (optional): if provided, loads that specific workout by ID
 // (including completed ones — used when navigating from dashboard "View Workout")
 
-export function useLogger(userId, workoutId = null) {
+export function useLogger(userId, workoutId = null, userWeightKg = 80) {
   const [workout,      setWorkout]      = useState(null);
   const [exercises,    setExercises]    = useState([]);
   const [allExercises, setAllExercises] = useState([]);
@@ -146,14 +139,14 @@ export function useLogger(userId, workoutId = null) {
   const [error,        setError]        = useState(null);
 
   const timers            = useRef({});
-  const pendingSetWrites  = useRef({});   // setId → db payload, cleared on write
+  const pendingSetWrites  = useRef({});
   const workoutRef        = useRef(null);
   const userIdRef         = useRef(null);
-  const exercisesRef      = useRef([]);   // mirrors exercises state for calorie calc
+  const weightKgRef       = useRef(userWeightKg);
 
-  useEffect(() => { workoutRef.current  = workout;   }, [workout]);
-  useEffect(() => { userIdRef.current   = userId;    }, [userId]);
-  useEffect(() => { exercisesRef.current = exercises; }, [exercises]);
+  useEffect(() => { workoutRef.current  = workout;      }, [workout]);
+  useEffect(() => { userIdRef.current   = userId;       }, [userId]);
+  useEffect(() => { weightKgRef.current = userWeightKg; }, [userWeightKg]);
 
   // userId === undefined  → session still resolving; stay loading
   // userId === null       → confirmed no session
@@ -397,10 +390,9 @@ export function useLogger(userId, workoutId = null) {
       setSavedAt(Date.now());
       // Recalculate calories from real DB set count
       const wId = workoutRef.current?.id;
-      const uid = userIdRef.current;
-      if (wId && uid) {
+      if (wId) {
         try {
-          await recalcCalories(wId, uid);
+          await recalcCalories(wId, weightKgRef.current);
         } catch (e) {
           console.error('[useLogger] recalc error after logSet:', e);
         }
@@ -492,7 +484,6 @@ export function useLogger(userId, workoutId = null) {
     // 2. Mark workout complete first (sets the completed_at timestamp)
     const now = new Date().toISOString();
     const wId = workoutRef.current.id;
-    const uid = userIdRef.current;
     console.log('[useLogger] completing workout:', wId);
     const { data, error: err } = await supabase
       .from('workouts')
@@ -510,7 +501,7 @@ export function useLogger(userId, workoutId = null) {
     }
 
     // 3. Calculate calories from real DB set count and write back
-    const calsBurned = await recalcCalories(wId, uid) ?? 0;
+    const calsBurned = await recalcCalories(wId, weightKgRef.current) ?? 0;
 
     // 4. Update local state and trigger redirect
     console.log('[useLogger] workout saved ✓ calsBurned:', calsBurned);
