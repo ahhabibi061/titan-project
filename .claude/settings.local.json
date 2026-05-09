@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"C:\\\\Users\\\\Amir Habibi\\\\Desktop\\\\project titan\\\\titan-project\\\\apps\\\\web\\\\src\\\\pages\")",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"C:\\\\Users\\\\Amir Habibi\\\\Desktop\\\\project titan\\\\titan-project\\\\apps\\\\web\\\\src\\\\lib\")"
+    ]
+  }
+}
