@@ -96,13 +96,13 @@ async function recalcCalories(workoutId, userId) {
     totalSets = count ?? 0;
   }
 
-  // Step 2: fetch profile weight (try start_weight_kg then weight_kg)
+  // Step 2: fetch profile weight
   const { data: profile } = await supabase
     .from('profiles')
-    .select('start_weight_kg, weight_kg')
+    .select('weight_kg')
     .eq('id', userId)
     .single();
-  const rawWeight = Number(profile?.start_weight_kg || profile?.weight_kg || 0);
+  const rawWeight = Number(profile?.weight_kg || 0);
   const weightKg  = rawWeight > 0 ? rawWeight : 80;
 
   // Step 3: calculate — MET 5.0, 135 s per set (45 s active + 90 s rest)
