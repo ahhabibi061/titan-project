@@ -1,4 +1,7 @@
 ﻿import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useSession } from '../hooks/useSession';
+import { useLogger } from '../hooks/useLogger';
 
 /* =========================================================================
  * IRONLAB LOGGER — Module 3 Proof-of-Concept
@@ -91,7 +94,7 @@ function exerciseVolume(we, completedOnly = true) {
 function muscleVolumes(workout, library) {
   const v = {};
   for (const we of workout) {
-    const ex = library.find(e => e.id === we.exerciseId);
+    const ex = we._ex || library.find(e => e.id === we.exerciseId);
     if (!ex) continue;
     const vol = exerciseVolume(we, true);
     if (vol === 0) continue;
@@ -520,97 +523,207 @@ const TrashIcon = () => (
   </svg>
 );
 
+// -------------------- SHARED STYLE --------------------
+const FONT_STYLE = `
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap');
+  .font-sans  { font-family: 'Manrope', system-ui, sans-serif; }
+  .font-mono  { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .font-anton { font-family: 'Anton', sans-serif; letter-spacing: 0.01em; }
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+  body { background: #0a0908; }
+`;
+
+// -------------------- AMBIENT BACKDROP --------------------
+function Backdrop() {
+  return (
+    <div className="fixed inset-0 pointer-events-none" aria-hidden>
+      <div className="absolute inset-0 opacity-[0.03]" style={{
+        backgroundImage: 'repeating-linear-gradient(0deg, transparent 0, transparent 38px, #fff 38px, #fff 39px)'
+      }} />
+      <div className="absolute top-0 right-0 w-[60vw] h-[60vh] opacity-[0.08] blur-3xl" style={{
+        background: 'radial-gradient(circle, #ff5a2a 0%, transparent 60%)'
+      }} />
+    </div>
+  );
+}
+
 // -------------------- MAIN --------------------
 export default function IronLabLogger() {
-  const [workout, setWorkout] = useState(INITIAL_WORKOUT);
-  const [name, setName] = useState('Push Day · Week 4');
-  const [seconds, setSeconds] = useState(1842); // ~30 min into session
+  const { session, loading: sessionLoading } = useSession();
+  // Pass undefined while session is still resolving (keeps hook in loading state).
+  // Pass null once confirmed no session, real ID once confirmed logged in.
+  const userId  = sessionLoading ? undefined : (session?.user?.id ?? null);
+  const navigate = useNavigate();
+  const logger   = useLogger(userId);
 
-  // session timer
+  const [name, setName]             = useState('New Workout');
+  const [seconds, setSeconds]       = useState(0);
+  const [showComplete, setShowComplete] = useState(false);
+  const [summary, setSummary]       = useState(null);
+
+  // Sync workout name from Supabase into local input
   useEffect(() => {
-    const i = setInterval(() => setSeconds(s => s + 1), 1000);
+    if (logger.workout?.name) setName(logger.workout.name);
+  }, [logger.workout?.name]);
+
+  // Timer ticking from workout.created_at
+  useEffect(() => {
+    if (!logger.workout?.created_at) return;
+    const start = new Date(logger.workout.created_at).getTime();
+    const tick  = () => setSeconds(Math.floor((Date.now() - start) / 1000));
+    tick();
+    const i = setInterval(tick, 1000);
     return () => clearInterval(i);
-  }, []);
+  }, [logger.workout?.created_at]);
 
-  const volumes = useMemo(() => muscleVolumes(workout, EXERCISE_LIBRARY), [workout]);
-  const maxVol = useMemo(() => Math.max(800, ...Object.values(volumes)), [volumes]);
+  // Redirect 3 s after complete
+  useEffect(() => {
+    if (!logger.completed) return;
+    const t = setTimeout(() => navigate('/dashboard'), 3000);
+    return () => clearTimeout(t);
+  }, [logger.completed, navigate]);
 
-  const totalVolume = useMemo(
-    () => workout.reduce((acc, we) => acc + exerciseVolume(we, true), 0),
-    [workout]
-  );
-  const doneSets = workout.reduce((a, we) => a + we.sets.filter(s => s.done).length, 0);
+  // Picker library: DB exercises first, EXERCISE_LIBRARY fallback
+  const library = logger.allExercises.length > 0 ? logger.allExercises : EXERCISE_LIBRARY;
+
+  const workout    = logger.exercises;
+  const volumes    = useMemo(() => muscleVolumes(workout, library), [workout, library]);
+  const maxVol     = useMemo(() => Math.max(800, ...Object.values(volumes)), [volumes]);
+  const totalVolume = useMemo(() => workout.reduce((acc, we) => acc + exerciseVolume(we, true), 0), [workout]);
+
+  const doneSets  = workout.reduce((a, we) => a + we.sets.filter(s => s.done).length, 0);
   const totalSets = workout.reduce((a, we) => a + we.sets.length, 0);
   const totalReps = workout.reduce(
-    (a, we) => a + we.sets.filter(s => s.done).reduce((b, s) => b + (Number(s.reps) || 0), 0),
-    0
+    (a, we) => a + we.sets.filter(s => s.done).reduce((b, s) => b + (Number(s.reps) || 0), 0), 0
   );
 
-  const updateExercise = useCallback((id, updater) => {
-    setWorkout(w => w.map(we => we.id === id ? updater(we) : we));
-  }, []);
+  // Diff-based updateExercise — routes changes to hook mutation functions
+  const { logSet, removeSetFromExercise, removeExercise: hookRemove, addSetToExercise, addExercise: hookAdd } = logger;
 
-  const addSet = useCallback((weId) => {
-    setWorkout(w => w.map(we => {
-      if (we.id !== weId) return we;
-      const last = we.sets[we.sets.length - 1];
-      return {
-        ...we,
-        sets: [...we.sets, {
-          id: `s-${Date.now()}`,
-          reps: last?.reps || 8,
-          weight: last?.weight || 0,
-          done: false,
-          prevReps: last?.prevReps || 0,
-          prevWeight: last?.prevWeight || 0,
-        }],
-      };
-    }));
-  }, []);
+  const updateExercise = useCallback((weId, updater) => {
+    const oldWe = logger.exercises.find(e => e.id === weId);
+    if (!oldWe) return;
+    const newWe = typeof updater === 'function' ? updater(oldWe) : updater;
 
-  const removeExercise = useCallback((id) => {
-    setWorkout(w => w.filter(we => we.id !== id));
-  }, []);
+    const oldMap = new Map(oldWe.sets.map(s => [s.id, s]));
+    const newMap = new Map(newWe.sets.map(s => [s.id, s]));
 
-  const addExercise = useCallback((ex) => {
-    setWorkout(w => [...w, {
-      id: `we-${Date.now()}`,
-      exerciseId: ex.id,
-      sets: [
-        { id: `s-${Date.now()}-1`, reps: 8, weight: 0, done: false, prevReps: 0, prevWeight: 0 },
-        { id: `s-${Date.now()}-2`, reps: 8, weight: 0, done: false, prevReps: 0, prevWeight: 0 },
-        { id: `s-${Date.now()}-3`, reps: 8, weight: 0, done: false, prevReps: 0, prevWeight: 0 },
-      ],
-    }]);
-  }, []);
+    // Removed sets
+    for (const [id] of oldMap) {
+      if (!newMap.has(id)) removeSetFromExercise(weId, id);
+    }
+    // Changed sets
+    for (const [id, ns] of newMap) {
+      const os = oldMap.get(id);
+      if (!os) continue;
+      if (os.reps !== ns.reps || os.weight !== ns.weight || os.done !== ns.done) {
+        logSet(weId, id, { reps: ns.reps, weight: ns.weight, done: ns.done });
+      }
+    }
+  }, [logger.exercises, logSet, removeSetFromExercise]);
 
   const usedIds = new Set(workout.map(we => we.exerciseId));
+  const mins    = String(Math.floor(seconds / 60)).padStart(2, '0');
+  const secs    = String(seconds % 60).padStart(2, '0');
 
-  const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
-  const secs = String(seconds % 60).padStart(2, '0');
+  const handleComplete = async () => {
+    const topEntry = Object.entries(volumes).sort(([, a], [, b]) => b - a)[0];
+    const prsHit   = workout.reduce(
+      (acc, we) => acc + we.sets.filter(s => s.done && overloadStatus(s).kind === 'pr').length, 0
+    );
+    setSummary({ totalVolume, doneSets, prsHit, topMuscle: topEntry?.[0], duration: seconds });
+    await logger.completeWorkout();
+    setShowComplete(true);
+  };
 
+  // ---- Loading ----
+  if (logger.loading) {
+    return (
+      <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 flex items-center justify-center">
+        <style>{FONT_STYLE}</style>
+        <Backdrop />
+        <div className="space-y-3 w-full max-w-md px-6">
+          {[80, 60, 70, 50].map((w, i) => (
+            <div key={i} className="h-4 bg-stone-800/60 animate-pulse" style={{ width: `${w}%` }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ---- No active workout ----
+  if (!logger.workout) {
+    return (
+      <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased flex items-center justify-center">
+        <style>{FONT_STYLE}</style>
+        <Backdrop />
+        <div className="relative z-10 text-center space-y-8 px-6 w-full max-w-sm">
+          <div className="flex items-baseline gap-2 justify-center">
+            <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">IRONLAB</span>
+            <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Logger</span>
+          </div>
+          <p className="text-stone-500 font-mono text-xs uppercase tracking-wider">No active session today</p>
+          <div className="space-y-3">
+            <input
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Workout name…"
+              className="w-full bg-stone-950/60 border border-stone-800 px-4 py-3 text-stone-100 font-mono text-sm placeholder:text-stone-600 focus:outline-none focus:border-orange-500/60"
+            />
+            <button
+              onClick={() => {
+                console.log('[Logger] Start Workout clicked — userId:', userId, 'sessionLoading:', sessionLoading);
+                logger.startWorkout(name || 'New Workout');
+              }}
+              className="w-full px-8 py-4 bg-orange-500 text-stone-950 font-anton text-2xl uppercase tracking-wider hover:bg-orange-400 transition-colors"
+            >
+              Start Workout
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Active workout ----
   return (
     <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap');
-        .font-sans  { font-family: 'Manrope', system-ui, sans-serif; }
-        .font-mono  { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-        .font-anton { font-family: 'Anton', sans-serif; letter-spacing: 0.01em; }
-        input[type=number]::-webkit-outer-spin-button,
-        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
-        body { background: #0a0908; }
-      `}</style>
+      <style>{FONT_STYLE}</style>
+      <Backdrop />
 
-      {/* AMBIENT BACKDROP */}
-      <div className="fixed inset-0 pointer-events-none" aria-hidden>
-        <div className="absolute inset-0 opacity-[0.03]" style={{
-          backgroundImage: 'repeating-linear-gradient(0deg, transparent 0, transparent 38px, #fff 38px, #fff 39px)'
-        }} />
-        <div className="absolute top-0 right-0 w-[60vw] h-[60vh] opacity-[0.08] blur-3xl" style={{
-          background: 'radial-gradient(circle, #ff5a2a 0%, transparent 60%)'
-        }} />
-      </div>
+      {/* COMPLETION OVERLAY */}
+      {showComplete && summary && (
+        <div className="fixed inset-0 z-50 bg-stone-950/96 flex items-center justify-center backdrop-blur-sm">
+          <div className="text-center space-y-8 px-6">
+            <div className="font-anton text-6xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">
+              Workout Complete
+            </div>
+            <div className="grid grid-cols-3 gap-8">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-1">Volume</div>
+                <div className="font-anton text-4xl text-orange-300 tabular-nums">{fmt(summary.totalVolume)}</div>
+                <div className="text-[10px] text-stone-600 font-mono">kg · reps</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-1">Sets Done</div>
+                <div className="font-anton text-4xl text-stone-100 tabular-nums">{summary.doneSets}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-1">PRs Hit</div>
+                <div className="font-anton text-4xl text-orange-300 tabular-nums">{summary.prsHit}</div>
+              </div>
+            </div>
+            {summary.topMuscle && (
+              <div className="text-stone-400 font-mono text-xs uppercase tracking-wider">
+                Top muscle: <span className="text-orange-300">{MUSCLES[summary.topMuscle]}</span>
+              </div>
+            )}
+            <p className="text-stone-600 font-mono text-xs">Redirecting to dashboard…</p>
+          </div>
+        </div>
+      )}
 
       <div className="relative z-10 max-w-[1400px] mx-auto px-6 py-8">
 
@@ -624,7 +737,7 @@ export default function IronLabLogger() {
             <span className="hidden md:inline-block w-px h-8 bg-stone-800" />
             <input
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={e => { setName(e.target.value); logger.updateWorkoutName(e.target.value); }}
               className="hidden md:block bg-transparent text-lg text-stone-300 focus:outline-none focus:text-stone-100 font-mono px-2 py-1 border-b border-transparent focus:border-orange-500/40"
             />
           </div>
@@ -633,35 +746,21 @@ export default function IronLabLogger() {
               <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono">Session</div>
               <div className="font-anton text-2xl tabular-nums text-stone-200">{mins}:{secs}</div>
             </div>
-            <button className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-lg uppercase tracking-wider hover:bg-orange-400 transition-colors">
-              Save Workout
+            <button
+              onClick={handleComplete}
+              className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-lg uppercase tracking-wider hover:bg-orange-400 transition-colors"
+            >
+              Complete Workout
             </button>
           </div>
         </header>
 
         {/* STATS BAR */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-0 mb-8 border border-stone-800/60 bg-stone-950/40">
-          <StatBlock
-            label="Total Volume"
-            value={fmt(totalVolume)}
-            sub="kg · reps"
-            accent="text-orange-300"
-          />
-          <StatBlock
-            label="Sets Completed"
-            value={`${doneSets}/${totalSets}`}
-            sub={`${Math.round((doneSets/Math.max(totalSets,1))*100)}% complete`}
-          />
-          <StatBlock
-            label="Reps Logged"
-            value={fmt(totalReps)}
-            sub="working sets"
-          />
-          <StatBlock
-            label="Muscles Hit"
-            value={Object.keys(volumes).length}
-            sub={`/ ${Object.keys(MUSCLES).length} total`}
-          />
+          <StatBlock label="Total Volume"    value={fmt(totalVolume)}          sub="kg · reps"                                       accent="text-orange-300" />
+          <StatBlock label="Sets Completed"  value={`${doneSets}/${totalSets}`} sub={`${Math.round((doneSets / Math.max(totalSets, 1)) * 100)}% complete`} />
+          <StatBlock label="Reps Logged"     value={fmt(totalReps)}            sub="working sets" />
+          <StatBlock label="Muscles Hit"     value={Object.keys(volumes).length} sub={`/ ${Object.keys(MUSCLES).length} total`} />
         </div>
 
         {/* MAIN GRID */}
@@ -669,7 +768,7 @@ export default function IronLabLogger() {
           {/* LEFT — EXERCISE GRID */}
           <main className="col-span-12 lg:col-span-7 xl:col-span-8 space-y-4">
             {workout.map((we, idx) => {
-              const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
+              const ex = we._ex || library.find(e => e.id === we.exerciseId);
               if (!ex) return null;
               return (
                 <ExerciseCard
@@ -678,12 +777,12 @@ export default function IronLabLogger() {
                   we={we}
                   exercise={ex}
                   onUpdate={(updated) => updateExercise(we.id, () => updated)}
-                  onRemove={() => removeExercise(we.id)}
-                  onAddSet={() => addSet(we.id)}
+                  onRemove={() => hookRemove(we.id)}
+                  onAddSet={() => addSetToExercise(we.id)}
                 />
               );
             })}
-            <AddExercisePicker library={EXERCISE_LIBRARY} onAdd={addExercise} used={usedIds} />
+            <AddExercisePicker library={library} onAdd={hookAdd} used={usedIds} />
           </main>
 
           {/* RIGHT — MUSCLE MAP + BREAKDOWN */}
@@ -694,7 +793,6 @@ export default function IronLabLogger() {
                 <span className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">live · volume-weighted</span>
               </div>
               <MuscleMap volumes={volumes} max={maxVol} />
-              {/* legend */}
               <div className="mt-4 pt-4 border-t border-stone-800/60">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">Volume</span>
