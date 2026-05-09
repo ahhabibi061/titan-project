@@ -2,7 +2,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSession } from '../hooks/useSession';
 import { useLogger } from '../hooks/useLogger';
-import { supabase } from '../lib/supabase';
+import { useProfileStore } from '../store/useProfileStore';
 
 /* =========================================================================
  * IRONLAB LOGGER — Module 3 Proof-of-Concept
@@ -530,26 +530,11 @@ export default function IronLabLogger() {
   const { session, loading: sessionLoading } = useSession();
   // Pass undefined while session is still resolving (keeps hook in loading state).
   // Pass null once confirmed no session, real ID once confirmed logged in.
-  const userId  = sessionLoading ? undefined : (session?.user?.id ?? null);
+  const userId       = sessionLoading ? undefined : (session?.user?.id ?? null);
+  const userWeightKg = useProfileStore((s) => Number(s.profile?.weight_kg || 0) || 80);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const workoutId = searchParams.get('workoutId');
-
-  const [userWeightKg, setUserWeightKg] = useState(80);
-
-  // Fetch profile weight once when userId is known
-  useEffect(() => {
-    if (!userId) return;
-    supabase
-      .from('profiles')
-      .select('weight_kg')
-      .eq('id', userId)
-      .single()
-      .then(({ data }) => {
-        const w = Number(data?.weight_kg || 0);
-        if (w > 0) setUserWeightKg(w);
-      });
-  }, [userId]);
 
   const logger   = useLogger(userId, workoutId, userWeightKg);
 

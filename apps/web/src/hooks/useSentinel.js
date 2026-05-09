@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useProfileStore } from '../store/useProfileStore';
 
 function toDateStr(d) {
   return d.toISOString().split('T')[0];
 }
 
 export function useSentinel(userId) {
+  const storeProfile = useProfileStore((s) => s.profile);
   const [meals, setMeals]                   = useState([]);
   const [targets, setTargets]               = useState({ kcal: 2200, protein: 180, carbs: 220, fat: 70 });
   const [loading, setLoading]               = useState(true);
@@ -13,19 +15,15 @@ export function useSentinel(userId) {
   const [calsBurned, setCalsBurned]         = useState(null);
   const [eatBackCalories, setEatBackCalories] = useState(false);
 
-  // Fetch profile targets + preferences once on mount
+  // Sync macro targets + eat-back preference from the global profile store
+  useEffect(() => {
+    if (!storeProfile) return;
+    if (storeProfile.current_macros) setTargets(storeProfile.current_macros);
+    setEatBackCalories(storeProfile.settings?.eat_back_calories ?? false);
+  }, [storeProfile]);
+
   useEffect(() => {
     if (!userId) return;
-    supabase
-      .from('profiles')
-      .select('current_macros, settings')
-      .eq('id', userId)
-      .single()
-      .then(({ data }) => {
-        if (data?.current_macros) setTargets(data.current_macros);
-        setEatBackCalories(data?.settings?.eat_back_calories ?? false);
-      });
-
     // Fetch today's completed workout calories_burned
     const today    = new Date().toISOString().split('T')[0];
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];

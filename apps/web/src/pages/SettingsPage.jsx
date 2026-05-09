@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useSession } from '../hooks/useSession';
+import { useProfileStore } from '../store/useProfileStore';
 
 // -------------------- DOMAIN --------------------
 const ACTIVITY_LEVELS = [
@@ -227,6 +228,8 @@ function DeleteModal({ onClose }) {
 export default function SettingsPage() {
   const navigate = useNavigate();
   const { session, user, loading: sessionLoading } = useSession();
+  const storeProfile  = useProfileStore((s) => s.profile);
+  const updateProfile = useProfileStore((s) => s.updateProfile);
 
   // ---- Profile section ----
   const [displayName, setDisplayName]   = useState('');
@@ -268,37 +271,23 @@ export default function SettingsPage() {
     }
   }, [session, sessionLoading, navigate]);
 
-  // Load profile on mount
+  // Populate form fields from the global profile store (fetched once at app boot)
   useEffect(() => {
-    if (!user) return;
-
-    const load = async () => {
-      setPageLoading(true);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('display_name, height_cm, start_weight_kg, goal_weight_kg, age, sex, activity_level, goal, subscription_tier, settings, created_at')
-        .eq('id', user.id)
-        .single();
-
-      if (error) { setLoadError(error.message); setPageLoading(false); return; }
-
-      setDisplayName(data.display_name ?? '');
-      setEmail(user.email ?? '');
-      setHeight(data.height_cm ?? '');
-      setWeight(data.start_weight_kg ?? '');
-      setGoalWeight(data.goal_weight_kg ?? '');
-      setAge(data.age ?? '');
-      setSex(data.sex ?? 'male');
-      setActivity(data.activity_level ?? 'moderate');
-      setGoal(data.goal ?? 'cut');
-      setTier(data.subscription_tier ?? 'basic');
-      setCreatedAt(data.created_at ? new Date(data.created_at) : null);
-      setPrefs({ ...DEFAULT_SETTINGS, ...(data.settings ?? {}) });
-      setPageLoading(false);
-    };
-
-    load();
-  }, [user]);
+    if (!storeProfile) return;
+    setDisplayName(storeProfile.display_name ?? '');
+    setEmail(user?.email ?? '');
+    setHeight(storeProfile.height_cm ?? '');
+    setWeight(storeProfile.weight_kg ?? '');
+    setGoalWeight(storeProfile.goal_weight_kg ?? '');
+    setAge(storeProfile.age ?? '');
+    setSex(storeProfile.sex ?? 'male');
+    setActivity(storeProfile.activity_level ?? 'moderate');
+    setGoal(storeProfile.goal ?? 'cut');
+    setTier(storeProfile.subscription_tier ?? 'basic');
+    setCreatedAt(storeProfile.created_at ? new Date(storeProfile.created_at) : null);
+    setPrefs({ ...DEFAULT_SETTINGS, ...(storeProfile.settings ?? {}) });
+    setPageLoading(false);
+  }, [storeProfile, user?.email]);
 
   // Live macro preview
   const macros = useMemo(() => calcMacros({
@@ -319,42 +308,50 @@ export default function SettingsPage() {
       .update({ display_name: displayName.trim() })
       .eq('id', user.id);
     setProfileSaving(false);
-    setProfileStatus(error
-      ? { error: error.message, success: null }
-      : { error: null, success: 'Profile saved.' });
+    if (error) {
+      setProfileStatus({ error: error.message, success: null });
+    } else {
+      updateProfile({ display_name: displayName.trim() });
+      setProfileStatus({ error: null, success: 'Profile saved.' });
+    }
   };
 
   const saveBiometrics = async () => {
     setBioSaving(true);
     setBioStatus({ error: null, success: null });
+    const bioPayload = {
+      height_cm:      parseFloat(height)     || null,
+      weight_kg:      parseFloat(weight)     || null,
+      goal_weight_kg: parseFloat(goalWeight) || null,
+      age:            parseInt(age, 10)      || null,
+      sex,
+      activity_level: activity,
+      goal,
+      current_macros: macros,
+    };
     const { error } = await supabase
       .from('profiles')
-      .update({
-        height_cm:       parseFloat(height)     || null,
-        start_weight_kg: parseFloat(weight)     || null,
-        goal_weight_kg:  parseFloat(goalWeight) || null,
-        age:             parseInt(age, 10)      || null,
-        sex,
-        activity_level:  activity,
-        goal,
-        current_macros:  macros,
-      })
+      .update(bioPayload)
       .eq('id', user.id);
     setBioSaving(false);
-    setBioStatus(error
-      ? { error: error.message, success: null }
-      : { error: null, success: 'Biometrics saved. Macros updated.' });
+    if (error) {
+      setBioStatus({ error: error.message, success: null });
+    } else {
+      updateProfile(bioPayload);
+      setBioStatus({ error: null, success: 'Biometrics saved. Macros updated.' });
+    }
   };
 
   const savePref = async (key, value) => {
     const next = { ...prefs, [key]: value };
     setPrefs(next);
     setPrefsSaving(true);
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({ settings: next })
       .eq('id', user.id);
     setPrefsSaving(false);
+    if (!error) updateProfile({ settings: next });
   };
 
   const handleSignOut = async () => {

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useProfileStore } from '../store/useProfileStore';
 
 function toDateStr(d) {
   return d.toISOString().split('T')[0];
@@ -36,12 +37,13 @@ function computeStreak(completedDateStrings) {
 }
 
 export function useDashboard(userId) {
+  const storeProfile = useProfileStore((s) => s.profile);
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !storeProfile) return;
     let cancelled = false;
 
     async function fetchAll() {
@@ -65,7 +67,6 @@ export function useDashboard(userId) {
         const sixtyDaysAgoStr = toDateStr(sixtyDaysAgo);
 
         const [
-          profileRes,
           nutritionTodayRes,
           workoutTodayRes,
           coachRes,
@@ -76,13 +77,7 @@ export function useDashboard(userId) {
           biometricsWeekRes,
           recentWorkoutsRes,
         ] = await Promise.all([
-          // 1. Profile — targets + display info + preferences
-          supabase.from('profiles')
-            .select('display_name, subscription_tier, current_macros, goal, goal_weight_kg, settings')
-            .eq('id', userId)
-            .single(),
-
-          // 2. Nutrition today — consumed macros + activity feed
+          // 1. Nutrition today — consumed macros + activity feed
           supabase.from('nutrition_logs')
             .select('kcal, protein_g, carbs_g, fat_g, meal_name, logged_at')
             .eq('user_id', userId)
@@ -157,14 +152,14 @@ export function useDashboard(userId) {
         if (cancelled) return;
 
         const firstErr = [
-          profileRes, nutritionTodayRes, workoutTodayRes, coachRes,
+          nutritionTodayRes, workoutTodayRes, coachRes,
           biometricsRes, nutritionWeekRes, workoutsWeekRes, workoutsStreakRes,
           biometricsWeekRes, recentWorkoutsRes,
         ].find(r => r.error)?.error;
         if (firstErr) throw new Error(firstErr.message);
 
-        // ── Profile ──
-        const profile = profileRes.data;
+        // ── Profile (from Zustand store, fetched once at app boot) ──
+        const profile = storeProfile;
         const targets = profile?.current_macros ?? { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
         const eatBackCalories = profile?.settings?.eat_back_calories ?? false;
 
@@ -347,7 +342,7 @@ export function useDashboard(userId) {
 
     fetchAll();
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, storeProfile]);
 
   return { data, loading, error };
 }
