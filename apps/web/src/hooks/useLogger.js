@@ -1,21 +1,28 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
+// ─── Schema reference ──────────────────────────────────────────────────────
+// exercises:         id TEXT pk, name, primary_muscle, secondary_muscles text[]
+// workouts:          id uuid pk, user_id, name, completed_at
+// workout_exercises: id uuid pk, workout_id, exercise_id TEXT fk, order_index int
+// sets:              id uuid pk, workout_exercise_id uuid fk, set_number,
+//                    weight_kg, reps, rir, logged_at timestamptz
+//   RLS on sets: via join workout_exercises → workouts where w.user_id = auth.uid()
+//   (NO user_id column on sets — do NOT include it in inserts)
+
 // ─── DB → UI adapters ──────────────────────────────────────────────────────
 
-// Sets table columns: id, user_id, workout_exercise_id, set_number,
-//                     weight_kg, reps, rir, logged_at
 function adaptSet(s, prevSets = [], idx = 0) {
   return {
-    id:          s.id,
-    _setNumber:  s.set_number,
-    _loggedAt:   s.logged_at,
-    reps:        s.reps      ?? 8,
-    weight:      s.weight_kg ?? 0,
-    done:        !!s.logged_at,           // logged_at set = set is "done"
-    prevReps:    prevSets[idx]?.reps   ?? 0,
-    prevWeight:  prevSets[idx]?.weight ?? 0,
-    rir:         s.rir ?? null,
+    id:         s.id,
+    _setNumber: s.set_number,
+    _loggedAt:  s.logged_at,
+    reps:       s.reps      ?? 8,
+    weight:     s.weight_kg ?? 0,
+    done:       !!s.logged_at,
+    prevReps:   prevSets[idx]?.reps   ?? 0,
+    prevWeight: prevSets[idx]?.weight ?? 0,
+    rir:        s.rir ?? null,
   };
 }
 
@@ -28,12 +35,12 @@ function adaptExercise(we, prevSets = []) {
   return {
     id:         we.id,
     exerciseId: we.exercise_id,
-    _order:     we.order ?? 0,
+    _order:     we.order_index ?? 0,       // column is order_index, not order
     _ex: ex ? {
       id:        ex.id,
       name:      ex.name,
-      primary:   Array.isArray(ex.primary_muscle)     ? ex.primary_muscle     : [ex.primary_muscle].filter(Boolean),
-      secondary: Array.isArray(ex.secondary_muscles)  ? ex.secondary_muscles  : [],
+      primary:   Array.isArray(ex.primary_muscle)    ? ex.primary_muscle    : [ex.primary_muscle].filter(Boolean),
+      secondary: Array.isArray(ex.secondary_muscles) ? ex.secondary_muscles : [],
     } : null,
     sets,
   };
@@ -43,7 +50,6 @@ function adaptExercise(we, prevSets = []) {
 
 async function fetchPrevSets(exerciseId) {
   try {
-    // Get all workout_exercises for this exercise that belong to a completed workout
     const { data } = await supabase
       .from('workout_exercises')
       .select('id, sets(set_number, weight_kg, reps), workouts!inner(completed_at)')
@@ -52,7 +58,7 @@ async function fetchPrevSets(exerciseId) {
 
     if (!data?.length) return [];
 
-    // Sort by completed_at desc in JS (Supabase JS v2 can't order by joined columns)
+    // Sort desc by completed_at in JS (Supabase JS v2 can't order by joined columns)
     const sorted = data
       .filter(we => we.workouts?.completed_at)
       .sort((a, b) => new Date(b.workouts.completed_at) - new Date(a.workouts.completed_at));
@@ -75,17 +81,18 @@ export function useLogger(userId) {
   const [allExercises, setAllExercises] = useState([]);
   const [loading,      setLoading]      = useState(true);
   const [completed,    setCompleted]    = useState(false);
+  const [error,        setError]        = useState(null);
 
   const timers     = useRef({});
   const workoutRef = useRef(null);
   const userIdRef  = useRef(null);
 
-  useEffect(() => { workoutRef.current = workout; },  [workout]);
-  useEffect(() => { userIdRef.current  = userId;  },  [userId]);
+  useEffect(() => { workoutRef.current = workout; }, [workout]);
+  useEffect(() => { userIdRef.current  = userId;  }, [userId]);
 
   // userId === undefined  → session still resolving; stay loading
   // userId === null       → confirmed no session
-  // userId === 'uuid'     → authenticated
+  // userId === 'uuid'     → authenticated; fetch from DB
   useEffect(() => {
     if (userId === undefined) return;
     if (!userId) { setLoading(false); return; }
@@ -102,11 +109,11 @@ export function useLogger(userId) {
   // ── Loaders ──────────────────────────────────────────────────────────────
 
   async function loadAllExercises() {
-    const { data, error } = await supabase
+    const { data, error: err } = await supabase
       .from('exercises')
       .select('id, name, primary_muscle, secondary_muscles')
       .order('name');
-    if (error) { console.error('[useLogger] loadAllExercises error:', error); return; }
+    if (err) { console.error('[useLogger] loadAllExercises error:', err); return; }
     if (data?.length) {
       setAllExercises(data.map(e => ({
         id:        e.id,
@@ -114,6 +121,9 @@ export function useLogger(userId) {
         primary:   Array.isArray(e.primary_muscle)    ? e.primary_muscle    : [e.primary_muscle].filter(Boolean),
         secondary: Array.isArray(e.secondary_muscles) ? e.secondary_muscles : [],
       })));
+      console.log('[useLogger] loaded', data.length, 'exercises from catalog');
+    } else {
+      console.warn('[useLogger] exercises catalog is empty — run 004_seed_exercises.sql');
     }
   }
 
@@ -121,7 +131,7 @@ export function useLogger(userId) {
     const today    = new Date().toISOString().split('T')[0];
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-    const { data: w, error } = await supabase
+    const { data: w, error: err } = await supabase
       .from('workouts')
       .select('id, name, created_at, completed_at')
       .eq('user_id', userId)
@@ -132,8 +142,8 @@ export function useLogger(userId) {
       .limit(1)
       .maybeSingle();
 
-    if (error) { console.error('[useLogger] loadTodayWorkout error:', error); return; }
-    if (!w) { console.log('[useLogger] no in-progress workout found today'); return; }
+    if (err) { console.error('[useLogger] loadTodayWorkout error:', err); return; }
+    if (!w)  { console.log('[useLogger] no in-progress workout today'); return; }
 
     console.log('[useLogger] resuming workout:', w.id, w.name);
     setWorkout(w);
@@ -142,17 +152,17 @@ export function useLogger(userId) {
   }
 
   async function loadExercises(workoutId) {
-    const { data, error } = await supabase
+    const { data, error: err } = await supabase
       .from('workout_exercises')
       .select(`
-        id, exercise_id, order,
+        id, exercise_id, order_index,
         exercises(id, name, primary_muscle, secondary_muscles),
         sets(id, set_number, weight_kg, reps, rir, logged_at)
       `)
       .eq('workout_id', workoutId)
-      .order('order', { ascending: true });
+      .order('order_index', { ascending: true });
 
-    if (error) { console.error('[useLogger] loadExercises error:', error); return; }
+    if (err) { console.error('[useLogger] loadExercises error:', err); return; }
     if (!data) return;
 
     const adapted = await Promise.all(
@@ -162,7 +172,7 @@ export function useLogger(userId) {
       })
     );
     setExercises(adapted);
-    console.log('[useLogger] loaded', adapted.length, 'exercises');
+    console.log('[useLogger] loaded', adapted.length, 'exercises for workout');
   }
 
   // ── Mutations ─────────────────────────────────────────────────────────────
@@ -172,13 +182,13 @@ export function useLogger(userId) {
     console.log('[useLogger] startWorkout → userId:', uid);
     if (!uid) { console.error('[useLogger] startWorkout: no userId'); return; }
 
-    const { data, error } = await supabase
+    const { data, error: err } = await supabase
       .from('workouts')
       .insert({ user_id: uid, name })
       .select('id, name, created_at, completed_at')
       .single();
 
-    if (error) { console.error('[useLogger] workouts insert error:', error); return; }
+    if (err) { console.error('[useLogger] workouts insert error:', err); setError('Failed to start workout.'); return; }
     console.log('[useLogger] workout created:', data.id);
     setWorkout(data);
     workoutRef.current = data;
@@ -197,53 +207,48 @@ export function useLogger(userId) {
 
   const addExercise = useCallback(async (ex) => {
     const workoutId = workoutRef.current?.id;
-    const uid       = userIdRef.current;
     if (!workoutId) { console.error('[useLogger] addExercise: no active workout'); return; }
 
-    console.log('[useLogger] addExercise:', ex.name, '→ workout:', workoutId);
+    console.log('[useLogger] addExercise:', ex.name, '(id:', ex.id, ')');
 
     const nextOrder = exercises.length;
-    const tempId    = `opt-we-${Date.now()}`;
+    const tempWeId  = `opt-we-${Date.now()}`;
     const ts        = Date.now();
 
-    const optimistic = {
-      id: tempId,
+    // Optimistic: show exercise immediately with temp IDs
+    setExercises(prev => [...prev, {
+      id: tempWeId,
       exerciseId: ex.id,
       _order: nextOrder,
-      _ex: { id: ex.id, name: ex.name, primary: ex.primary, secondary: ex.secondary },
-      sets: [1, 2, 3].map(n => ({
+      _ex:    { id: ex.id, name: ex.name, primary: ex.primary, secondary: ex.secondary },
+      sets:   [1, 2, 3].map(n => ({
         id: `opt-s-${ts}-${n}`, _setNumber: n, _loggedAt: null,
         reps: 8, weight: 0, done: false, prevReps: 0, prevWeight: 0,
       })),
-    };
-    setExercises(prev => [...prev, optimistic]);
+    }]);
 
-    // Only write to DB if exercise has a real UUID (not EXERCISE_LIBRARY fallback IDs)
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(ex.id);
-    if (!isUUID) {
-      console.warn('[useLogger] addExercise: non-UUID exercise id — local only:', ex.id);
-      return;
-    }
-
-    // 1. Insert workout_exercise
+    // workout_exercises.exercise_id is TEXT FK → use ex.id directly (text slug from catalog)
+    // EXERCISE_LIBRARY fallback slugs (e.g. 'bench') won't exist in DB — the insert will fail
+    // with FK violation if exercises table isn't seeded. That error surfaces below.
     const { data: weData, error: weErr } = await supabase
       .from('workout_exercises')
-      .insert({ workout_id: workoutId, exercise_id: ex.id, order: nextOrder })
+      .insert({ workout_id: workoutId, exercise_id: ex.id, order_index: nextOrder })
       .select('id')
       .single();
 
     if (weErr) {
       console.error('[useLogger] workout_exercises insert error:', weErr);
-      setExercises(prev => prev.filter(e => e.id !== tempId));
+      setExercises(prev => prev.filter(e => e.id !== tempWeId));
+      setError(`Could not add "${ex.name}". ${weErr.message}`);
       return;
     }
     console.log('[useLogger] workout_exercise created:', weData.id);
 
-    // 2. Insert 3 default sets with user_id (required for RLS)
+    // Insert 3 default sets — NO user_id (sets table has no user_id column;
+    // RLS resolves via workout_exercises → workouts join)
     const { data: setsData, error: setsErr } = await supabase
       .from('sets')
       .insert([1, 2, 3].map(n => ({
-        user_id:             uid,
         workout_exercise_id: weData.id,
         set_number:          n,
         weight_kg:           0,
@@ -253,7 +258,7 @@ export function useLogger(userId) {
 
     if (setsErr) {
       console.error('[useLogger] sets insert error:', setsErr);
-      // Don't rollback exercise — it exists in DB, just sets failed
+      setError(`Exercise added but sets failed to save. ${setsErr.message}`);
     } else {
       console.log('[useLogger] sets created:', setsData?.length);
     }
@@ -263,23 +268,22 @@ export function useLogger(userId) {
       .sort((a, b) => a.set_number - b.set_number)
       .map((s, i) => adaptSet(s, prev, i));
 
+    // Replace temp IDs with real DB IDs
     setExercises(prevEx => prevEx.map(e =>
-      e.id === tempId ? { ...e, id: weData.id, sets: realSets } : e
+      e.id === tempWeId ? { ...e, id: weData.id, sets: realSets } : e
     ));
   }, [exercises.length]);
 
   const removeExercise = useCallback(async (weId) => {
     setExercises(prev => prev.filter(e => e.id !== weId));
-    if (!/^opt-/.test(weId)) {
-      const { error } = await supabase.from('workout_exercises').delete().eq('id', weId);
-      if (error) console.error('[useLogger] removeExercise error:', error);
+    if (!weId.startsWith('opt-')) {
+      const { error: err } = await supabase.from('workout_exercises').delete().eq('id', weId);
+      if (err) console.error('[useLogger] removeExercise error:', err);
     }
   }, []);
 
   // Optimistic update + debounced DB write per set (500 ms)
   const logSet = useCallback((weId, setId, updates) => {
-    console.log('[useLogger] logSet:', setId, updates);
-
     // Optimistic UI update immediately
     setExercises(prev => prev.map(we =>
       we.id !== weId ? we : {
@@ -288,8 +292,9 @@ export function useLogger(userId) {
       }
     ));
 
-    if (/^opt-/.test(setId)) {
-      console.log('[useLogger] logSet: temp ID, skipping DB write');
+    // Skip DB write if either the set ID or the workout_exercise ID is still a temp
+    if (setId.startsWith('opt-') || weId.startsWith('opt-')) {
+      console.log('[useLogger] logSet: skipping DB write — temp ID (setId:', setId, 'weId:', weId, ')');
       return;
     }
 
@@ -301,13 +306,12 @@ export function useLogger(userId) {
       if ('done'   in updates) db.logged_at = updates.done ? new Date().toISOString() : null;
 
       console.log('[useLogger] logSet DB write → set:', setId, db);
-      const { error } = await supabase.from('sets').update(db).eq('id', setId);
-      if (error) console.error('[useLogger] logSet update error:', error, 'set:', setId);
+      const { error: err } = await supabase.from('sets').update(db).eq('id', setId);
+      if (err) console.error('[useLogger] logSet update error:', err, 'set:', setId);
     }, 500);
   }, []);
 
   const addSetToExercise = useCallback(async (weId) => {
-    const uid = userIdRef.current;
     setExercises(prev => {
       const we = prev.find(e => e.id === weId);
       if (!we) return prev;
@@ -324,12 +328,11 @@ export function useLogger(userId) {
         prevWeight: last?.prevWeight || 0,
       };
 
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(weId);
-      if (isUUID) {
+      // Only write to DB if weId is a real UUID (not a temp workout_exercise)
+      if (!weId.startsWith('opt-')) {
         supabase
           .from('sets')
           .insert({
-            user_id:             uid,
             workout_exercise_id: weId,
             set_number:          nextNum,
             weight_kg:           last?.weight || 0,
@@ -337,9 +340,9 @@ export function useLogger(userId) {
           })
           .select('id, set_number, weight_kg, reps, logged_at')
           .single()
-          .then(({ data, error }) => {
-            if (error) {
-              console.error('[useLogger] addSetToExercise insert error:', error);
+          .then(({ data, error: err }) => {
+            if (err) {
+              console.error('[useLogger] addSetToExercise insert error:', err);
               setExercises(ex => ex.map(e =>
                 e.id !== weId ? e : { ...e, sets: e.sets.filter(s => s.id !== tempId) }
               ));
@@ -363,9 +366,9 @@ export function useLogger(userId) {
     setExercises(prev => prev.map(e =>
       e.id !== weId ? e : { ...e, sets: e.sets.filter(s => s.id !== setId) }
     ));
-    if (!/^opt-/.test(setId)) {
-      const { error } = await supabase.from('sets').delete().eq('id', setId);
-      if (error) console.error('[useLogger] removeSetFromExercise error:', error);
+    if (!setId.startsWith('opt-')) {
+      const { error: err } = await supabase.from('sets').delete().eq('id', setId);
+      if (err) console.error('[useLogger] removeSetFromExercise error:', err);
     }
   }, []);
 
@@ -374,14 +377,16 @@ export function useLogger(userId) {
     setWorkout(w => w ? { ...w, completed_at: now } : w);
     setCompleted(true);
     if (workoutRef.current?.id) {
-      const { error } = await supabase
+      const { error: err } = await supabase
         .from('workouts')
         .update({ completed_at: now })
         .eq('id', workoutRef.current.id);
-      if (error) console.error('[useLogger] completeWorkout error:', error);
-      else console.log('[useLogger] workout completed:', workoutRef.current.id);
+      if (err) console.error('[useLogger] completeWorkout error:', err);
+      else     console.log('[useLogger] workout completed:', workoutRef.current.id);
     }
   }, []);
+
+  const clearError = useCallback(() => setError(null), []);
 
   return {
     workout,
@@ -389,6 +394,8 @@ export function useLogger(userId) {
     allExercises,
     loading,
     completed,
+    error,
+    clearError,
     startWorkout,
     updateWorkoutName,
     addExercise,

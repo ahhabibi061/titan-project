@@ -578,6 +578,13 @@ export default function IronLabLogger() {
     return () => clearInterval(i);
   }, [logger.workout?.created_at]);
 
+  // Dismiss hook errors automatically after 5 s
+  useEffect(() => {
+    if (!logger.error) return;
+    const t = setTimeout(() => logger.clearError(), 5000);
+    return () => clearTimeout(t);
+  }, [logger.error]);
+
   // Redirect 3 s after complete
   useEffect(() => {
     if (!logger.completed) return;
@@ -692,6 +699,14 @@ export default function IronLabLogger() {
     <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
       <style>{FONT_STYLE}</style>
       <Backdrop />
+
+      {/* ERROR TOAST */}
+      {logger.error && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-900/90 border border-red-700/60 px-5 py-3 backdrop-blur-sm max-w-md text-center">
+          <span className="text-red-200 font-mono text-xs">{logger.error}</span>
+          <button onClick={logger.clearError} className="ml-4 text-red-400 hover:text-red-200 font-mono text-xs">✕</button>
+        </div>
+      )}
 
       {/* COMPLETION OVERLAY */}
       {showComplete && summary && (
