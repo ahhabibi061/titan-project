@@ -641,8 +641,8 @@ export default function IronLabLogger() {
       (acc, we) => acc + we.sets.filter(s => s.done && overloadStatus(s).kind === 'pr').length, 0
     );
     setSummary({ totalVolume, doneSets, prsHit, topMuscle: topEntry?.[0], duration: seconds });
-    await logger.completeWorkout();
-    setShowComplete(true);
+    const saved = await logger.completeWorkout();
+    if (saved) setShowComplete(true);
   };
 
   // ---- Loading ----

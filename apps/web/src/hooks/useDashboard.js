@@ -74,6 +74,7 @@ export function useDashboard(userId) {
           workoutsWeekRes,
           workoutsStreakRes,
           biometricsWeekRes,
+          recentWorkoutsRes,
         ] = await Promise.all([
           // 1. Profile — targets + display info
           supabase.from('profiles')
@@ -89,11 +90,14 @@ export function useDashboard(userId) {
             .lt('logged_at', tomorrowStr)
             .order('logged_at', { ascending: true }),
 
-          // 3. Today's workout with exercises
+          // 3. Today's workout — match by created_at so Logger workouts (no scheduled_date) appear
           supabase.from('workouts')
             .select('id, name, completed_at, workout_exercises(id, sets_target, exercises(name))')
             .eq('user_id', userId)
-            .eq('scheduled_date', todayStr)
+            .gte('created_at', todayStr)
+            .lt('created_at', tomorrowStr)
+            .order('created_at', { ascending: false })
+            .limit(1)
             .maybeSingle(),
 
           // 4. Latest unapplied coach recommendation
@@ -127,12 +131,12 @@ export function useDashboard(userId) {
             .gte('scheduled_date', weekStart)
             .lte('scheduled_date', weekEnd),
 
-          // 8. Completed workouts last 60 days — streak
+          // 8. Completed workouts last 60 days — streak (use completed_at, not scheduled_date)
           supabase.from('workouts')
-            .select('scheduled_date')
+            .select('completed_at')
             .eq('user_id', userId)
-            .gte('scheduled_date', sixtyDaysAgoStr)
-            .not('completed_at', 'is', null),
+            .not('completed_at', 'is', null)
+            .gte('completed_at', sixtyDaysAgoStr),
 
           // 9. Biometrics this week — adherence weight column
           supabase.from('biometric_entries')
@@ -140,13 +144,22 @@ export function useDashboard(userId) {
             .eq('user_id', userId)
             .gte('logged_at', weekStart)
             .lte('logged_at', weekEnd),
+
+          // 10. Recent completed workouts — last 3
+          supabase.from('workouts')
+            .select('id, name, completed_at, workout_exercises(id)')
+            .eq('user_id', userId)
+            .not('completed_at', 'is', null)
+            .order('completed_at', { ascending: false })
+            .limit(3),
         ]);
 
         if (cancelled) return;
 
         const firstErr = [
           profileRes, nutritionTodayRes, workoutTodayRes, coachRes,
-          biometricsRes, nutritionWeekRes, workoutsWeekRes, workoutsStreakRes, biometricsWeekRes,
+          biometricsRes, nutritionWeekRes, workoutsWeekRes, workoutsStreakRes,
+          biometricsWeekRes, recentWorkoutsRes,
         ].find(r => r.error)?.error;
         if (firstErr) throw new Error(firstErr.message);
 
@@ -164,7 +177,7 @@ export function useDashboard(userId) {
           mealsLogged: nlToday.length,
         };
 
-        // ── Activity feed (today's meals) ──
+        // ── Activity feed (today's meals + completed workout) ──
         const activityFeed = nlToday.map(r => ({
           time: new Date(r.logged_at).toLocaleTimeString('en-US', {
             hour: '2-digit', minute: '2-digit', hour12: false,
@@ -172,9 +185,18 @@ export function useDashboard(userId) {
           type: 'meal',
           text: `${r.meal_name || 'Meal'} · ${r.kcal ?? 0} kcal`,
         }));
+        const workoutRaw = workoutTodayRes.data;
+        if (workoutRaw?.completed_at) {
+          activityFeed.unshift({
+            time: new Date(workoutRaw.completed_at).toLocaleTimeString('en-US', {
+              hour: '2-digit', minute: '2-digit', hour12: false,
+            }),
+            type: 'workout',
+            text: `${workoutRaw.name || 'Workout'} · ${workoutRaw.workout_exercises?.length ?? 0} exercises completed`,
+          });
+        }
 
         // ── Workout today ──
-        const workoutRaw = workoutTodayRes.data;
         const workout = workoutRaw ? {
           id:        workoutRaw.id,
           name:      workoutRaw.name,
@@ -229,8 +251,14 @@ export function useDashboard(userId) {
           .flatMap(we => we.sets ?? [])
           .length;
 
-        // ── Streak ──
-        const completedDates = (workoutsStreakRes.data ?? []).map(w => w.scheduled_date);
+        // ── Streak — dedupe by date (multiple workouts same day count once) ──
+        const completedDates = [
+          ...new Set(
+            (workoutsStreakRes.data ?? [])
+              .map(w => w.completed_at?.split('T')[0])
+              .filter(Boolean)
+          ),
+        ];
         const streak = computeStreak(completedDates);
 
         // ── Weekly adherence grid ──
@@ -264,6 +292,13 @@ export function useDashboard(userId) {
         });
 
         if (!cancelled) {
+          const recentWorkouts = (recentWorkoutsRes.data ?? []).map(w => ({
+            id:            w.id,
+            name:          w.name || 'Workout',
+            completedAt:   w.completed_at,
+            exerciseCount: w.workout_exercises?.length ?? 0,
+          }));
+
           setData({
             profile,
             targets,
@@ -279,6 +314,7 @@ export function useDashboard(userId) {
             weeklyStats: { totalSets, avgKcal, avgProtein, streak },
             weeklyAdherence,
             activityFeed,
+            recentWorkouts,
           });
           setError(null);
         }

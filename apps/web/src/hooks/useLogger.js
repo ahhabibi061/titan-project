@@ -83,9 +83,10 @@ export function useLogger(userId) {
   const [completed,    setCompleted]    = useState(false);
   const [error,        setError]        = useState(null);
 
-  const timers     = useRef({});
-  const workoutRef = useRef(null);
-  const userIdRef  = useRef(null);
+  const timers            = useRef({});
+  const pendingSetWrites  = useRef({});   // setId → db payload, cleared on write
+  const workoutRef        = useRef(null);
+  const userIdRef         = useRef(null);
 
   useEffect(() => { workoutRef.current = workout; }, [workout]);
   useEffect(() => { userIdRef.current  = userId;  }, [userId]);
@@ -298,12 +299,16 @@ export function useLogger(userId) {
       return;
     }
 
+    const db = { logged_at: new Date().toISOString() };
+    if ('reps'   in updates) db.reps      = updates.reps;
+    if ('weight' in updates) db.weight_kg = (updates.weight === '' ? null : updates.weight);
+
+    // Track the latest payload so completeWorkout can flush immediately
+    pendingSetWrites.current[setId] = db;
+
     clearTimeout(timers.current[setId]);
     timers.current[setId] = setTimeout(async () => {
-      const db = { logged_at: new Date().toISOString() };
-      if ('reps'   in updates) db.reps      = updates.reps;
-      if ('weight' in updates) db.weight_kg = (updates.weight === '' ? null : updates.weight);
-
+      delete pendingSetWrites.current[setId];
       console.log('[useLogger] logSet DB write → set:', setId, db);
       const { error: err } = await supabase.from('sets').update(db).eq('id', setId);
       if (err) console.error('[useLogger] logSet update error:', err, 'set:', setId);
@@ -372,17 +377,48 @@ export function useLogger(userId) {
   }, []);
 
   const completeWorkout = useCallback(async () => {
+    if (!workoutRef.current?.id) {
+      console.error('[useLogger] completeWorkout: no active workout');
+      return false;
+    }
+
+    // 1. Flush all debounced set writes immediately before completing
+    const pending = Object.entries(pendingSetWrites.current);
+    if (pending.length) {
+      console.log('[useLogger] flushing', pending.length, 'pending set write(s) before completing');
+      pending.forEach(([id]) => clearTimeout(timers.current[id]));
+      pendingSetWrites.current = {};
+      await Promise.all(pending.map(([setId, db]) =>
+        supabase.from('sets').update(db).eq('id', setId).then(({ error: err }) => {
+          if (err) console.error('[useLogger] flush error for set', setId, err);
+          else     console.log('[useLogger] flushed set', setId, db);
+        })
+      ));
+    }
+
+    // 2. Mark workout complete in Supabase
     const now = new Date().toISOString();
+    console.log('[useLogger] completing workout:', workoutRef.current.id);
+    const { data, error: err } = await supabase
+      .from('workouts')
+      .update({ completed_at: now })
+      .eq('id', workoutRef.current.id)
+      .select('id, completed_at')
+      .single();
+
+    console.log('[useLogger] completeWorkout response →', { data, err });
+
+    if (err) {
+      console.error('[useLogger] completeWorkout failed:', err);
+      setError('Failed to save workout. Please try again.');
+      return false;
+    }
+
+    // 3. Only update local state and trigger redirect after DB confirms
+    console.log('[useLogger] workout saved ✓', data);
     setWorkout(w => w ? { ...w, completed_at: now } : w);
     setCompleted(true);
-    if (workoutRef.current?.id) {
-      const { error: err } = await supabase
-        .from('workouts')
-        .update({ completed_at: now })
-        .eq('id', workoutRef.current.id);
-      if (err) console.error('[useLogger] completeWorkout error:', err);
-      else     console.log('[useLogger] workout completed:', workoutRef.current.id);
-    }
+    return true;
   }, []);
 
   const clearError = useCallback(() => setError(null), []);
