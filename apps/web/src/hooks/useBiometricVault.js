@@ -106,8 +106,9 @@ export function useBiometricVault(userId, goalWeightKg) {
     return                                              { label: 'TOO SLOW', color: 'text-amber-400' };
   }, [chartData, slopePerWeek, goalWeightKg]);
 
-  // UPSERT — unique constraint on (user_id, logged_at)
-  const logEntry = useCallback(async ({ weight_kg, body_fat_pct, notes }) => {
+  // UPSERT — unique constraint on (user_id, logged_at).
+  // logged_at defaults to today; pass a different date for past-day / chart-edit cases.
+  const logEntry = useCallback(async ({ logged_at, weight_kg, body_fat_pct, notes }) => {
     if (!userId) return { error: 'Not authenticated' };
     setSaving(true);
     const { error } = await supabase
@@ -115,7 +116,7 @@ export function useBiometricVault(userId, goalWeightKg) {
       .upsert(
         {
           user_id:      userId,
-          logged_at:    todayStr,
+          logged_at:    logged_at ?? todayStr,
           weight_kg,
           body_fat_pct: body_fat_pct != null && body_fat_pct !== '' ? Number(body_fat_pct) : null,
           notes:        notes || null,
@@ -129,6 +130,7 @@ export function useBiometricVault(userId, goalWeightKg) {
   }, [userId, todayStr, fetchEntries]);
 
   return {
+    rawEntries,
     chartData,
     loading,
     error,

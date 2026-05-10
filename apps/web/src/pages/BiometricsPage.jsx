@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import AppNav from '../components/AppNav';
 import { useSession } from '../hooks/useSession';
 import { useProfileStore } from '../store/useProfileStore';
@@ -51,8 +51,15 @@ const fmt1     = (n) => Number(n).toFixed(1);
 const fmtDate  = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const fmtDateLong = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
+// Local-time YYYY-MM-DD — safe for date inputs (toISOString() shifts by tz offset)
+function localDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+const todayLocalStr     = localDateStr(new Date());
+const yesterdayLocalStr = localDateStr(new Date(new Date().setDate(new Date().getDate() - 1)));
+
 // -------------------- WEIGHT CHART --------------------
-function WeightChart({ data, goal, ma, reg, unit }) {
+function WeightChart({ data, goal, ma, reg, unit, onPointClick }) {
   const [hover, setHover] = useState(null);
   const svgRef = useRef(null);
 
@@ -89,14 +96,23 @@ function WeightChart({ data, goal, ma, reg, unit }) {
     .filter(({ d }) => d.getDate() <= 7)
     .filter((v, i, arr) => arr.findIndex(a => a.d.getMonth() === v.d.getMonth()) === i);
 
-  const handleMove = (e) => {
-    if (!svgRef.current) return;
+  const getIdxFromEvent = (e) => {
+    if (!svgRef.current) return null;
     const rect = svgRef.current.getBoundingClientRect();
     const px = ((e.clientX - rect.left) / rect.width) * W;
-    if (px < pad.l || px > pad.l + innerW) { setHover(null); return; }
+    if (px < pad.l || px > pad.l + innerW) return null;
     const ratio = (px - pad.l) / innerW;
-    const idx = Math.round(ratio * (data.length - 1));
-    setHover({ idx: Math.max(0, Math.min(data.length - 1, idx)) });
+    return Math.max(0, Math.min(data.length - 1, Math.round(ratio * (data.length - 1))));
+  };
+
+  const handleMove = (e) => {
+    const idx = getIdxFromEvent(e);
+    setHover(idx != null ? { idx } : null);
+  };
+
+  const handleClick = (e) => {
+    const idx = getIdxFromEvent(e);
+    if (idx != null && onPointClick) onPointClick(data[idx]);
   };
 
   const hoverEntry = hover != null ? data[hover.idx] : null;
@@ -111,7 +127,8 @@ function WeightChart({ data, goal, ma, reg, unit }) {
         className="w-full"
         onMouseMove={handleMove}
         onMouseLeave={() => setHover(null)}
-        style={{ cursor: 'crosshair' }}
+        onClick={handleClick}
+        style={{ cursor: hover != null ? 'pointer' : 'crosshair' }}
       >
         <defs>
           <linearGradient id="ma-fill-bv" x1="0" y1="0" x2="0" y2="1">
@@ -160,6 +177,14 @@ function WeightChart({ data, goal, ma, reg, unit }) {
           <g>
             <line x1={x(hover.idx)} x2={x(hover.idx)} y1={pad.t} y2={pad.t + innerH} stroke="#ed7a2a" strokeWidth="1" opacity="0.4" />
             <circle cx={x(hover.idx)} cy={y(toDisplay(hoverEntry.weight, unit))} r="4" fill="#ff5a2a" stroke="#0a0908" strokeWidth="2" />
+            <text
+              x={x(hover.idx) + 7}
+              y={y(toDisplay(hoverEntry.weight, unit)) - 6}
+              fontSize="10"
+              fill="#ed7a2a"
+              fontFamily="JetBrains Mono"
+              style={{ userSelect: 'none' }}
+            >✎</text>
           </g>
         )}
 
@@ -304,32 +329,89 @@ function PhotoPlaceholder() {
   );
 }
 
-// -------------------- LOG MODAL --------------------
-function LogModal({ onClose, onSave, todayEntry, unit, saving }) {
-  const existing = todayEntry;
-  const [weight, setWeight] = useState(
-    existing ? String(toDisplay(existing.weight_kg, unit)) : ''
-  );
-  const [bf, setBf]     = useState(existing?.body_fat_pct != null ? String(existing.body_fat_pct) : '');
-  const [notes, setNotes] = useState(existing?.notes ?? '');
-  const [err, setErr]   = useState('');
+// -------------------- ENTRY MODAL --------------------
+// mode: 'today' | 'past' | 'edit'
+// 'today' — date fixed to today, pre-fills from initialEntry (todayEntry)
+// 'past'  — date picker (max=yesterday), pre-fills if DB row exists for chosen date
+// 'edit'  — date fixed to initialEntry.logged_at, always pre-filled
+function EntryModal({ mode, initialEntry, rawEntries, onClose, onSave, unit, saving }) {
+  const fixedDate = mode === 'today' ? todayLocalStr
+    : mode === 'edit'  ? (initialEntry?.logged_at ?? todayLocalStr)
+    : null;
+
+  const [selectedDate, setSelectedDate] = useState(fixedDate ?? yesterdayLocalStr);
+
+  // For 'past' mode, derive the existing row whenever selectedDate changes
+  const pastRow = mode === 'past' ? (rawEntries.find(r => r.logged_at === selectedDate) ?? null) : null;
+  const sourceRow = mode === 'past' ? pastRow : initialEntry;
+
+  const [weight, setWeight] = useState(sourceRow ? String(toDisplay(sourceRow.weight_kg, unit)) : '');
+  const [bf, setBf]         = useState(sourceRow?.body_fat_pct != null ? String(sourceRow.body_fat_pct) : '');
+  const [notes, setNotes]   = useState(sourceRow?.notes ?? '');
+  const [err, setErr]       = useState('');
+
+  // Re-fill fields when the user picks a different past date
+  useEffect(() => {
+    if (mode !== 'past') return;
+    const row = rawEntries.find(r => r.logged_at === selectedDate) ?? null;
+    setWeight(row ? String(toDisplay(row.weight_kg, unit)) : '');
+    setBf(row?.body_fat_pct != null ? String(row.body_fat_pct) : '');
+    setNotes(row?.notes ?? '');
+    setErr('');
+  }, [selectedDate, mode, rawEntries, unit]);
 
   async function handleSave() {
-    const w = parseFloat(weight);
-    if (!w || w <= 0) { setErr('Enter a valid weight'); return; }
+    const w   = parseFloat(weight);
     const wKg = fromDisplay(w, unit);
-    const result = await onSave({ weight_kg: wKg, body_fat_pct: bf !== '' ? parseFloat(bf) : null, notes });
+    if (!w || wKg < 30 || wKg > 300) {
+      setErr(`Weight must be ${fmt1(toDisplay(30, unit))}–${fmt1(toDisplay(300, unit))} ${unit}`);
+      return;
+    }
+    const result = await onSave({
+      logged_at:    selectedDate,
+      weight_kg:    wKg,
+      body_fat_pct: bf !== '' ? parseFloat(bf) : null,
+      notes,
+    });
     if (result?.error) { setErr(result.error); return; }
     onClose();
   }
+
+  const hasExisting = mode === 'past'
+    ? !!rawEntries.find(r => r.logged_at === selectedDate)
+    : !!initialEntry;
+
+  const title = mode === 'today' ? 'Log Today'
+    : mode === 'past'  ? 'Log Previous Day'
+    : `Edit — ${fmtDate(new Date(initialEntry.logged_at + 'T12:00:00'))}`;
+
+  const saveLabel = saving ? 'Saving…' : hasExisting ? 'Update' : 'Log';
 
   return (
     <div className="fixed inset-0 z-50 bg-stone-950/90 flex items-center justify-center backdrop-blur-sm px-4">
       <div className="w-full max-w-sm border border-stone-800 bg-[#0a0908] p-6 space-y-5">
         <div className="flex items-baseline justify-between">
-          <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Log Today</h2>
+          <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">{title}</h2>
           <button onClick={onClose} className="text-stone-600 hover:text-stone-300 font-mono text-xs">✕</button>
         </div>
+
+        {/* Date — picker for past mode, read-only label for today/edit */}
+        {mode === 'past' ? (
+          <div>
+            <label className="block text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-2">Date</label>
+            <input
+              type="date"
+              value={selectedDate}
+              max={yesterdayLocalStr}
+              onChange={e => setSelectedDate(e.target.value)}
+              className="w-full bg-stone-950/60 border border-stone-800 px-4 py-3 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors"
+            />
+          </div>
+        ) : (
+          <div className="text-[10px] uppercase tracking-[0.18em] text-stone-600 font-mono">
+            {fmtDateLong(new Date(selectedDate + 'T12:00:00'))}
+          </div>
+        )}
 
         <div>
           <label className="block text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-2">
@@ -388,7 +470,7 @@ function LogModal({ onClose, onSave, todayEntry, unit, saving }) {
             disabled={saving}
             className="flex-1 px-4 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-50"
           >
-            {saving ? 'Saving…' : existing ? 'Update' : 'Save'}
+            {saveLabel}
           </button>
         </div>
       </div>
@@ -418,7 +500,22 @@ export default function BiometricVault() {
 
   const vault = useBiometricVault(userId, goalWeightKg);
 
-  const [showLog, setShowLog] = useState(false);
+  // modalState: null | { mode: 'today'|'past'|'edit', entry: rawEntry|null }
+  const [modalState, setModalState] = useState(null);
+
+  const openToday = () => setModalState({ mode: 'today', entry: vault.todayEntry });
+  const openPast  = () => setModalState({ mode: 'past',  entry: null });
+  const openEdit  = (chartEntry) => {
+    // chartEntry is from chartData — map back to rawEntry shape for pre-fill
+    const raw = vault.rawEntries.find(r => r.logged_at === chartEntry.logged_at) ?? null;
+    setModalState({ mode: 'edit', entry: raw ?? {
+      logged_at: chartEntry.logged_at,
+      weight_kg: chartEntry.weight,
+      body_fat_pct: chartEntry.bodyFat,
+      notes: null,
+    }});
+  };
+  const closeModal = () => setModalState(null);
 
   const { chartData, ma, reg, slopePerWeek, slope30PerWeek, projection, compEntries, paceStatus } = vault;
 
@@ -470,19 +567,29 @@ export default function BiometricVault() {
             <p className="text-stone-600 font-mono text-xs max-w-sm mx-auto">
               7+ entries unlocks projections and trend analysis. Log daily for best results.
             </p>
-            <button
-              onClick={() => setShowLog(true)}
-              className="px-8 py-4 bg-orange-500 text-stone-950 font-anton text-xl uppercase tracking-wider hover:bg-orange-400 transition-colors"
-            >
-              + Log Today's Weight
-            </button>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={openToday}
+                className="px-8 py-4 bg-orange-500 text-stone-950 font-anton text-xl uppercase tracking-wider hover:bg-orange-400 transition-colors"
+              >
+                + Log Today's Weight
+              </button>
+              <button
+                onClick={openPast}
+                className="px-5 py-4 border border-stone-700 text-stone-400 font-anton text-lg uppercase tracking-wider hover:border-stone-500 hover:text-stone-200 transition-colors"
+              >
+                Log Previous Day
+              </button>
+            </div>
           </div>
         </div>
-        {showLog && (
-          <LogModal
-            onClose={() => setShowLog(false)}
+        {modalState && (
+          <EntryModal
+            mode={modalState.mode}
+            initialEntry={modalState.entry}
+            rawEntries={vault.rawEntries}
+            onClose={closeModal}
             onSave={vault.logEntry}
-            todayEntry={vault.todayEntry}
             unit={unit}
             saving={vault.saving}
           />
@@ -530,7 +637,13 @@ export default function BiometricVault() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => setShowLog(true)}
+              onClick={openPast}
+              className="px-4 py-2.5 border border-stone-700 text-stone-400 font-anton text-sm uppercase tracking-wider hover:border-stone-500 hover:text-stone-200 transition-colors"
+            >
+              Log Previous Day
+            </button>
+            <button
+              onClick={openToday}
               className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors"
             >
               {vault.todayEntry ? '✓ Update Today' : '+ Log Today'}
@@ -593,7 +706,7 @@ export default function BiometricVault() {
               Log <span className="text-stone-300">{7 - chartData.length} more {7 - chartData.length === 1 ? 'day' : 'days'}</span> to unlock projections and trend analysis
             </span>
             <button
-              onClick={() => setShowLog(true)}
+              onClick={openToday}
               className="px-4 py-2 border border-orange-500/40 text-orange-300 font-mono text-[10px] uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
             >
               + Log Today
@@ -607,7 +720,7 @@ export default function BiometricVault() {
             <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Weight Timeline</h2>
             <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">interactive · hover for details</span>
           </div>
-          <WeightChart data={chartData} goal={goalWeightKg} ma={ma} reg={reg} unit={unit} />
+          <WeightChart data={chartData} goal={goalWeightKg} ma={ma} reg={reg} unit={unit} onPointClick={openEdit} />
         </div>
 
         {/* TWO-COL: BODY COMP + DERIVED METRICS */}
@@ -689,12 +802,14 @@ export default function BiometricVault() {
         </footer>
       </div>
 
-      {/* LOG MODAL */}
-      {showLog && (
-        <LogModal
-          onClose={() => setShowLog(false)}
+      {/* ENTRY MODAL — today / past / edit */}
+      {modalState && (
+        <EntryModal
+          mode={modalState.mode}
+          initialEntry={modalState.entry}
+          rawEntries={vault.rawEntries}
+          onClose={closeModal}
           onSave={vault.logEntry}
-          todayEntry={vault.todayEntry}
           unit={unit}
           saving={vault.saving}
         />
