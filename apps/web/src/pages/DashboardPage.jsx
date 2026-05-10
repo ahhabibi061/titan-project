@@ -370,13 +370,17 @@ export default function Dashboard() {
                   </div>
                   {eatBackCalories && calsBurned ? (
                     <div className="text-[10px] font-mono text-orange-400 mt-0.5 tabular-nums">
-                      {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} avail
+                      {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} available
+                    </div>
+                  ) : consumed.mealsLogged > 0 ? (
+                    <div className="text-[10px] font-mono text-stone-500 mt-0.5 tabular-nums">
+                      {fmt0(consumed.kcal)} / {fmt0(targets.kcal)} kcal
+                      {calsBurned ? ` · ${fmt0(calsBurned)} burned` : ''}
                     </div>
                   ) : (
                     <div className="text-[10px] font-mono text-stone-600 mt-0.5 tabular-nums">
-                      {consumed.mealsLogged > 0
-                        ? `${fmt0(consumed.kcal)} / ${fmt0(targets.kcal)} kcal`
-                        : `${fmt0(targets.kcal)} kcal target`}
+                      {fmt0(targets.kcal)} kcal target
+                      {calsBurned ? ` · ${fmt0(calsBurned)} burned` : ''}
                     </div>
                   )}
                 </>
@@ -552,7 +556,11 @@ export default function Dashboard() {
                       <div className="font-anton text-2xl tabular-nums text-stone-600 leading-none">{fmt0(targets.kcal)}</div>
                       {eatBackCalories && calsBurned ? (
                         <div className="text-[10px] font-mono text-orange-400 mt-1 tabular-nums">
-                          {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} avail
+                          {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} available
+                        </div>
+                      ) : calsBurned ? (
+                        <div className="text-[10px] font-mono text-stone-500 mt-1 tabular-nums">
+                          {fmt0(calsBurned)} cal burned today
                         </div>
                       ) : (
                         <div className="text-[10px] uppercase tracking-wider text-stone-600 font-mono mt-1">kcal target</div>
@@ -585,7 +593,11 @@ export default function Dashboard() {
                       <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mt-1">kcal remaining</div>
                       {eatBackCalories && calsBurned ? (
                         <div className="text-[10px] font-mono text-orange-400 mt-1 tabular-nums">
-                          {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} avail
+                          {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} available
+                        </div>
+                      ) : calsBurned ? (
+                        <div className="text-[10px] font-mono text-stone-500 mt-1 tabular-nums">
+                          {fmt0(calsBurned)} cal burned today
                         </div>
                       ) : (
                         <div className="text-[10px] font-mono tabular-nums text-stone-600 mt-2">

@@ -289,6 +289,19 @@ export default function SettingsPage() {
     setPageLoading(false);
   }, [storeProfile, user?.email]);
 
+  // Load eat_back_calories from the settings table (separate from profile store)
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase.from('settings')
+      .select('eat_back_calories')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (error) { console.error('[settings] load eat_back error:', error); return; }
+        if (data) setPrefs(prev => ({ ...prev, eat_back_calories: data.eat_back_calories ?? false }));
+      });
+  }, [user?.id]);
+
   // Live macro preview
   const macros = useMemo(() => calcMacros({
     weightKg: parseFloat(weight)     || 0,
@@ -346,12 +359,25 @@ export default function SettingsPage() {
     const next = { ...prefs, [key]: value };
     setPrefs(next);
     setPrefsSaving(true);
-    const { error } = await supabase
-      .from('profiles')
-      .update({ settings: next })
-      .eq('id', user.id);
-    setPrefsSaving(false);
-    if (!error) updateProfile({ settings: next });
+
+    if (key === 'eat_back_calories') {
+      // eat_back_calories lives in the settings table, not profiles
+      const { data, error } = await supabase
+        .from('settings')
+        .upsert({ user_id: user.id, eat_back_calories: value }, { onConflict: 'user_id' })
+        .select();
+      console.log('[settings] eat_back_calories upsert →', { value, data, error });
+      setPrefsSaving(false);
+      if (error) console.error('[settings] eat_back upsert failed:', error);
+    } else {
+      // Other prefs live in profiles.settings JSONB
+      const { error } = await supabase
+        .from('profiles')
+        .update({ settings: next })
+        .eq('id', user.id);
+      setPrefsSaving(false);
+      if (!error) updateProfile({ settings: next });
+    }
   };
 
   const handleSignOut = async () => {

@@ -77,6 +77,7 @@ export function useDashboard(userId) {
           biometricsWeekRes,
           recentWorkoutsRes,
           eatBackRes,
+          burnRes,
         ] = await Promise.all([
           // 1. Nutrition today — consumed macros + activity feed
           supabase.from('nutrition_logs')
@@ -149,10 +150,22 @@ export function useDashboard(userId) {
             .order('completed_at', { ascending: false })
             .limit(3),
 
-          // 10. eat_back_calories preference — error handled separately (column may not exist yet)
-          supabase.from('profiles')
+          // 10. eat_back_calories from the settings table (confirmed schema)
+          supabase.from('settings')
             .select('eat_back_calories')
-            .eq('id', userId)
+            .eq('user_id', userId)
+            .maybeSingle(),
+
+          // 11. Today's calories burned — filter by completed_at so workouts
+          //     started yesterday but finished today are captured correctly
+          supabase.from('workouts')
+            .select('calories_burned')
+            .eq('user_id', userId)
+            .not('completed_at', 'is', null)
+            .gte('completed_at', todayStr)
+            .lt('completed_at', tomorrowStr)
+            .order('completed_at', { ascending: false })
+            .limit(1)
             .maybeSingle(),
         ]);
 
@@ -169,8 +182,7 @@ export function useDashboard(userId) {
         const profile = storeProfile;
         const targets = profile?.current_macros ?? { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
 
-        // eat_back_calories — read directly from DB (not Zustand cache).
-        // Defaults to false if the column doesn't exist yet or returns null.
+        // eat_back_calories — read from settings table (not Zustand cache, not profiles).
         const eatBackCalories = (!eatBackRes.error && eatBackRes.data?.eat_back_calories) || false;
 
         // ── Nutrition today ──
@@ -205,8 +217,11 @@ export function useDashboard(userId) {
         // ── Workout today ──
         const allWeSets   = (workoutRaw?.workout_exercises ?? []).flatMap(we => we.sets ?? []);
         const exCount     = workoutRaw?.workout_exercises?.length ?? 0;
-        // calories_burned is set by the calculate_workout_calories RPC after each set save
-        const calsBurned  = workoutRaw?.completed_at ? (workoutRaw?.calories_burned ?? null) : null;
+        // calories_burned: use the explicit completed_at query (burnRes) as primary source.
+        // Falls back to workoutRaw.calories_burned for the same-day created+completed case.
+        const calsBurned = burnRes.data?.calories_burned != null
+          ? burnRes.data.calories_burned
+          : (workoutRaw?.completed_at ? (workoutRaw?.calories_burned ?? null) : null);
         const adjustedKcal = eatBackCalories && calsBurned
           ? targets.kcal + Math.round(calsBurned)
           : targets.kcal;
