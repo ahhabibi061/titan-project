@@ -655,7 +655,7 @@ export default function SettingsPage() {
                   </span>
                   <span className="text-[9px] px-2 py-0.5 border font-mono uppercase tracking-wider"
                     style={{ borderColor: `${tierColor}40`, color: tierColor, background: `${tierColor}15` }}>
-                    {tier === 'basic' ? 'Free' : tier === 'pro' ? '$9.99 / mo' : '$19.99 / mo'}
+                    {tier === 'basic' ? 'Free' : tier === 'pro' ? '$14.99 / mo' : '$19.99 / mo'}
                   </span>
                 </div>
               </div>
@@ -704,7 +704,7 @@ export default function SettingsPage() {
                         <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 16, letterSpacing: 2, color: '#ed7a2a' }}>
                           {upgradeLoading === import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY ? 'REDIRECTING…' : 'UPGRADE TO PRO'}
                         </span>
-                        <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 20, color: '#ed7a2a' }}>$9.99</span>
+                        <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 20, color: '#ed7a2a' }}>$14.99</span>
                       </div>
                       <div className="text-[10px] font-mono text-stone-500 uppercase tracking-wider">/ month · Sentinel scan · Oracle · Unlimited history</div>
                     </button>
