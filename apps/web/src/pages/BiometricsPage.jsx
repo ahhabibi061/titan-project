@@ -291,7 +291,9 @@ function EntryModal({ mode, initialEntry, rawEntries, onClose, onSave, unit, sav
     : mode === 'edit'  ? (initialEntry?.logged_at ?? todayLocalStr)
     : null;
 
-  const [selectedDate, setSelectedDate] = useState(fixedDate ?? yesterdayLocalStr);
+  // past mode: use the date passed from calendar click (initialEntry.logged_at), else yesterday
+  const defaultDate = (mode === 'past' && initialEntry?.logged_at) ? initialEntry.logged_at : yesterdayLocalStr;
+  const [selectedDate, setSelectedDate] = useState(fixedDate ?? defaultDate);
   const pastRow   = mode === 'past' ? (rawEntries.find(r => r.logged_at === selectedDate) ?? null) : null;
   const sourceRow = mode === 'past' ? pastRow : initialEntry;
 
@@ -381,61 +383,99 @@ function StatBlock({ label, value, sub, accent }) {
   );
 }
 
-// -------------------- 12-WEEK HEATMAP --------------------
-function WeekHeatmap({ rawEntries }) {
+// -------------------- MONTH CALENDAR --------------------
+function MonthCalendar({ rawEntries, calMonth, onPrev, onNext, onDayClick }) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  // Align to Monday of this week, then go back 11 more weeks = 12 total
-  const todayDay = today.getDay(); // 0=Sun
-  const daysSinceMonday = todayDay === 0 ? 6 : todayDay - 1;
-  const startMonday = new Date(today);
-  startMonday.setDate(today.getDate() - daysSinceMonday - 11 * 7);
+  const todayStr = localDateStr(today);
 
   const entryDates = new Set(rawEntries.map(e => e.logged_at));
-  const todayStr   = localDateStr(today);
 
-  const weeks = [];
-  const cursor = new Date(startMonday);
-  for (let w = 0; w < 12; w++) {
-    const week = [];
-    for (let d = 0; d < 7; d++) {
-      const dateStr  = localDateStr(cursor);
-      const isFuture = cursor > today;
-      week.push({ dateStr, hasEntry: entryDates.has(dateStr), isToday: dateStr === todayStr, isFuture });
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    weeks.push(week);
+  const year  = calMonth.getFullYear();
+  const month = calMonth.getMonth();
+
+  const firstDay = new Date(year, month, 1);
+  const lastDay  = new Date(year, month + 1, 0);
+
+  // Monday-anchored grid
+  const startDow = firstDay.getDay();
+  const offsetStart = startDow === 0 ? 6 : startDow - 1;
+  const endDow    = lastDay.getDay();
+  const offsetEnd = endDow === 0 ? 0 : 7 - endDow;
+
+  const gridStart = new Date(firstDay);
+  gridStart.setDate(firstDay.getDate() - offsetStart);
+  const gridEnd = new Date(lastDay);
+  gridEnd.setDate(lastDay.getDate() + offsetEnd);
+
+  const cells = [];
+  const cursor = new Date(gridStart);
+  while (cursor <= gridEnd) {
+    cells.push(new Date(cursor));
+    cursor.setDate(cursor.getDate() + 1);
   }
+
+  const monthLabel = calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
+  const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   return (
     <div>
-      <div className="flex gap-1.5">
-        <div className="flex flex-col gap-1.5 mr-1 pt-0.5">
-          {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((l, i) => (
-            <div key={i} className="w-3 h-3 flex items-center justify-center text-[8px] text-stone-600 font-mono leading-none">{l}</div>
-          ))}
-        </div>
-        {weeks.map((week, wi) => (
-          <div key={wi} className="flex flex-col gap-1.5">
-            {week.map((day, di) => (
-              <div
-                key={di}
-                title={day.dateStr}
-                className={[
-                  'w-3 h-3',
-                  day.isFuture  ? 'bg-transparent'  :
-                  day.hasEntry  ? 'bg-orange-500'    : 'bg-stone-800',
-                  day.isToday   ? 'outline outline-1 outline-white outline-offset-[-1px]' : '',
-                ].join(' ')}
-              />
-            ))}
-          </div>
+      {/* Navigation */}
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={onPrev} className="text-stone-400 hover:text-orange-400 font-mono text-lg leading-none transition-colors px-1">←</button>
+        <span className="font-anton text-lg uppercase tracking-tight text-stone-100">{monthLabel}</span>
+        <button onClick={onNext} className="text-stone-400 hover:text-orange-400 font-mono text-lg leading-none transition-colors px-1">→</button>
+      </div>
+
+      {/* Day headers */}
+      <div className="grid grid-cols-7 mb-1">
+        {DAY_HEADERS.map(d => (
+          <div key={d} className="text-center text-[9px] uppercase tracking-wider text-stone-600 font-mono py-1">{d}</div>
         ))}
       </div>
-      <div className="flex items-center gap-4 mt-3 text-[9px] font-mono text-stone-600 uppercase tracking-wider">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-orange-500 inline-block" />Logged</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-stone-800 inline-block" />No entry</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-stone-800 outline outline-1 outline-white outline-offset-[-1px] inline-block" />Today</span>
+
+      {/* Cells */}
+      <div className="grid grid-cols-7 gap-px bg-stone-800/30">
+        {cells.map((d, i) => {
+          const dateStr     = localDateStr(d);
+          const isThisMonth = d.getMonth() === month;
+          const isToday     = dateStr === todayStr;
+          const isFuture    = d > today;
+          const hasEntry    = entryDates.has(dateStr);
+          const clickable   = isThisMonth && !isFuture;
+
+          let bg = '';
+          let textColor = '';
+          if (!isThisMonth)      { bg = 'bg-stone-900/30'; textColor = 'text-stone-700'; }
+          else if (isFuture)     { bg = 'bg-stone-800/40'; textColor = 'text-stone-600'; }
+          else if (hasEntry)     { bg = 'bg-orange-500/10'; textColor = 'text-stone-200'; }
+          else                   { bg = 'bg-stone-900';    textColor = 'text-stone-500'; }
+
+          const border    = hasEntry && isThisMonth ? 'border border-orange-500/30' : 'border border-transparent';
+          const todayRing = isToday ? 'outline outline-1 outline-white outline-offset-[-1px]' : '';
+          const hover     = clickable ? (hasEntry ? 'hover:bg-orange-500/20 cursor-pointer' : 'hover:bg-stone-800 hover:text-stone-300 cursor-pointer') : 'cursor-default';
+
+          return (
+            <button
+              key={i}
+              disabled={!clickable}
+              onClick={() => clickable && onDayClick(dateStr, hasEntry, isToday)}
+              className={`relative flex flex-col items-center justify-center aspect-square text-[11px] font-mono tabular-nums transition-colors ${bg} ${textColor} ${border} ${todayRing} ${hover}`}
+            >
+              <span className="leading-none">{d.getDate()}</span>
+              {hasEntry && isThisMonth && (
+                <span className="absolute bottom-1 w-1 h-1 rounded-full bg-orange-400" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-5 mt-3 text-[9px] font-mono text-stone-600 uppercase tracking-wider">
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-orange-500/10 border border-orange-500/30 inline-block" />Logged</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-stone-900 inline-block" />No entry</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-stone-900 outline outline-1 outline-white outline-offset-[-1px] inline-block" />Today</span>
       </div>
     </div>
   );
@@ -511,14 +551,26 @@ export default function BiometricVault() {
 
   const [modalState, setModalState]     = useState(null);
   const [showCheckin, setShowCheckin]   = useState(false);
+  const [calMonth, setCalMonth]         = useState(() => { const d = new Date(); d.setDate(1); return d; });
 
   const openToday = () => setModalState({ mode: 'today', entry: vault.todayEntry });
-  const openPast  = () => setModalState({ mode: 'past',  entry: null });
+  // dateStr — optional; when passed from calendar click, pre-selects that date in the picker
+  const openPast  = (dateStr = null) => setModalState({ mode: 'past', entry: dateStr ? { logged_at: dateStr } : null });
   const openEdit  = (chartEntry) => {
     const raw = vault.rawEntries.find(r => r.logged_at === chartEntry.logged_at) ?? null;
     setModalState({ mode: 'edit', entry: raw ?? { logged_at: chartEntry.logged_at, weight_kg: chartEntry.weight, body_fat_pct: chartEntry.bodyFat, notes: null } });
   };
   const closeModal = () => setModalState(null);
+
+  const handleCalDayClick = (dateStr, hasEntry, isToday) => {
+    if (isToday) { openToday(); return; }
+    if (hasEntry) {
+      const raw = vault.rawEntries.find(r => r.logged_at === dateStr);
+      setModalState({ mode: 'edit', entry: raw ?? { logged_at: dateStr, weight_kg: null, body_fat_pct: null, notes: null } });
+    } else {
+      openPast(dateStr);
+    }
+  };
 
   const { chartData, ma, reg, slopePerWeek, slope30PerWeek, projection, compEntries, paceStatus } = vault;
 
@@ -648,8 +700,13 @@ export default function BiometricVault() {
             </div>
           </div>
           <div className="pt-5 border-t border-stone-800/60">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-stone-600 font-mono mb-3">12-week log</div>
-            <WeekHeatmap rawEntries={vault.rawEntries} />
+            <MonthCalendar
+              rawEntries={vault.rawEntries}
+              calMonth={calMonth}
+              onPrev={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+              onNext={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+              onDayClick={handleCalDayClick}
+            />
           </div>
         </div>
 

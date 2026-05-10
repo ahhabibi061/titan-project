@@ -663,6 +663,7 @@ export default function IronLabLogger() {
   const [showComplete, setShowComplete] = useState(false);
   const [summary, setSummary]       = useState(null);
   const [savedToast, setSavedToast] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
   // Sync workout name from Supabase into local input
   useEffect(() => {
@@ -797,6 +798,14 @@ export default function IronLabLogger() {
       <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased flex items-center justify-center">
         <style>{FONT_STYLE}</style>
         <Backdrop />
+        <div className="fixed top-6 left-6 z-10">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="text-[10px] uppercase tracking-wider font-mono text-stone-400 hover:text-orange-400 transition-colors"
+          >
+            ← Dashboard
+          </button>
+        </div>
         <div className="relative z-10 text-center space-y-8 px-6 w-full max-w-sm">
           <div className="flex items-baseline gap-2 justify-center">
             <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">IRONLAB</span>
@@ -818,6 +827,12 @@ export default function IronLabLogger() {
               className="w-full px-8 py-4 bg-orange-500 text-stone-950 font-anton text-2xl uppercase tracking-wider hover:bg-orange-400 transition-colors"
             >
               Start Workout
+            </button>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="w-full px-8 py-3 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-200 transition-colors"
+            >
+              Return to Dashboard
             </button>
           </div>
         </div>
@@ -893,6 +908,39 @@ export default function IronLabLogger() {
       )}
 
       <div className="relative z-10 max-w-[1400px] mx-auto px-6 py-8">
+
+        {/* BACK NAV */}
+        <div className="mb-4 flex items-center min-h-[24px]">
+          {showLeaveConfirm ? (
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-[10px] font-mono text-stone-400 uppercase tracking-wider">
+                Workout in progress — leave without saving?
+              </span>
+              <button
+                onClick={() => setShowLeaveConfirm(false)}
+                className="text-[10px] font-mono text-stone-400 border border-stone-700 px-2 py-0.5 uppercase tracking-wider hover:border-stone-500 transition-colors"
+              >
+                Stay
+              </button>
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="text-[10px] font-mono text-orange-400 border border-orange-500/40 px-2 py-0.5 uppercase tracking-wider hover:border-orange-400 transition-colors"
+              >
+                Leave
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                if (logger.completed || workoutId) navigate('/dashboard');
+                else setShowLeaveConfirm(true);
+              }}
+              className="text-[10px] uppercase tracking-wider font-mono text-stone-400 hover:text-orange-400 transition-colors"
+            >
+              ← Dashboard
+            </button>
+          )}
+        </div>
 
         {/* HEADER */}
         <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
