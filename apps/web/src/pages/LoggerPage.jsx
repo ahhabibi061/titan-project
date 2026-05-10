@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSession } from '../hooks/useSession';
 import { useLogger } from '../hooks/useLogger';
 import { useProfileStore } from '../store/useProfileStore';
+import { useBodyMap } from '../hooks/useBodyMap';
 
 /* =========================================================================
  * IRONLAB LOGGER — Module 3 Proof-of-Concept
@@ -400,52 +401,170 @@ function AddExercisePicker({ library, onAdd, used }) {
   );
 }
 
-// -------------------- MUSCLE MAP --------------------
-function MuscleMap({ volumes, max }) {
+// -------------------- BODY MAP (RECOVERY / GROWTH) --------------------
+const RECOVERY_COLORS = {
+  ready:   '#4ade80',
+  almost:  '#a3e635',
+  partial: '#fbbf24',
+  resting: '#f87171',
+  no_data: 'rgba(255,255,255,0.03)',
+};
+
+const GROWTH_COLORS = {
+  pr:        '#fb923c',
+  improved:  '#4ade80',
+  regressed: '#fbbf24',
+  dropped:   '#f87171',
+  first:     '#60a5fa',
+};
+
+function BodyMap({ recoveryMap, growthMap, mode, setMode }) {
   const [hover, setHover] = useState(null);
+
+  function getColor(key) {
+    if (mode === 'recovery') {
+      const e = recoveryMap[key];
+      if (!e) return 'rgba(255,255,255,0.03)';
+      return RECOVERY_COLORS[e.status] ?? 'rgba(255,255,255,0.03)';
+    }
+    const e = growthMap[key];
+    if (!e) return 'rgba(255,255,255,0.03)';
+    return GROWTH_COLORS[e.status] ?? 'rgba(255,255,255,0.03)';
+  }
+
+  function getTooltip(key) {
+    if (mode === 'recovery') {
+      const e = recoveryMap[key];
+      if (!e || e.status === 'no_data') return { name: MUSCLES[key], line1: 'No data', line2: null };
+      const line1 = e.status === 'ready' ? 'Fully recovered' : `${e.pct}% recovered`;
+      const line2 = e.hoursRemaining > 0 ? `${e.hoursRemaining}h remaining` : 'Ready to train';
+      return { name: MUSCLES[key], line1, line2 };
+    }
+    const e = growthMap[key];
+    if (!e) return { name: MUSCLES[key], line1: 'Not trained today', line2: null };
+    const line1 = e.growthPct !== null ? `${e.growthPct > 0 ? '+' : ''}${e.growthPct}% vs last session` : 'First session';
+    const line2 = e.prevVol !== null ? `${fmt(e.currentVol)} vs ${fmt(e.prevVol)} kg·reps` : `${fmt(e.currentVol)} kg·reps`;
+    return { name: MUSCLES[key], line1, line2 };
+  }
 
   const renderMuscle = (key, d) => (
     <path
       key={key}
       d={d}
-      fill={volumeToFill(volumes[key] || 0, max)}
+      fill={getColor(key)}
       stroke="rgba(255,255,255,0.05)"
       strokeWidth="0.5"
       style={{ transition: 'fill 320ms ease', cursor: 'pointer' }}
-      onMouseEnter={() => setHover({ key, vol: volumes[key] || 0 })}
+      onMouseEnter={() => setHover(key)}
       onMouseLeave={() => setHover(null)}
     />
   );
 
+  const tooltip = hover ? getTooltip(hover) : null;
+
+  const summaryItems = mode === 'recovery'
+    ? Object.entries(recoveryMap)
+        .filter(([, v]) => v.status !== 'no_data' && v.status !== 'ready')
+        .sort(([, a], [, b]) => (a.pct ?? 100) - (b.pct ?? 100))
+        .slice(0, 3)
+        .map(([k, v]) => ({ key: k, label: MUSCLES[k], value: `${v.pct}%`, sub: `${v.hoursRemaining}h left`, color: RECOVERY_COLORS[v.status] }))
+    : Object.entries(growthMap)
+        .filter(([, v]) => v.growthPct !== null)
+        .sort(([, a], [, b]) => (b.growthPct ?? 0) - (a.growthPct ?? 0))
+        .slice(0, 3)
+        .map(([k, v]) => ({ key: k, label: MUSCLES[k], value: `${v.growthPct > 0 ? '+' : ''}${v.growthPct}%`, sub: `${fmt(v.currentVol)} kg·reps`, color: GROWTH_COLORS[v.status] }));
+
   return (
-    <div className="relative">
-      <div className="grid grid-cols-2 gap-2">
-        {/* FRONT */}
-        <div className="relative">
-          <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1 text-center">Anterior</div>
-          <svg viewBox="0 0 220 460" className="w-full">
-            {HEAD_FRONT}{NECK}
-            {Object.entries(FRONT_PATHS).map(([k, d]) => renderMuscle(k, d))}
-          </svg>
+    <div>
+      {/* Mode toggle */}
+      <div className="flex gap-1 mb-4">
+        {['recovery', 'growth'].map(m => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            className={`px-3 py-1 font-mono text-[10px] uppercase tracking-wider border transition-colors ${
+              mode === m
+                ? 'border-orange-500/60 text-orange-300 bg-orange-500/10'
+                : 'border-stone-700 text-stone-500 hover:text-stone-300 hover:border-stone-600'
+            }`}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+
+      {/* SVG body */}
+      <div className="relative">
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1 text-center">Anterior</div>
+            <svg viewBox="0 0 220 460" className="w-full">
+              {HEAD_FRONT}{NECK}
+              {Object.entries(FRONT_PATHS).map(([k, d]) => renderMuscle(k, d))}
+            </svg>
+          </div>
+          <div>
+            <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1 text-center">Posterior</div>
+            <svg viewBox="0 0 220 460" className="w-full">
+              {HEAD_BACK}{NECK}
+              {Object.entries(BACK_PATHS).map(([k, d]) => renderMuscle(k, d))}
+            </svg>
+          </div>
         </div>
-        {/* BACK */}
-        <div className="relative">
-          <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1 text-center">Posterior</div>
-          <svg viewBox="0 0 220 460" className="w-full">
-            {HEAD_BACK}{NECK}
-            {Object.entries(BACK_PATHS).map(([k, d]) => renderMuscle(k, d))}
-          </svg>
+        <div className="absolute top-0 right-0 min-h-[42px] text-right pointer-events-none">
+          {tooltip && (
+            <div className="bg-stone-950/95 border border-stone-700/50 px-3 py-2 backdrop-blur-sm">
+              <div className="text-[9px] uppercase tracking-wider text-stone-500 font-mono">{tooltip.name}</div>
+              <div className="font-mono text-xs text-stone-100 mt-0.5">{tooltip.line1}</div>
+              {tooltip.line2 && <div className="text-[9px] text-stone-500 font-mono">{tooltip.line2}</div>}
+            </div>
+          )}
         </div>
       </div>
-      <div className="absolute top-0 right-0 min-h-[42px] text-right">
-        {hover && (
-          <div className="bg-stone-950/95 border border-orange-500/30 px-3 py-2 backdrop-blur-sm">
-            <div className="text-[9px] uppercase tracking-wider text-stone-500 font-mono">{MUSCLES[hover.key]}</div>
-            <div className="font-anton text-lg text-orange-300 tabular-nums leading-none mt-0.5">{fmt(hover.vol)}</div>
-            <div className="text-[9px] text-stone-600 font-mono">kg·reps</div>
+
+      {/* Legend */}
+      <div className="mt-3 pt-3 border-t border-stone-800/60">
+        {mode === 'recovery' ? (
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {[['ready','Ready'],['almost','Almost'],['partial','Partial'],['resting','Resting']].map(([s, label]) => (
+              <div key={s} className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: RECOVERY_COLORS[s] }} />
+                <span className="text-[9px] font-mono text-stone-500 uppercase tracking-wider">{label}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {[['pr','PR'],['improved','Improved'],['regressed','Regressed'],['dropped','Dropped'],['first','First']].map(([s, label]) => (
+              <div key={s} className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: GROWTH_COLORS[s] }} />
+                <span className="text-[9px] font-mono text-stone-500 uppercase tracking-wider">{label}</span>
+              </div>
+            ))}
           </div>
         )}
       </div>
+
+      {/* Summary list */}
+      {summaryItems.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-stone-800/60 space-y-2">
+          <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">
+            {mode === 'recovery' ? 'Most Fatigued' : 'Top Gains'}
+          </div>
+          {summaryItems.map(item => (
+            <div key={item.key} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.color }} />
+                <span className="text-[10px] font-mono text-stone-400">{item.label}</span>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-mono text-stone-200">{item.value}</span>
+                <span className="text-[9px] font-mono text-stone-600 ml-1.5">{item.sub}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -537,6 +656,7 @@ export default function IronLabLogger() {
   const workoutId = searchParams.get('workoutId');
 
   const logger   = useLogger(userId, workoutId, userWeightKg);
+  const bodyMap  = useBodyMap(userId, logger.exercises);
 
   const [name, setName]             = useState('New Workout');
   const [seconds, setSeconds]       = useState(0);
@@ -848,18 +968,14 @@ export default function IronLabLogger() {
             <div className="border border-stone-800/60 bg-stone-950/40 p-5 lg:sticky lg:top-6">
               <div className="flex items-baseline justify-between mb-3">
                 <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Muscle Map</h2>
-                <span className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">live · volume-weighted</span>
+                <span className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">recovery · growth</span>
               </div>
-              <MuscleMap volumes={volumes} max={maxVol} />
-              <div className="mt-4 pt-4 border-t border-stone-800/60">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">Volume</span>
-                  <span className="text-[9px] uppercase tracking-wider text-stone-600 font-mono tabular-nums">0 → {fmt(maxVol)}</span>
-                </div>
-                <div className="h-1.5 w-full" style={{
-                  background: 'linear-gradient(to right, rgba(255,255,255,0.025), rgb(98,42,18), rgb(186,74,28), rgb(240,110,38), rgb(255,78,38))'
-                }} />
-              </div>
+              <BodyMap
+                recoveryMap={bodyMap.recoveryMap}
+                growthMap={bodyMap.growthMap}
+                mode={bodyMap.mode}
+                setMode={bodyMap.setMode}
+              />
             </div>
 
             <div className="border border-stone-800/60 bg-stone-950/40 p-5">
