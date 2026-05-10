@@ -161,7 +161,7 @@ export function useDashboard(userId) {
         // ── Profile (from Zustand store, fetched once at app boot) ──
         const profile = storeProfile;
         const targets = profile?.current_macros ?? { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
-        const eatBackCalories = profile?.settings?.eat_back_calories ?? false;
+        const eatBackCalories = false; // eat_back_calories not yet stored in DB
 
         // ── Nutrition today ──
         const nlToday = nutritionTodayRes.data ?? [];

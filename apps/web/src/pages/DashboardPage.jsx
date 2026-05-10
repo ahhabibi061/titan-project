@@ -366,13 +366,9 @@ export default function Dashboard() {
               ) : consumed.mealsLogged === 0 ? (
                 <>
                   <div className="font-anton text-3xl tabular-nums text-stone-500">{fmt0(targets.kcal)}</div>
-                  {eatBackCalories && calsBurned ? (
-                    <div className="text-[10px] font-mono text-orange-400 mt-0.5 tabular-nums">
-                      {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} available
-                    </div>
-                  ) : (
-                    <div className="text-[10px] font-mono text-stone-600 mt-0.5 uppercase tracking-wider">no meals logged yet</div>
-                  )}
+                  <div className="text-[10px] font-mono text-stone-600 mt-0.5 tabular-nums">
+                    0 / {fmt0(targets.kcal)} kcal
+                  </div>
                 </>
               ) : (
                 <>

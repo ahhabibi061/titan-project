@@ -19,7 +19,7 @@ export function useSentinel(userId) {
   useEffect(() => {
     if (!storeProfile) return;
     if (storeProfile.current_macros) setTargets(storeProfile.current_macros);
-    setEatBackCalories(storeProfile.settings?.eat_back_calories ?? false);
+    setEatBackCalories(false); // eat_back_calories not yet stored in DB
   }, [storeProfile]);
 
   useEffect(() => {

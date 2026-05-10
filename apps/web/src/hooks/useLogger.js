@@ -442,6 +442,8 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
                   sets: e.sets.map(s => s.id === tempId ? { ...s, id: data.id } : s),
                 }
               ));
+              const wId = workoutRef.current?.id;
+              if (wId) recalcCalories(wId, weightKgRef.current).catch(() => {});
             }
           });
       }
@@ -456,7 +458,9 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
     ));
     if (!setId.startsWith('opt-')) {
       const { error: err } = await supabase.from('sets').delete().eq('id', setId);
-      if (err) console.error('[useLogger] removeSetFromExercise error:', err);
+      if (err) { console.error('[useLogger] removeSetFromExercise error:', err); return; }
+      const wId = workoutRef.current?.id;
+      if (wId) recalcCalories(wId, weightKgRef.current).catch(() => {});
     }
   }, []);
 
