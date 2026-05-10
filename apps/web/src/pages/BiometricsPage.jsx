@@ -1,55 +1,32 @@
 import React, { useState, useMemo, useRef } from 'react';
 import AppNav from '../components/AppNav';
+import { useSession } from '../hooks/useSession';
+import { useProfileStore } from '../store/useProfileStore';
+import { useBiometricVault } from '../hooks/useBiometricVault';
 
-/* =========================================================================
- * BIOMETRIC VAULT — Module 4 Proof-of-Concept
- * Demonstrates: 90-day weight timeline, linear regression trendline,
- *               7-day moving average, goal-date projection,
- *               body composition split, photo timeline scrubber.
- *
- * Production notes:
- *   - Data hydrates from Supabase `biometric_entries` table (RLS-gated).
- *   - Photos stored in private Storage bucket; signed URLs expire in 1h.
- *   - Body-fat estimates accept manual or BIA scale integrations later.
- * ========================================================================= */
+const FONT_STYLE = `
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap');
+  .font-sans  { font-family: 'Manrope', system-ui, sans-serif; }
+  .font-mono  { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .font-anton { font-family: 'Anton', sans-serif; letter-spacing: 0.01em; }
+  body { background: #0a0908; }
+`;
 
-// -------------------- DATA --------------------
-const GOAL_WEIGHT = 80.0;
-const START_DATE = new Date('2026-02-01');
-
-// Deterministic noisy weight series — mimics real daily fluctuation
-// (water, sodium, glycogen) overlaid on a steady cut trajectory.
-function generateTimeline() {
-  const days = 90;
-  const startWeight = 88.2;
-  const slope = -0.072; // kg/day → roughly -0.5kg/week
-  const startBF = 22.0;
-  const endBF = 18.6;
-  const out = [];
-  for (let i = 0; i < days; i++) {
-    const d = new Date(START_DATE);
-    d.setDate(START_DATE.getDate() + i);
-    // multi-frequency noise so the chart looks organic
-    const noise =
-      Math.sin(i * 0.71) * 0.45 +
-      Math.sin(i * 1.37) * 0.28 +
-      Math.sin(i * 2.13) * 0.18;
-    const weekend = (d.getDay() === 0 || d.getDay() === 6) ? 0.25 : 0;
-    const weight = +(startWeight + slope * i + noise + weekend).toFixed(1);
-    const bf = +(startBF + (endBF - startBF) * (i / (days - 1)) + Math.sin(i * 0.5) * 0.15).toFixed(1);
-    out.push({ idx: i, date: d, weight, bodyFat: bf });
-  }
-  return out;
+// -------------------- UNIT HELPERS --------------------
+const KG_TO_LBS = 2.20462;
+function toDisplay(kg, unit) {
+  if (unit === 'lbs') return +(kg * KG_TO_LBS).toFixed(1);
+  return kg;
+}
+function fromDisplay(val, unit) {
+  if (unit === 'lbs') return +(Number(val) / KG_TO_LBS).toFixed(2);
+  return Number(val);
 }
 
-const TIMELINE = generateTimeline();
-// Photo capture cadence — every ~12 days
-const PHOTO_INDICES = [0, 12, 24, 36, 48, 60, 72, 84, 89];
-
-// -------------------- LOGIC --------------------
+// -------------------- MATH --------------------
 function linearRegression(values) {
   const n = values.length;
-  if (n < 2) return { slope: 0, intercept: values[0] || 0 };
+  if (n < 2) return { slope: 0, intercept: values[0] ?? 0 };
   const meanX = (n - 1) / 2;
   const meanY = values.reduce((a, b) => a + b, 0) / n;
   let num = 0, den = 0;
@@ -63,30 +40,19 @@ function linearRegression(values) {
 
 function movingAverage(values, window = 7) {
   return values.map((_, i) => {
-    const start = Math.max(0, i - window + 1);
-    const slice = values.slice(start, i + 1);
+    const slice = values.slice(Math.max(0, i - window + 1), i + 1);
     return slice.reduce((a, b) => a + b, 0) / slice.length;
   });
 }
 
-function projectGoalDate(data, goalWeight) {
-  const reg = linearRegression(data.map(d => d.weight));
-  const last = data[data.length - 1];
-  if (reg.slope >= -0.005) return { unreachable: true };
-  if (last.weight <= goalWeight) return { reached: true };
-  const daysToGoal = (last.weight - goalWeight) / -reg.slope;
-  const projected = new Date(last.date);
-  projected.setDate(last.date.getDate() + Math.ceil(daysToGoal));
-  return { date: projected, daysToGoal: Math.ceil(daysToGoal), slopePerWeek: reg.slope * 7 };
-}
-
-const fmt0 = (n) => Math.round(n).toLocaleString('en-US');
-const fmt1 = (n) => n.toFixed(1);
-const fmtDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-const fmtDateLong = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+// -------------------- FORMATTERS --------------------
+const fmt0     = (n) => Math.round(n).toLocaleString('en-US');
+const fmt1     = (n) => Number(n).toFixed(1);
+const fmtDate  = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const fmtDateLong = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
 // -------------------- WEIGHT CHART --------------------
-function WeightChart({ data, goal }) {
+function WeightChart({ data, goal, ma, reg, unit }) {
   const [hover, setHover] = useState(null);
   const svgRef = useRef(null);
 
@@ -96,33 +62,35 @@ function WeightChart({ data, goal }) {
   const innerH = H - pad.t - pad.b;
 
   const weights = data.map(d => d.weight);
-  const ma = useMemo(() => movingAverage(weights, 7), [data]);
-  const reg = useMemo(() => linearRegression(weights), [data]);
+  const displayWeights = weights.map(w => toDisplay(w, unit));
+  const displayGoal    = goal ? toDisplay(goal, unit) : null;
+  const displayMA      = ma.map(w => toDisplay(w, unit));
+  const displayReg     = { slope: reg.slope * (unit === 'lbs' ? KG_TO_LBS : 1), intercept: toDisplay(reg.intercept, unit) };
 
-  const minW = Math.min(...weights, goal) - 0.6;
-  const maxW = Math.max(...weights) + 0.6;
+  const minW = Math.min(...displayWeights, ...(displayGoal != null ? [displayGoal] : [])) - 0.6;
+  const maxW = Math.max(...displayWeights) + 0.6;
 
-  const x = (i) => pad.l + (i / (data.length - 1)) * innerW;
-  const y = (w) => pad.t + ((maxW - w) / (maxW - minW)) * innerH;
+  const x = (i) => pad.l + (i / Math.max(data.length - 1, 1)) * innerW;
+  const y = (w) => pad.t + ((maxW - w) / Math.max(maxW - minW, 0.1)) * innerH;
 
-  const rawPath = data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)},${y(d.weight).toFixed(1)}`).join(' ');
-  const maPath = ma.map((w, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)},${y(w).toFixed(1)}`).join(' ');
-  const regPath = `M ${x(0).toFixed(1)},${y(reg.intercept).toFixed(1)} L ${x(data.length - 1).toFixed(1)},${y(reg.slope * (data.length - 1) + reg.intercept).toFixed(1)}`;
-  const maFill = `${maPath} L ${x(data.length - 1).toFixed(1)},${(pad.t + innerH).toFixed(1)} L ${x(0).toFixed(1)},${(pad.t + innerH).toFixed(1)} Z`;
+  const rawPath  = displayWeights.map((w, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)},${y(w).toFixed(1)}`).join(' ');
+  const maPath   = displayMA.map((w, i) => `${i === 0 ? 'M' : 'L'} ${x(i).toFixed(1)},${y(w).toFixed(1)}`).join(' ');
+  const regPath  = `M ${x(0).toFixed(1)},${y(displayReg.intercept).toFixed(1)} L ${x(data.length - 1).toFixed(1)},${y(displayReg.slope * (data.length - 1) + displayReg.intercept).toFixed(1)}`;
+  const maFill   = `${maPath} L ${x(data.length - 1).toFixed(1)},${(pad.t + innerH).toFixed(1)} L ${x(0).toFixed(1)},${(pad.t + innerH).toFixed(1)} Z`;
 
-  // Y axis ticks
   const yTicks = [];
-  const tickStep = 2;
+  const tickStep = unit === 'lbs' ? 5 : 2;
   const tickStart = Math.ceil(minW / tickStep) * tickStep;
   for (let v = tickStart; v <= maxW; v += tickStep) yTicks.push(v);
 
-  // X axis ticks — first of each month
+  // Month-boundary x ticks
   const xTicks = data
-    .map((d, i) => ({ d, i }))
-    .filter(({ d }) => d.getDate() <= 7 && data.findIndex(x => x.date.getMonth() === d.getMonth() && x.date.getDate() <= d.getDate()) >= 0)
-    .filter((v, i, arr) => arr.findIndex(x => x.d.getMonth() === v.d.getMonth()) === i);
+    .map((d, i) => ({ d: d.date, i }))
+    .filter(({ d }) => d.getDate() <= 7)
+    .filter((v, i, arr) => arr.findIndex(a => a.d.getMonth() === v.d.getMonth()) === i);
 
   const handleMove = (e) => {
+    if (!svgRef.current) return;
     const rect = svgRef.current.getBoundingClientRect();
     const px = ((e.clientX - rect.left) / rect.width) * W;
     if (px < pad.l || px > pad.l + innerW) { setHover(null); return; }
@@ -131,7 +99,9 @@ function WeightChart({ data, goal }) {
     setHover({ idx: Math.max(0, Math.min(data.length - 1, idx)) });
   };
 
-  const hoverData = hover ? data[hover.idx] : null;
+  const hoverEntry = hover != null ? data[hover.idx] : null;
+  const hoverMA    = hover != null ? displayMA[hover.idx] : null;
+  const hoverReg   = hover != null ? displayReg.slope * hover.idx + displayReg.intercept : null;
 
   return (
     <div className="relative">
@@ -144,13 +114,12 @@ function WeightChart({ data, goal }) {
         style={{ cursor: 'crosshair' }}
       >
         <defs>
-          <linearGradient id="ma-fill" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id="ma-fill-bv" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#ed7a2a" stopOpacity="0.18" />
             <stop offset="100%" stopColor="#ed7a2a" stopOpacity="0" />
           </linearGradient>
         </defs>
 
-        {/* Y grid + ticks */}
         {yTicks.map(v => (
           <g key={v}>
             <line x1={pad.l} x2={pad.l + innerW} y1={y(v)} y2={y(v)} stroke="rgba(255,255,255,0.04)" />
@@ -160,7 +129,6 @@ function WeightChart({ data, goal }) {
           </g>
         ))}
 
-        {/* X axis labels */}
         {xTicks.map(({ d, i }) => (
           <g key={i}>
             <line x1={x(i)} x2={x(i)} y1={pad.t + innerH} y2={pad.t + innerH + 4} stroke="rgba(255,255,255,0.1)" />
@@ -170,48 +138,41 @@ function WeightChart({ data, goal }) {
           </g>
         ))}
 
-        {/* Goal reference line */}
-        <line x1={pad.l} x2={pad.l + innerW} y1={y(goal)} y2={y(goal)} stroke="#7eb6ff" strokeDasharray="3 4" strokeWidth="1" opacity="0.6" />
-        <text x={pad.l + innerW - 4} y={y(goal) - 4} fontSize="9" fill="#7eb6ff" textAnchor="end" fontFamily="JetBrains Mono" letterSpacing="0.08em">
-          GOAL · {goal} KG
-        </text>
+        {displayGoal != null && (
+          <>
+            <line x1={pad.l} x2={pad.l + innerW} y1={y(displayGoal)} y2={y(displayGoal)} stroke="#f59e0b" strokeDasharray="3 4" strokeWidth="1" opacity="0.7" />
+            <text x={pad.l + innerW - 4} y={y(displayGoal) - 4} fontSize="9" fill="#f59e0b" textAnchor="end" fontFamily="JetBrains Mono" letterSpacing="0.08em">
+              GOAL · {fmt1(displayGoal)} {unit.toUpperCase()}
+            </text>
+          </>
+        )}
 
-        {/* MA fill */}
-        <path d={maFill} fill="url(#ma-fill)" />
+        <path d={maFill} fill="url(#ma-fill-bv)" />
 
-        {/* Raw daily points */}
-        {data.map((d, i) => (
-          <circle key={i} cx={x(i)} cy={y(d.weight)} r="1.4" fill="#888" opacity="0.5" />
+        {displayWeights.map((w, i) => (
+          <circle key={i} cx={x(i)} cy={y(w)} r="1.4" fill="#888" opacity="0.5" />
         ))}
 
-        {/* MA line */}
         <path d={maPath} fill="none" stroke="#ed7a2a" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={regPath} fill="none" stroke="#a8a29e" strokeWidth="1.2" strokeDasharray="6 4" opacity="0.7" />
 
-        {/* Regression line */}
-        <path d={regPath} fill="none" stroke="#ff5a2a" strokeWidth="1.2" strokeDasharray="6 4" opacity="0.85" />
-
-        {/* Photo markers along x-axis */}
-        {PHOTO_INDICES.map(idx => (
-          <g key={idx}>
-            <line x1={x(idx)} x2={x(idx)} y1={pad.t} y2={pad.t + innerH} stroke="rgba(237,122,42,0.14)" strokeWidth="1" />
-            <circle cx={x(idx)} cy={pad.t - 6} r="3" fill="#ed7a2a" />
-          </g>
-        ))}
-
-        {/* Hover crosshair */}
-        {hoverData && (
+        {hover != null && hoverEntry && (
           <g>
             <line x1={x(hover.idx)} x2={x(hover.idx)} y1={pad.t} y2={pad.t + innerH} stroke="#ed7a2a" strokeWidth="1" opacity="0.4" />
-            <circle cx={x(hover.idx)} cy={y(hoverData.weight)} r="4" fill="#ff5a2a" stroke="#0a0908" strokeWidth="2" />
+            <circle cx={x(hover.idx)} cy={y(toDisplay(hoverEntry.weight, unit))} r="4" fill="#ff5a2a" stroke="#0a0908" strokeWidth="2" />
           </g>
         )}
 
-        {/* Last point marker */}
-        <circle cx={x(data.length - 1)} cy={y(data[data.length - 1].weight)} r="4" fill="#ed7a2a" stroke="#0a0908" strokeWidth="2" />
+        {data.length > 0 && (
+          <circle
+            cx={x(data.length - 1)}
+            cy={y(toDisplay(data[data.length - 1].weight, unit))}
+            r="4" fill="#ed7a2a" stroke="#0a0908" strokeWidth="2"
+          />
+        )}
       </svg>
 
-      {/* Hover tooltip */}
-      {hoverData && (
+      {hoverEntry && (
         <div
           className="absolute pointer-events-none bg-stone-950 border border-orange-500/40 px-3 py-2 backdrop-blur-sm text-[11px] font-mono"
           style={{
@@ -220,51 +181,52 @@ function WeightChart({ data, goal }) {
             transform: 'translate(-50%, -8px) translateY(-100%)',
           }}
         >
-          <div className="text-stone-500 uppercase tracking-wider text-[9px] mb-0.5">{fmtDateLong(hoverData.date)}</div>
-          <div className="font-anton text-orange-300 text-lg tabular-nums leading-none">{fmt1(hoverData.weight)} <span className="text-stone-500 text-xs">kg</span></div>
-          <div className="text-[10px] text-stone-500 tabular-nums mt-0.5">{fmt1(hoverData.bodyFat)}% body fat</div>
+          <div className="text-stone-500 uppercase tracking-wider text-[9px] mb-0.5">{fmtDateLong(hoverEntry.date)}</div>
+          <div className="font-anton text-orange-300 text-lg tabular-nums leading-none">
+            {fmt1(toDisplay(hoverEntry.weight, unit))} <span className="text-stone-500 text-xs">{unit}</span>
+          </div>
+          <div className="text-[10px] text-stone-400 tabular-nums mt-0.5">MA: {fmt1(hoverMA)} {unit}</div>
+          <div className="text-[10px] text-stone-500 tabular-nums">Trend: {fmt1(hoverReg)} {unit}</div>
+          {hoverEntry.bodyFat != null && (
+            <div className="text-[10px] text-stone-500 tabular-nums">{fmt1(hoverEntry.bodyFat)}% bf</div>
+          )}
         </div>
       )}
 
-      {/* Legend */}
       <div className="flex flex-wrap items-center gap-5 text-[10px] uppercase tracking-wider text-stone-500 font-mono mt-3 pt-3 border-t border-stone-800/60">
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-stone-500 opacity-50" />
-          Daily weigh-in
+          <span className="w-2 h-2 rounded-full bg-stone-500 opacity-50" />Daily weigh-in
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-4 h-px bg-orange-400" />
-          7-day moving avg
+          <span className="w-4 h-px bg-orange-400" />7-day moving avg
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-4 h-px bg-orange-500" style={{ borderTop: '1px dashed #ff5a2a' }} />
-          Linear regression
+          <span className="w-4 h-px bg-stone-400" style={{ borderTop: '1px dashed #a8a29e' }} />Linear regression
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-4 h-px bg-blue-400" style={{ borderTop: '1px dashed #7eb6ff' }} />
-          Goal weight
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-orange-400" />
-          Photo logged
-        </span>
+        {displayGoal != null && (
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-px bg-amber-400" style={{ borderTop: '1px dashed #f59e0b' }} />Goal weight
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-// -------------------- BODY COMP STACKED --------------------
-function BodyComposition({ data }) {
-  // Estimate lean and fat mass for first vs latest entry
-  const first = data[0];
-  const last = data[data.length - 1];
-  const firstFat = first.weight * (first.bodyFat / 100);
+// -------------------- BODY COMPOSITION --------------------
+function BodyComposition({ compEntries, unit }) {
+  if (compEntries.length < 1) return null;
+
+  const first = compEntries[0];
+  const last  = compEntries[compEntries.length - 1];
+
+  const firstFat  = first.weight * (first.bodyFat / 100);
   const firstLean = first.weight - firstFat;
-  const lastFat = last.weight * (last.bodyFat / 100);
-  const lastLean = last.weight - lastFat;
-  const fatLost = firstFat - lastFat;
-  const leanLost = firstLean - lastLean;
-  const max = Math.max(first.weight, last.weight);
+  const lastFat   = last.weight  * (last.bodyFat  / 100);
+  const lastLean  = last.weight  - lastFat;
+  const fatDelta  = firstFat  - lastFat;
+  const leanDelta = firstLean - lastLean;
+  const maxW      = Math.max(first.weight, last.weight);
 
   const Bar = ({ lean, fat, total, label, date }) => (
     <div>
@@ -272,18 +234,18 @@ function BodyComposition({ data }) {
         <span className="text-[10px] uppercase tracking-wider text-stone-500 font-mono">{label}</span>
         <span className="text-[10px] text-stone-600 font-mono">{date}</span>
       </div>
-      <div className="flex h-7 w-full" style={{ width: `${(total / max) * 100}%` }}>
+      <div className="flex h-7" style={{ width: `${(total / maxW) * 100}%` }}>
         <div
           className="bg-stone-400 flex items-center justify-end pr-2 text-[10px] font-mono tabular-nums text-stone-900 font-medium"
           style={{ width: `${(lean / total) * 100}%` }}
         >
-          {fmt1(lean)} kg
+          {fmt1(toDisplay(lean, unit))} {unit}
         </div>
         <div
           className="bg-orange-500 flex items-center justify-end pr-2 text-[10px] font-mono tabular-nums text-stone-950 font-medium"
           style={{ width: `${(fat / total) * 100}%` }}
         >
-          {fmt1(fat)} kg
+          {fmt1(toDisplay(fat, unit))} {unit}
         </div>
       </div>
     </div>
@@ -291,22 +253,24 @@ function BodyComposition({ data }) {
 
   return (
     <div className="space-y-4">
-      <Bar lean={firstLean} fat={firstFat} total={first.weight} label="Cut start" date={fmtDate(first.date)} />
-      <Bar lean={lastLean} fat={lastFat} total={last.weight} label="Today" date={fmtDate(last.date)} />
-
+      <Bar lean={firstLean} fat={firstFat} total={first.weight} label="First entry" date={fmtDate(first.date)} />
+      <Bar lean={lastLean}  fat={lastFat}  total={last.weight}  label="Latest"      date={fmtDate(last.date)} />
       <div className="pt-3 border-t border-stone-800/60 grid grid-cols-2 gap-3">
         <div>
-          <div className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono mb-1">Fat lost</div>
-          <div className="font-anton text-2xl text-orange-400 tabular-nums">−{fmt1(fatLost)}<span className="text-stone-500 text-base ml-1">kg</span></div>
+          <div className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono mb-1">Fat change</div>
+          <div className="font-anton text-2xl text-orange-400 tabular-nums">
+            {fatDelta >= 0 ? '−' : '+'}{fmt1(toDisplay(Math.abs(fatDelta), unit))}
+            <span className="text-stone-500 text-base ml-1">{unit}</span>
+          </div>
         </div>
         <div>
           <div className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono mb-1">Lean change</div>
-          <div className={`font-anton text-2xl tabular-nums ${leanLost > 0.5 ? 'text-red-400' : 'text-stone-300'}`}>
-            {leanLost > 0 ? '−' : '+'}{fmt1(Math.abs(leanLost))}<span className="text-stone-500 text-base ml-1">kg</span>
+          <div className={`font-anton text-2xl tabular-nums ${leanDelta > 0.5 ? 'text-red-400' : 'text-stone-300'}`}>
+            {leanDelta > 0 ? '−' : '+'}{fmt1(toDisplay(Math.abs(leanDelta), unit))}
+            <span className="text-stone-500 text-base ml-1">{unit}</span>
           </div>
         </div>
       </div>
-
       <div className="flex items-center gap-4 text-[9px] uppercase tracking-wider text-stone-600 font-mono">
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-stone-400" />Lean</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-orange-500" />Fat</span>
@@ -315,111 +279,118 @@ function BodyComposition({ data }) {
   );
 }
 
-// -------------------- PHOTO SILHOUETTE --------------------
-// Stylized body silhouettes — placeholders for actual user photos.
-// Simplified anterior, lateral, posterior poses.
-const SILHOUETTE_PATHS = {
-  front: 'M 60,18 Q 50,18 47,28 Q 47,38 53,42 L 53,48 Q 38,52 32,68 L 28,98 Q 26,116 30,128 L 36,124 L 40,108 L 44,102 Q 44,140 42,170 L 40,228 L 38,250 L 50,250 L 52,228 L 56,180 L 60,180 L 64,228 L 66,250 L 78,250 L 76,228 L 74,170 Q 72,140 72,102 L 76,108 L 80,124 L 86,128 Q 90,116 88,98 L 84,68 Q 78,52 63,48 L 63,42 Q 69,38 69,28 Q 66,18 60,18 Z',
-  side: 'M 60,18 Q 52,18 50,28 Q 50,40 58,44 L 58,52 Q 50,56 48,72 L 48,108 Q 50,114 56,114 L 60,128 Q 60,168 56,200 L 54,250 L 64,250 L 66,200 Q 68,168 68,128 L 70,112 L 76,108 Q 78,84 70,68 L 64,52 L 64,44 Q 70,40 70,28 Q 68,18 60,18 Z',
-  back: 'M 60,18 Q 50,18 47,28 Q 47,38 53,42 L 53,48 Q 38,52 32,68 L 28,98 Q 26,116 30,128 L 36,124 L 40,108 L 44,102 Q 44,140 42,170 L 40,228 L 38,250 L 50,250 L 52,228 L 56,180 L 60,180 L 64,228 L 66,250 L 78,250 L 76,228 L 74,170 Q 72,140 72,102 L 76,108 L 80,124 L 86,128 Q 90,116 88,98 L 84,68 Q 78,52 63,48 L 63,42 Q 69,38 69,28 Q 66,18 60,18 Z',
-};
-
-function PhotoCard({ pose, entry, leaner = 0 }) {
-  // Subtle scale: as body fat drops, silhouette gets very slightly narrower (visual cue).
-  const scale = 1 - leaner * 0.04;
+// -------------------- PHOTO PLACEHOLDER --------------------
+function PhotoPlaceholder() {
+  const zones = ['Front', 'Side', 'Back'];
   return (
-    <div className="border border-stone-800/60 bg-stone-950/40 p-3 flex flex-col">
-      <div className="flex items-baseline justify-between mb-2">
-        <span className="text-[9px] uppercase tracking-[0.2em] text-stone-500 font-mono">{pose}</span>
-        <span className="text-[9px] text-stone-700 font-mono tabular-nums">{fmtDate(entry.date)}</span>
+    <div>
+      <div className="grid grid-cols-3 gap-4 mb-5">
+        {zones.map(pose => (
+          <div key={pose} className="border border-stone-800/60 bg-stone-950/40 p-3 flex flex-col items-center justify-center aspect-[3/5]">
+            <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-3">{pose}</div>
+            <div className="w-10 h-10 border border-dashed border-stone-700 flex items-center justify-center mb-3">
+              <span className="text-stone-700 text-lg">+</span>
+            </div>
+            <div className="text-[9px] text-stone-700 font-mono text-center leading-relaxed">Upload<br />photo</div>
+          </div>
+        ))}
       </div>
-      <div className="flex-1 relative aspect-[3/5] bg-gradient-to-b from-stone-900/60 to-stone-950 overflow-hidden">
-        <svg viewBox="0 0 120 268" className="w-full h-full">
-          <defs>
-            <linearGradient id={`silhouette-${pose}-${entry.idx}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3a342e" />
-              <stop offset="100%" stopColor="#1a1815" />
-            </linearGradient>
-          </defs>
-          <g transform={`translate(60 130) scale(${scale}) translate(-60 -130)`}>
-            <path d={SILHOUETTE_PATHS[pose.toLowerCase()]} fill={`url(#silhouette-${pose}-${entry.idx})`} stroke="rgba(237,122,42,0.2)" strokeWidth="0.5" />
-          </g>
-        </svg>
-        <div className="absolute bottom-1.5 left-2 right-2 flex justify-between text-[9px] font-mono text-stone-500 tabular-nums">
-          <span>{fmt1(entry.weight)} kg</span>
-          <span>{fmt1(entry.bodyFat)}%</span>
-        </div>
+      <div className="flex items-center gap-2 px-4 py-3 border border-stone-800/40 bg-stone-900/20">
+        <span className="text-[9px] uppercase tracking-wider font-mono text-stone-600">Pro feature</span>
+        <span className="text-stone-700">·</span>
+        <span className="text-[10px] font-mono text-stone-500">Photo upload coming soon — progress photos stored encrypted with signed-URL access</span>
       </div>
     </div>
   );
 }
 
-// -------------------- PHOTO COMPARISON --------------------
-function PhotoComparison({ start, current }) {
-  const leanProgress = (start.bodyFat - current.bodyFat) / (start.bodyFat - 14); // 14% as theoretical floor
-  return (
-    <div className="grid grid-cols-2 gap-4">
-      <div>
-        <div className="flex items-baseline justify-between mb-2">
-          <span className="text-[10px] uppercase tracking-[0.2em] text-stone-500 font-mono">Start</span>
-          <span className="text-[10px] text-stone-600 font-mono">{fmtDateLong(start.date)}</span>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          <PhotoCard pose="Front" entry={start} leaner={0} />
-          <PhotoCard pose="Side" entry={start} leaner={0} />
-          <PhotoCard pose="Back" entry={start} leaner={0} />
-        </div>
-      </div>
-      <div>
-        <div className="flex items-baseline justify-between mb-2">
-          <span className="text-[10px] uppercase tracking-[0.2em] text-orange-400 font-mono">Current</span>
-          <span className="text-[10px] text-stone-600 font-mono">{fmtDateLong(current.date)}</span>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          <PhotoCard pose="Front" entry={current} leaner={leanProgress} />
-          <PhotoCard pose="Side" entry={current} leaner={leanProgress} />
-          <PhotoCard pose="Back" entry={current} leaner={leanProgress} />
-        </div>
-      </div>
-    </div>
+// -------------------- LOG MODAL --------------------
+function LogModal({ onClose, onSave, todayEntry, unit, saving }) {
+  const existing = todayEntry;
+  const [weight, setWeight] = useState(
+    existing ? String(toDisplay(existing.weight_kg, unit)) : ''
   );
-}
+  const [bf, setBf]     = useState(existing?.body_fat_pct != null ? String(existing.body_fat_pct) : '');
+  const [notes, setNotes] = useState(existing?.notes ?? '');
+  const [err, setErr]   = useState('');
 
-// -------------------- PHOTO TIMELINE SCRUBBER --------------------
-function PhotoTimeline({ photos, selectedIdx, onSelect }) {
+  async function handleSave() {
+    const w = parseFloat(weight);
+    if (!w || w <= 0) { setErr('Enter a valid weight'); return; }
+    const wKg = fromDisplay(w, unit);
+    const result = await onSave({ weight_kg: wKg, body_fat_pct: bf !== '' ? parseFloat(bf) : null, notes });
+    if (result?.error) { setErr(result.error); return; }
+    onClose();
+  }
+
   return (
-    <div className="space-y-3">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">Photo Timeline · {photos.length} captures</span>
-        <span className="text-[9px] text-stone-700 font-mono">tap a marker to compare</span>
-      </div>
-      <div className="relative h-12">
-        {/* Track */}
-        <div className="absolute top-1/2 left-0 right-0 h-px bg-stone-800" />
-        {/* Markers */}
-        {photos.map((p, i) => {
-          const isSelected = i === selectedIdx;
-          const left = (p.idx / 89) * 100;
-          return (
-            <button
-              key={p.idx}
-              onClick={() => onSelect(i)}
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 group"
-              style={{ left: `${left}%` }}
-            >
-              <div className={`w-3 h-3 rounded-full border-2 transition-all ${
-                isSelected
-                  ? 'bg-orange-500 border-orange-300 scale-150'
-                  : 'bg-stone-900 border-stone-600 group-hover:border-orange-400 group-hover:scale-125'
-              }`} />
-              <div className={`absolute top-full mt-2 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] font-mono tabular-nums ${
-                isSelected ? 'text-orange-300' : 'text-stone-600 group-hover:text-stone-400'
-              }`}>
-                {fmtDate(p.date)}
-              </div>
-            </button>
-          );
-        })}
+    <div className="fixed inset-0 z-50 bg-stone-950/90 flex items-center justify-center backdrop-blur-sm px-4">
+      <div className="w-full max-w-sm border border-stone-800 bg-[#0a0908] p-6 space-y-5">
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Log Today</h2>
+          <button onClick={onClose} className="text-stone-600 hover:text-stone-300 font-mono text-xs">✕</button>
+        </div>
+
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-2">
+            Weight ({unit})
+          </label>
+          <input
+            type="number"
+            step="0.1"
+            value={weight}
+            onChange={e => setWeight(e.target.value)}
+            placeholder={unit === 'lbs' ? '185.0' : '84.0'}
+            className="w-full bg-stone-950/60 border border-stone-800 px-4 py-3 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors"
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-2">
+            Body fat % <span className="text-stone-700">(optional)</span>
+          </label>
+          <input
+            type="number"
+            step="0.1"
+            min="3"
+            max="60"
+            value={bf}
+            onChange={e => setBf(e.target.value)}
+            placeholder="18.5"
+            className="w-full bg-stone-950/60 border border-stone-800 px-4 py-3 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors"
+          />
+        </div>
+
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-2">
+            Notes <span className="text-stone-700">(optional)</span>
+          </label>
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            rows={2}
+            placeholder="Heavy sodium day, refeed…"
+            className="w-full bg-stone-950/60 border border-stone-800 px-4 py-3 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors resize-none"
+          />
+        </div>
+
+        {err && <div className="text-red-400 font-mono text-xs">{err}</div>}
+
+        <div className="flex gap-3 pt-1">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-200 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 px-4 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : existing ? 'Update' : 'Save'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -438,30 +409,93 @@ function StatBlock({ label, value, sub, accent }) {
 
 // -------------------- MAIN --------------------
 export default function BiometricVault() {
-  const [selectedPhotoIdx, setSelectedPhotoIdx] = useState(PHOTO_INDICES.length - 1);
-  const photos = PHOTO_INDICES.map(idx => TIMELINE[idx]);
-  const startEntry = photos[0];
-  const currentPhoto = photos[selectedPhotoIdx];
+  const { session, loading: sessionLoading } = useSession();
+  const userId  = sessionLoading ? undefined : (session?.user?.id ?? null);
+  const profile = useProfileStore(s => s.profile);
 
-  const projection = useMemo(() => projectGoalDate(TIMELINE, GOAL_WEIGHT), []);
-  const last = TIMELINE[TIMELINE.length - 1];
-  const first = TIMELINE[0];
-  const totalChange = last.weight - first.weight;
-  const last30 = TIMELINE.slice(-30);
-  const change30 = last30[last30.length - 1].weight - last30[0].weight;
-  const reg = linearRegression(TIMELINE.map(d => d.weight));
-  const slopePerWeek = reg.slope * 7;
+  const goalWeightKg = profile?.goal_weight_kg ?? null;
+  const unit         = profile?.settings?.weight_unit ?? 'kg';
+
+  const vault = useBiometricVault(userId, goalWeightKg);
+
+  const [showLog, setShowLog] = useState(false);
+
+  const { chartData, ma, reg, slopePerWeek, slope30PerWeek, projection, compEntries, paceStatus } = vault;
+
+  const first = chartData[0] ?? null;
+  const last  = chartData[chartData.length - 1] ?? null;
+
+  // All deltas in kg; convert for display only
+  const totalChange    = first && last ? last.weight - first.weight : null;
+  const last30Data     = chartData.slice(-30);
+  const change30       = last30Data.length >= 2
+    ? last30Data[last30Data.length - 1].weight - last30Data[0].weight
+    : null;
+  const dTotalChange   = totalChange != null ? toDisplay(totalChange, unit) : null;
+  const dChange30      = change30 != null    ? toDisplay(change30, unit)    : null;
+  const dSlope30       = toDisplay(slope30PerWeek, unit);
+
+  // ---- Loading ----
+  if (vault.loading) {
+    return (
+      <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 flex items-center justify-center">
+        <style>{FONT_STYLE}</style>
+        <div className="space-y-3 w-full max-w-md px-6">
+          {[80, 60, 70, 50].map((w, i) => (
+            <div key={i} className="h-4 bg-stone-800/60 animate-pulse" style={{ width: `${w}%` }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // ---- Empty state ----
+  if (chartData.length === 0) {
+    return (
+      <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
+        <style>{FONT_STYLE}</style>
+        <AppNav />
+        <div className="relative z-10 max-w-[1280px] mx-auto px-6 py-8">
+          <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
+            <div className="flex items-baseline gap-3">
+              <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Biometric</span>
+              <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">Vault</span>
+            </div>
+          </header>
+          <div className="border border-stone-800/60 bg-stone-950/40 p-12 text-center space-y-6">
+            <div className="text-[10px] uppercase tracking-[0.25em] text-stone-600 font-mono">No data yet</div>
+            <h2 className="font-anton text-3xl uppercase tracking-tight text-stone-300">
+              Start logging your weight daily to unlock trends
+            </h2>
+            <p className="text-stone-600 font-mono text-xs max-w-sm mx-auto">
+              7+ entries unlocks projections and trend analysis. Log daily for best results.
+            </p>
+            <button
+              onClick={() => setShowLog(true)}
+              className="px-8 py-4 bg-orange-500 text-stone-950 font-anton text-xl uppercase tracking-wider hover:bg-orange-400 transition-colors"
+            >
+              + Log Today's Weight
+            </button>
+          </div>
+        </div>
+        {showLog && (
+          <LogModal
+            onClose={() => setShowLog(false)}
+            onSave={vault.logEntry}
+            todayEntry={vault.todayEntry}
+            unit={unit}
+            saving={vault.saving}
+          />
+        )}
+      </div>
+    );
+  }
+
+  const needsMoreData = chartData.length < 7;
 
   return (
     <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap');
-        .font-sans  { font-family: 'Manrope', system-ui, sans-serif; }
-        .font-mono  { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-        .font-anton { font-family: 'Anton', sans-serif; letter-spacing: 0.01em; }
-        body { background: #0a0908; }
-      `}</style>
-
+      <style>{FONT_STYLE}</style>
       <AppNav />
 
       <div className="fixed inset-0 pointer-events-none" aria-hidden>
@@ -483,60 +517,87 @@ export default function BiometricVault() {
               <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">Vault</span>
             </div>
             <div className="flex items-center gap-3 text-xs font-mono text-stone-500">
-              <span className="px-2 py-1 bg-orange-500/15 text-orange-300 border border-orange-500/30 uppercase tracking-wider">Cut</span>
               <span>90-day window</span>
               <span className="text-stone-700">·</span>
-              <span>{TIMELINE.length} weigh-ins</span>
-              <span className="text-stone-700">·</span>
-              <span>{photos.length} photo sessions</span>
+              <span>{chartData.length} weigh-ins</span>
+              {goalWeightKg && (
+                <>
+                  <span className="text-stone-700">·</span>
+                  <span>Goal {fmt1(toDisplay(goalWeightKg, unit))} {unit}</span>
+                </>
+              )}
             </div>
           </div>
           <div className="flex gap-2">
-            <button className="px-4 py-2.5 border border-stone-700 text-stone-400 font-anton text-sm uppercase tracking-wider hover:bg-stone-800 hover:text-stone-200 transition-colors">
-              Export CSV
-            </button>
-            <button className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors">
-              + Log Today
+            <button
+              onClick={() => setShowLog(true)}
+              className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors"
+            >
+              {vault.todayEntry ? '✓ Update Today' : '+ Log Today'}
             </button>
           </div>
         </header>
 
-        {/* STATS */}
+        {/* STATS BAR */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-0 mb-8 border border-stone-800/60 bg-stone-950/40">
           <StatBlock
             label="Current Weight"
-            value={fmt1(last.weight)}
-            sub={`kg · ${fmt1(last.bodyFat)}% bf`}
+            value={last ? fmt1(toDisplay(last.weight, unit)) : '—'}
+            sub={`${unit}${last?.bodyFat != null ? ` · ${fmt1(last.bodyFat)}% bf` : ''}`}
             accent="text-orange-300"
           />
           <StatBlock
             label="Total Change"
-            value={`${totalChange > 0 ? '+' : ''}${fmt1(totalChange)}`}
-            sub={`since ${fmtDate(first.date)}`}
-            accent={totalChange < 0 ? 'text-orange-300' : 'text-stone-300'}
+            value={dTotalChange != null ? `${dTotalChange > 0 ? '+' : ''}${fmt1(dTotalChange)}` : '—'}
+            sub={first ? `since ${fmtDate(first.date)}` : ''}
+            accent={dTotalChange != null && dTotalChange < 0 ? 'text-orange-300' : 'text-stone-300'}
           />
           <StatBlock
             label="30d Trend"
-            value={`${change30 > 0 ? '+' : ''}${fmt1(change30)}`}
-            sub={`${fmt1(Math.abs(slopePerWeek))} kg / wk`}
+            value={dChange30 != null ? `${dChange30 > 0 ? '+' : ''}${fmt1(dChange30)}` : '—'}
+            sub={`${fmt1(Math.abs(dSlope30))} ${unit}/wk`}
           />
           <StatBlock
             label="Goal ETA"
-            value={projection.daysToGoal ? `${projection.daysToGoal}d` : '—'}
-            sub={projection.date ? fmtDate(projection.date) : 'projection'}
+            value={projection?.daysToGoal ? `${projection.daysToGoal}d` : projection?.reached ? 'Reached' : '—'}
+            sub={projection?.date ? fmtDate(projection.date) : needsMoreData ? 'needs 7+ entries' : 'projection'}
             accent="text-orange-300"
           />
         </div>
 
         {/* HEADLINE PROJECTION */}
-        {projection.date && (
+        {projection?.date && !needsMoreData && (
           <div className="mb-10">
             <div className="text-[10px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-2">Trajectory projection</div>
             <h1 className="font-anton text-4xl md:text-5xl uppercase tracking-tight leading-[0.95] text-stone-100 max-w-4xl">
-              At your current rate, you'll hit <span className="text-orange-400">{GOAL_WEIGHT} kg</span> by{' '}
+              At your current rate, you'll hit{' '}
+              <span className="text-orange-400">{fmt1(toDisplay(goalWeightKg, unit))} {unit}</span> by{' '}
               <span className="text-orange-400">{fmtDateLong(projection.date)}</span>
               <span className="text-stone-600"> — about {projection.daysToGoal} days from today.</span>
             </h1>
+          </div>
+        )}
+
+        {projection?.unreachable && !needsMoreData && (
+          <div className="mb-10 border border-orange-500/30 bg-orange-500/5 px-5 py-4">
+            <span className="font-mono text-xs text-orange-400 uppercase tracking-wider">
+              Trend going wrong way — current slope won't reach goal weight. Check your deficit.
+            </span>
+          </div>
+        )}
+
+        {/* INSUFFICIENT DATA BANNER */}
+        {needsMoreData && (
+          <div className="mb-8 border border-stone-800/60 bg-stone-900/20 px-5 py-4 flex items-center justify-between">
+            <span className="font-mono text-xs text-stone-500">
+              Log <span className="text-stone-300">{7 - chartData.length} more {7 - chartData.length === 1 ? 'day' : 'days'}</span> to unlock projections and trend analysis
+            </span>
+            <button
+              onClick={() => setShowLog(true)}
+              className="px-4 py-2 border border-orange-500/40 text-orange-300 font-mono text-[10px] uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+            >
+              + Log Today
+            </button>
           </div>
         )}
 
@@ -546,19 +607,28 @@ export default function BiometricVault() {
             <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Weight Timeline</h2>
             <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">interactive · hover for details</span>
           </div>
-          <WeightChart data={TIMELINE} goal={GOAL_WEIGHT} />
+          <WeightChart data={chartData} goal={goalWeightKg} ma={ma} reg={reg} unit={unit} />
         </div>
 
         {/* TWO-COL: BODY COMP + DERIVED METRICS */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
+
+          {/* BODY COMPOSITION */}
           <div className="lg:col-span-7 border border-stone-800/60 bg-stone-950/40 p-6">
             <div className="flex items-baseline justify-between mb-5">
               <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Body Composition</h2>
               <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">lean vs fat mass</span>
             </div>
-            <BodyComposition data={TIMELINE} />
+            {compEntries.length >= 1 ? (
+              <BodyComposition compEntries={compEntries} unit={unit} />
+            ) : (
+              <div className="py-10 text-center text-stone-600 font-mono text-xs uppercase tracking-wider">
+                Log body fat % with your weigh-in to unlock composition tracking
+              </div>
+            )}
           </div>
 
+          {/* DERIVED METRICS */}
           <div className="lg:col-span-5 border border-stone-800/60 bg-stone-950/40 p-6">
             <div className="flex items-baseline justify-between mb-5">
               <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Derived</h2>
@@ -567,25 +637,35 @@ export default function BiometricVault() {
             <div className="space-y-3">
               <div className="flex justify-between items-baseline pb-3 border-b border-stone-800/60">
                 <span className="text-[10px] uppercase tracking-wider text-stone-500 font-mono">Regression slope</span>
-                <span className="font-anton text-xl text-orange-300 tabular-nums">{fmt1(slopePerWeek)} <span className="text-stone-500 text-xs">kg/wk</span></span>
+                <span className="font-anton text-xl text-orange-300 tabular-nums">
+                  {fmt1(toDisplay(slopePerWeek, unit))} <span className="text-stone-500 text-xs">{unit}/wk</span>
+                </span>
               </div>
               <div className="flex justify-between items-baseline pb-3 border-b border-stone-800/60">
                 <span className="text-[10px] uppercase tracking-wider text-stone-500 font-mono">% bw / wk</span>
-                <span className="font-anton text-xl text-stone-200 tabular-nums">{fmt1((slopePerWeek / first.weight) * 100)}<span className="text-stone-500 text-xs">%</span></span>
+                <span className="font-anton text-xl text-stone-200 tabular-nums">
+                  {first ? fmt1((slopePerWeek / first.weight) * 100) : '—'}<span className="text-stone-500 text-xs">%</span>
+                </span>
               </div>
               <div className="flex justify-between items-baseline pb-3 border-b border-stone-800/60">
-                <span className="text-[10px] uppercase tracking-wider text-stone-500 font-mono">Avg deficit</span>
-                <span className="font-anton text-xl text-stone-200 tabular-nums">~{fmt0(Math.abs(slopePerWeek) * 7700 / 7)}<span className="text-stone-500 text-xs"> kcal/d</span></span>
+                <span className="text-[10px] uppercase tracking-wider text-stone-500 font-mono">Est. daily deficit</span>
+                <span className="font-anton text-xl text-stone-200 tabular-nums">
+                  ~{fmt0(Math.abs(slopePerWeek) * 7700 / 7)}<span className="text-stone-500 text-xs"> kcal/d</span>
+                </span>
               </div>
               <div className="flex justify-between items-baseline pb-3 border-b border-stone-800/60">
-                <span className="text-[10px] uppercase tracking-wider text-stone-500 font-mono">Days remaining</span>
-                <span className="font-anton text-xl text-orange-300 tabular-nums">{projection.daysToGoal}</span>
+                <span className="text-[10px] uppercase tracking-wider text-stone-500 font-mono">Days to goal</span>
+                <span className="font-anton text-xl text-orange-300 tabular-nums">
+                  {projection?.daysToGoal ?? (projection?.reached ? '✓' : '—')}
+                </span>
               </div>
               <div className="flex justify-between items-baseline">
                 <span className="text-[10px] uppercase tracking-wider text-stone-500 font-mono">Pace status</span>
-                <span className={`font-anton text-xl tabular-nums ${Math.abs((slopePerWeek / first.weight) * 100) > 0.7 ? 'text-red-400' : 'text-orange-300'}`}>
-                  {Math.abs((slopePerWeek / first.weight) * 100) > 0.7 ? 'AGGRESSIVE' : 'ON TARGET'}
-                </span>
+                {paceStatus ? (
+                  <span className={`font-anton text-xl tabular-nums ${paceStatus.color}`}>{paceStatus.label}</span>
+                ) : (
+                  <span className="font-mono text-xs text-stone-600">7+ entries needed</span>
+                )}
               </div>
             </div>
             <div className="mt-5 pt-4 border-t border-stone-800/60 text-[10px] font-mono text-stone-600 leading-relaxed">
@@ -600,17 +680,25 @@ export default function BiometricVault() {
             <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Visual Progress</h2>
             <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">private · encrypted at rest</span>
           </div>
-          <div className="mb-8">
-            <PhotoTimeline photos={photos} selectedIdx={selectedPhotoIdx} onSelect={setSelectedPhotoIdx} />
-          </div>
-          <PhotoComparison start={startEntry} current={currentPhoto} />
+          <PhotoPlaceholder />
         </div>
 
         <footer className="mt-12 pt-6 border-t border-stone-800/60 flex items-center justify-between text-[10px] uppercase tracking-wider text-stone-600 font-mono">
-          <span>Biometric Vault v0.4 · Module 4 · Longitudinal tracking</span>
+          <span>Biometric Vault v0.5 · Module 4 · Longitudinal tracking</span>
           <span>Regression: ordinary least squares · MA window 7d</span>
         </footer>
       </div>
+
+      {/* LOG MODAL */}
+      {showLog && (
+        <LogModal
+          onClose={() => setShowLog(false)}
+          onSave={vault.logEntry}
+          todayEntry={vault.todayEntry}
+          unit={unit}
+          saving={vault.saving}
+        />
+      )}
     </div>
   );
 }
