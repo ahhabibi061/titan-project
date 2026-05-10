@@ -76,6 +76,7 @@ export function useDashboard(userId) {
           workoutsStreakRes,
           biometricsWeekRes,
           recentWorkoutsRes,
+          eatBackRes,
         ] = await Promise.all([
           // 1. Nutrition today — consumed macros + activity feed
           supabase.from('nutrition_logs')
@@ -85,7 +86,7 @@ export function useDashboard(userId) {
             .lt('logged_at', tomorrowStr)
             .order('logged_at', { ascending: true }),
 
-          // 3. Today's workout — match by created_at so Logger workouts (no scheduled_date) appear
+          // 2. Today's workout — match by created_at so Logger workouts (no scheduled_date) appear
           supabase.from('workouts')
             .select('id, name, created_at, completed_at, calories_burned, workout_exercises(id, exercises(name), sets(id, reps))')
             .eq('user_id', userId)
@@ -95,7 +96,7 @@ export function useDashboard(userId) {
             .limit(1)
             .maybeSingle(),
 
-          // 4. Latest unapplied coach recommendation
+          // 3. Latest unapplied coach recommendation
           supabase.from('coach_recommendations')
             .select('id, decision, narrative')
             .eq('user_id', userId)
@@ -104,7 +105,7 @@ export function useDashboard(userId) {
             .limit(1)
             .maybeSingle(),
 
-          // 5. Biometrics last 14 days — sparkline + current weight
+          // 4. Biometrics last 14 days — sparkline + current weight
           supabase.from('biometric_entries')
             .select('weight_kg, logged_at')
             .eq('user_id', userId)
@@ -112,41 +113,47 @@ export function useDashboard(userId) {
             .lte('logged_at', todayStr)
             .order('logged_at', { ascending: true }),
 
-          // 6. Nutrition this week — avg kcal / protein
+          // 5. Nutrition this week — avg kcal / protein
           supabase.from('nutrition_logs')
             .select('kcal, protein_g, logged_at')
             .eq('user_id', userId)
             .gte('logged_at', weekStart)
             .lte('logged_at', weekEnd),
 
-          // 7. Workouts this week — adherence + set count
+          // 6. Workouts this week — adherence + set count
           supabase.from('workouts')
             .select('id, scheduled_date, completed_at, workout_exercises(id, sets(id))')
             .eq('user_id', userId)
             .gte('scheduled_date', weekStart)
             .lte('scheduled_date', weekEnd),
 
-          // 8. Completed workouts last 60 days — streak (use completed_at, not scheduled_date)
+          // 7. Completed workouts last 60 days — streak (use completed_at, not scheduled_date)
           supabase.from('workouts')
             .select('completed_at')
             .eq('user_id', userId)
             .not('completed_at', 'is', null)
             .gte('completed_at', sixtyDaysAgoStr),
 
-          // 9. Biometrics this week — adherence weight column
+          // 8. Biometrics this week — adherence weight column
           supabase.from('biometric_entries')
             .select('logged_at')
             .eq('user_id', userId)
             .gte('logged_at', weekStart)
             .lte('logged_at', weekEnd),
 
-          // 10. Recent completed workouts — last 3
+          // 9. Recent completed workouts — last 3
           supabase.from('workouts')
             .select('id, name, completed_at, workout_exercises(id)')
             .eq('user_id', userId)
             .not('completed_at', 'is', null)
             .order('completed_at', { ascending: false })
             .limit(3),
+
+          // 10. eat_back_calories preference — error handled separately (column may not exist yet)
+          supabase.from('profiles')
+            .select('eat_back_calories')
+            .eq('id', userId)
+            .maybeSingle(),
         ]);
 
         if (cancelled) return;
@@ -161,7 +168,10 @@ export function useDashboard(userId) {
         // ── Profile (from Zustand store, fetched once at app boot) ──
         const profile = storeProfile;
         const targets = profile?.current_macros ?? { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
-        const eatBackCalories = false; // eat_back_calories not yet stored in DB
+
+        // eat_back_calories — read directly from DB (not Zustand cache).
+        // Defaults to false if the column doesn't exist yet or returns null.
+        const eatBackCalories = (!eatBackRes.error && eatBackRes.data?.eat_back_calories) || false;
 
         // ── Nutrition today ──
         const nlToday = nutritionTodayRes.data ?? [];
@@ -195,6 +205,7 @@ export function useDashboard(userId) {
         // ── Workout today ──
         const allWeSets   = (workoutRaw?.workout_exercises ?? []).flatMap(we => we.sets ?? []);
         const exCount     = workoutRaw?.workout_exercises?.length ?? 0;
+        // calories_burned is set by the calculate_workout_calories RPC after each set save
         const calsBurned  = workoutRaw?.completed_at ? (workoutRaw?.calories_burned ?? null) : null;
         const adjustedKcal = eatBackCalories && calsBurned
           ? targets.kcal + Math.round(calsBurned)

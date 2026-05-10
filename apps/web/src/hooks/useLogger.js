@@ -74,55 +74,17 @@ async function fetchPrevSets(exerciseId) {
 }
 
 // ─── Calorie recalculation ─────────────────────────────────────────────────
-// Queries DB for real set count, fetches profile weight, writes calories_burned.
-// Returns the calculated calories so completeWorkout can use it in its return value.
+// Calls the calculate_workout_calories RPC which counts sets server-side via
+// a JOIN (bypasses RLS nested-select issues) and writes calories_burned.
 
-// weightKg is passed in from the component — avoids an extra profiles query
-// with RLS timing issues inside the hook.
 async function recalcCalories(workoutId, weightKg) {
-  // Step 1: get workout_exercise IDs for this workout
-  const { data: weRows, error: weErr } = await supabase
-    .from('workout_exercises')
-    .select('id')
-    .eq('workout_id', workoutId);
-  if (weErr) { console.error('[useLogger] recalcCalories weRows error:', weErr); return null; }
-
-  const weIds = (weRows ?? []).map(r => r.id);
-  let totalSets = 0;
-  if (weIds.length > 0) {
-    const { count, error: cntErr } = await supabase
-      .from('sets')
-      .select('*', { count: 'exact', head: true })
-      .in('workout_exercise_id', weIds);
-    if (cntErr) { console.error('[useLogger] recalcCalories count error:', cntErr); return null; }
-    totalSets = count ?? 0;
-  }
-
-  // Step 2: calculate — MET 5.0, 135 s per set (45 s active + 90 s rest)
-  const activeSeconds  = totalSets * 135;
-  const durationHours  = activeSeconds / 3600;
-  const calories       = Math.round(5.0 * weightKg * durationHours);
-
-  console.log('[useLogger] recalcCalories: weight_kg from profile:', weightKg);
-  console.log('[useLogger] recalcCalories: total sets count from Supabase:', totalSets);
-  console.log('[useLogger] recalcCalories: duration hours:', durationHours.toFixed(4));
-  console.log('[useLogger] recalcCalories: calories result:', calories);
-
-  // Step 3: save to DB
-  await supabase
-    .from('workouts')
-    .update({ calories_burned: calories })
-    .eq('id', workoutId);
-
-  // Step 4: verify read-back
-  const { data: updated } = await supabase
-    .from('workouts')
-    .select('calories_burned')
-    .eq('id', workoutId)
-    .single();
-  console.log('[useLogger] recalcCalories: calories_burned saved to DB:', updated?.calories_burned);
-
-  return calories;
+  const { data, error } = await supabase.rpc('calculate_workout_calories', {
+    p_workout_id: workoutId,
+    p_weight_kg:  weightKg ?? 80,
+  });
+  if (error) { console.error('[calories] RPC error:', error); return null; }
+  console.log('[calories] sets-based result from DB:', data);
+  return data;
 }
 
 // ─── Hook ──────────────────────────────────────────────────────────────────

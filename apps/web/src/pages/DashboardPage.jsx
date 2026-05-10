@@ -363,24 +363,22 @@ export default function Dashboard() {
                   <Sk className="h-8 w-20 mb-1" />
                   <Sk className="h-3 w-28" />
                 </>
-              ) : consumed.mealsLogged === 0 ? (
-                <>
-                  <div className="font-anton text-3xl tabular-nums text-stone-500">{fmt0(targets.kcal)}</div>
-                  <div className="text-[10px] font-mono text-stone-600 mt-0.5 tabular-nums">
-                    0 / {fmt0(targets.kcal)} kcal
-                  </div>
-                </>
               ) : (
                 <>
-                  <div className="font-anton text-3xl tabular-nums text-orange-300">{fmt0(remaining)}</div>
-                  <div className="text-[10px] font-mono tabular-nums text-stone-500 mt-0.5">
-                    {fmt0(consumed.kcal)} / {fmt0(targets.kcal)}
+                  <div className={`font-anton text-3xl tabular-nums ${consumed.mealsLogged === 0 ? 'text-stone-500' : 'text-orange-300'}`}>
+                    {fmt0(remaining)}
                   </div>
                   {eatBackCalories && calsBurned ? (
                     <div className="text-[10px] font-mono text-orange-400 mt-0.5 tabular-nums">
-                      {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned
+                      {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} avail
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="text-[10px] font-mono text-stone-600 mt-0.5 tabular-nums">
+                      {consumed.mealsLogged > 0
+                        ? `${fmt0(consumed.kcal)} / ${fmt0(targets.kcal)} kcal`
+                        : `${fmt0(targets.kcal)} kcal target`}
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -552,13 +550,18 @@ export default function Dashboard() {
                     <MiniCalorieRing consumed={0} target={targets.kcal} />
                     <div className="flex-1 min-w-0">
                       <div className="font-anton text-2xl tabular-nums text-stone-600 leading-none">{fmt0(targets.kcal)}</div>
-                      <div className="text-[10px] uppercase tracking-wider text-stone-600 font-mono mt-1">kcal remaining</div>
-                      <div className="text-[10px] font-mono text-stone-700 mt-2">no meals logged yet</div>
+                      {eatBackCalories && calsBurned ? (
+                        <div className="text-[10px] font-mono text-orange-400 mt-1 tabular-nums">
+                          {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} avail
+                        </div>
+                      ) : (
+                        <div className="text-[10px] uppercase tracking-wider text-stone-600 font-mono mt-1">kcal target</div>
+                      )}
                     </div>
                   </div>
                   <div className="flex-1 flex items-center justify-center py-4">
                     <p className="text-xs font-mono text-stone-600 text-center">
-                      Log your first meal today.<br />
+                      No meals logged yet.<br />
                       <span className="text-stone-700">Use the Sentinel scanner or manual entry.</span>
                     </p>
                   </div>
@@ -580,9 +583,15 @@ export default function Dashboard() {
                     <div className="flex-1 min-w-0">
                       <div className="font-anton text-2xl tabular-nums text-orange-300 leading-none">{fmt0(remaining)}</div>
                       <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mt-1">kcal remaining</div>
-                      <div className="text-[10px] font-mono tabular-nums text-stone-600 mt-2">
-                        {consumed.mealsLogged} meal{consumed.mealsLogged !== 1 ? 's' : ''} logged
-                      </div>
+                      {eatBackCalories && calsBurned ? (
+                        <div className="text-[10px] font-mono text-orange-400 mt-1 tabular-nums">
+                          {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} avail
+                        </div>
+                      ) : (
+                        <div className="text-[10px] font-mono tabular-nums text-stone-600 mt-2">
+                          {consumed.mealsLogged} meal{consumed.mealsLogged !== 1 ? 's' : ''} logged
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-2.5 flex-1">
