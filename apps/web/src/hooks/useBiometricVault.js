@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useProfileStore } from '../store/useProfileStore';
 
 function linearRegression(values) {
   const n = values.length;
@@ -31,6 +32,7 @@ export function useBiometricVault(userId, goalWeightKg) {
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(null);
   const [saving, setSaving]         = useState(false);
+  const updateProfile = useProfileStore(s => s.updateProfile);
 
   const todayStr = toDateStr(new Date());
 
@@ -126,8 +128,16 @@ export function useBiometricVault(userId, goalWeightKg) {
     setSaving(false);
     if (error) return { error: error.message };
     await fetchEntries();
+    // Increment streak for today's log
+    await supabase.rpc('update_streak', { p_user_id: userId });
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('current_streak, longest_streak, last_logged_date')
+      .eq('id', userId)
+      .single();
+    if (prof) updateProfile(prof);
     return { success: true };
-  }, [userId, todayStr, fetchEntries]);
+  }, [userId, todayStr, fetchEntries, updateProfile]);
 
   return {
     rawEntries,

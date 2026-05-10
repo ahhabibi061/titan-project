@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useSession } from '../hooks/useSession';
 import { useDashboard } from '../hooks/useDashboard';
+import { useProfileStore } from '../store/useProfileStore';
+import { useCheckin } from '../hooks/useCheckin';
+import { CheckinModal } from '../components/CheckinModal';
 
 const NAV_MODULES = [
   { id: 'home',       label: 'Home',       path: '/dashboard'  },
@@ -184,11 +187,32 @@ function WeeklyGrid({ days }) {
 }
 
 // -------------------- MAIN --------------------
+function getCheckinBannerVisible() {
+  try {
+    const until = localStorage.getItem('checkin_suppress_until');
+    if (!until) return true;
+    return new Date() > new Date(until);
+  } catch { return true; }
+}
+
 export default function Dashboard() {
   const { user } = useSession();
   const { data, loading } = useDashboard(user?.id);
+  const zustandProfile = useProfileStore(s => s.profile);
   const [searchParams, setSearchParams] = useSearchParams();
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(searchParams.get('upgraded') === 'true');
+  const [showCheckinBanner, setShowCheckinBanner] = useState(getCheckinBannerVisible);
+  const [showCheckinModal, setShowCheckinModal]   = useState(false);
+  const checkin = useCheckin(user?.id);
+
+  const isSunday = new Date().getDay() === 0;
+
+  function dismissCheckinBanner() {
+    const until = new Date();
+    until.setDate(until.getDate() + 7);
+    localStorage.setItem('checkin_suppress_until', until.toISOString());
+    setShowCheckinBanner(false);
+  }
 
   useEffect(() => {
     if (showUpgradeBanner) setSearchParams({}, { replace: true });
@@ -213,11 +237,13 @@ export default function Dashboard() {
   const completedDays    = weeklyAdherence.filter(d => d.workout === true).length;
   const totalWorkoutDays = weeklyAdherence.filter(d => !d.rest && !d.future).length;
 
-  const displayName = profile?.display_name || 'Athlete';
-  const initials    = (displayName[0] ?? 'A').toUpperCase();
-  const tier        = profile?.subscription_tier ?? 'basic';
-  const tierLabel   = tier.toUpperCase();
-  const goalLabel   = profile?.goal ? `goal: ${profile.goal}` : 'loading';
+  const displayName   = profile?.display_name || 'Athlete';
+  const initials      = (displayName[0] ?? 'A').toUpperCase();
+  const tier          = profile?.subscription_tier ?? 'basic';
+  const tierLabel     = tier.toUpperCase();
+  const goalLabel     = profile?.goal ? `goal: ${profile.goal}` : 'loading';
+  // Use Zustand profile for real-time streak updates (set by useBiometricVault after each log)
+  const currentStreak = zustandProfile?.current_streak ?? weeklyStats.streak ?? 0;
 
   return (
     <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
@@ -263,9 +289,8 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <span className="hidden sm:flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-stone-500 font-mono">
-                <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
-                {loading ? '—' : `${weeklyStats.streak}d streak`}
+              <span className={`hidden sm:flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-mono ${currentStreak >= 7 ? 'text-amber-400' : 'text-stone-500'}`}>
+                🔥 {loading ? '—' : `${currentStreak}d streak`}
               </span>
               <span className="text-[10px] uppercase tracking-wider px-2 py-1 bg-orange-500/15 text-orange-300 border border-orange-500/30 font-mono">
                 {loading ? '…' : tierLabel}
@@ -307,6 +332,33 @@ export default function Dashboard() {
               >
                 Dismiss
               </button>
+            </div>
+          )}
+
+          {/* SUNDAY CHECK-IN BANNER */}
+          {isSunday && showCheckinBanner && !loading && (
+            <div className="relative mb-8 border border-orange-500/40 bg-orange-500/5 px-6 py-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <span className="text-3xl shrink-0">📋</span>
+                <div>
+                  <div className="font-anton text-xl uppercase tracking-tight text-stone-100">Weekly Check-In</div>
+                  <div className="text-sm text-stone-400 font-mono mt-0.5">How was your week? Rate mood, energy, and sleep quality.</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  onClick={() => setShowCheckinModal(true)}
+                  className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors"
+                >
+                  Start →
+                </button>
+                <button
+                  onClick={dismissCheckinBanner}
+                  className="text-stone-600 hover:text-stone-300 font-mono text-xs uppercase tracking-wider transition-colors"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
           )}
 
@@ -422,11 +474,16 @@ export default function Dashboard() {
                 </>
               ) : (
                 <>
-                  <div className="font-anton text-3xl tabular-nums text-stone-100">
-                    {weeklyStats.streak}<span className="text-stone-500 text-lg ml-1">days</span>
+                  <div className={`font-anton text-3xl tabular-nums flex items-baseline gap-1.5 flex-wrap ${currentStreak >= 7 ? 'text-amber-400' : 'text-stone-100'}`}>
+                    <span>🔥</span>
+                    {currentStreak}
+                    <span className="text-stone-500 text-lg">days</span>
+                    {currentStreak >= 30 && (
+                      <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 font-mono uppercase tracking-wider">ELITE</span>
+                    )}
                   </div>
                   <div className="text-[10px] font-mono uppercase tracking-wider text-stone-500 mt-0.5">
-                    {weeklyStats.streak === 0 ? 'start your streak today' : 'keep going'}
+                    {currentStreak === 0 ? 'Start your streak — log today' : 'keep going'}
                   </div>
                 </>
               )}
@@ -834,6 +891,19 @@ export default function Dashboard() {
           </footer>
         </div>
       </div>
+
+      {showCheckinModal && (
+        <CheckinModal
+          onClose={() => setShowCheckinModal(false)}
+          onSave={async (payload) => {
+            const result = await checkin.submitCheckin(payload);
+            if (result?.success) dismissCheckinBanner();
+            return result;
+          }}
+          saving={checkin.saving}
+          todayCheckin={checkin.todayCheckin}
+        />
+      )}
     </div>
   );
 }
