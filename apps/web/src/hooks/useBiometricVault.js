@@ -43,7 +43,7 @@ export function useBiometricVault(userId, goalWeightKg) {
     since.setDate(since.getDate() - 89);
     const { data, error } = await supabase
       .from('biometric_entries')
-      .select('id, logged_at, weight_kg, body_fat_pct, notes')
+      .select('id, logged_at, weight_kg, body_fat_pct, notes, photo_front_url, photo_side_url, photo_back_url')
       .eq('user_id', userId)
       .gte('logged_at', toDateStr(since))
       .order('logged_at', { ascending: true });

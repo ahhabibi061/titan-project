@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import AppNav from '../components/AppNav';
 import { CheckinModal } from '../components/CheckinModal';
 import { useSession } from '../hooks/useSession';
 import { useProfileStore } from '../store/useProfileStore';
 import { useBiometricVault } from '../hooks/useBiometricVault';
 import { useCheckin } from '../hooks/useCheckin';
+import { useProgressPhotos } from '../hooks/useProgressPhotos';
 
 const FONT_STYLE = `
   @import url('https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap');
@@ -261,32 +263,254 @@ function BodyComposition({ compEntries, unit }) {
   );
 }
 
-// -------------------- PHOTO PLACEHOLDER --------------------
-function PhotoPlaceholder() {
+// -------------------- UPLOAD ZONE --------------------
+function UploadZone({ angle, signedUrl, uploading, error, onUpload, onDelete }) {
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [localPreview, setLocalPreview]   = useState(null);
+  const inputRef = useRef(null);
+  const label = angle.charAt(0).toUpperCase() + angle.slice(1);
+
+  function handleFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLocalPreview(URL.createObjectURL(file));
+    onUpload(file).then(result => { if (result?.error) setLocalPreview(null); });
+    e.target.value = '';
+  }
+
+  useEffect(() => { if (signedUrl) setLocalPreview(null); }, [signedUrl]);
+
+  const display = localPreview ?? signedUrl;
+
+  if (display) {
+    return (
+      <div className="relative aspect-[3/5] bg-stone-950 border border-stone-800/60 overflow-hidden group">
+        <img src={display} alt={label} className="w-full h-full object-cover" />
+        {uploading && (
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-stone-800">
+            <div className="h-full bg-orange-500 animate-pulse w-3/5" />
+          </div>
+        )}
+        {!uploading && !deleteConfirm && (
+          <button
+            onClick={() => setDeleteConfirm(true)}
+            className="absolute top-2 right-2 w-6 h-6 bg-stone-950/80 border border-stone-700 text-stone-400 hover:text-red-400 hover:border-red-500/40 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+          >×</button>
+        )}
+        {deleteConfirm && (
+          <div className="absolute inset-0 bg-stone-950/90 flex flex-col items-center justify-center gap-3 p-3">
+            <span className="text-[9px] font-mono text-stone-300 uppercase tracking-wider text-center leading-relaxed">Remove this photo?</span>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteConfirm(false)} className="px-3 py-1.5 border border-stone-700 text-stone-400 font-mono text-[9px] uppercase hover:border-stone-500 transition-colors">Cancel</button>
+              <button onClick={() => { setDeleteConfirm(false); setLocalPreview(null); onDelete(); }} className="px-3 py-1.5 bg-red-500/20 border border-red-500/40 text-red-400 font-mono text-[9px] uppercase hover:bg-red-500/30 transition-colors">Remove</button>
+            </div>
+          </div>
+        )}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-stone-950/80 to-transparent px-2 pb-2 pt-6 pointer-events-none">
+          <span className="text-[9px] uppercase tracking-wider font-mono text-stone-400">{label}</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="relative aspect-[3/5] border border-dashed border-stone-700 hover:border-orange-500/50 bg-stone-950/40 transition-colors cursor-pointer group"
+      onClick={() => !uploading && inputRef.current?.click()}
+    >
+      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleFile} disabled={uploading} />
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+        {uploading ? (
+          <>
+            <div className="w-8 h-8 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
+            <span className="text-[9px] uppercase tracking-wider font-mono text-orange-400">Uploading…</span>
+          </>
+        ) : (
+          <>
+            <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-stone-600 group-hover:text-orange-400 transition-colors" viewBox="0 0 24 24">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round"/>
+              <circle cx="12" cy="13" r="4" strokeLinecap="round"/>
+            </svg>
+            <span className="text-[9px] uppercase tracking-wider font-mono text-stone-600">{label}</span>
+            <span className="text-[8px] font-mono text-stone-700">jpg · png · webp</span>
+          </>
+        )}
+      </div>
+      {uploading && (
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-stone-800">
+          <div className="h-full bg-orange-500 transition-all" style={{ width: '65%' }} />
+        </div>
+      )}
+      {error && (
+        <div className="absolute top-1 left-1 right-1 bg-red-500/20 text-red-400 text-[8px] font-mono px-1 py-0.5 text-center">{error}</div>
+      )}
+    </div>
+  );
+}
+
+// -------------------- PROGRESS PHOTO SECTION --------------------
+function ProgressPhotoSection({ progressPhotos, date, isPro }) {
+  const [photos, setPhotos] = useState({ front: null, side: null, back: null });
+
+  useEffect(() => {
+    if (!isPro || !date) return;
+    progressPhotos.getPhotosForDate(date).then(result => setPhotos(result));
+  }, [date, isPro]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleUpload(file, angle) {
+    const result = await progressPhotos.uploadPhoto(file, angle, date);
+    if (result?.success) {
+      const url = await progressPhotos.getSignedUrl(result.path);
+      setPhotos(prev => ({ ...prev, [angle]: url }));
+    }
+    return result;
+  }
+
+  async function handleDelete(angle) {
+    await progressPhotos.deletePhoto(angle, date);
+    setPhotos(prev => ({ ...prev, [angle]: null }));
+  }
+
+  if (!isPro) {
+    return (
+      <div className="relative">
+        <div className="grid grid-cols-3 gap-4 opacity-20 pointer-events-none select-none">
+          {['front', 'side', 'back'].map(a => (
+            <div key={a} className="aspect-[3/5] border border-dashed border-stone-700 bg-stone-950/40 flex flex-col items-center justify-center gap-3">
+              <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-stone-600" viewBox="0 0 24 24">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="12" cy="13" r="4" strokeLinecap="round"/>
+              </svg>
+              <span className="text-[9px] uppercase tracking-wider font-mono text-stone-600">{a}</span>
+            </div>
+          ))}
+        </div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
+          <svg width="28" height="28" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-stone-500" viewBox="0 0 24 24">
+            <rect x="3" y="11" width="18" height="11" rx="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <div className="text-center">
+            <div className="font-anton text-base uppercase text-stone-200 mb-1">Pro Feature</div>
+            <div className="text-[10px] font-mono text-stone-500 mb-3">Progress photos require Pro or Elite</div>
+            <Link to="/settings" className="inline-block px-4 py-2 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors">
+              Upgrade to Pro →
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <div className="grid grid-cols-3 gap-4 mb-5">
-        {['Front', 'Side', 'Back'].map(pose => (
-          <div key={pose} className="border border-stone-800/60 bg-stone-950/40 p-3 flex flex-col items-center justify-center aspect-[3/5]">
-            <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-3">{pose}</div>
-            <div className="w-10 h-10 border border-dashed border-stone-700 flex items-center justify-center mb-3">
-              <span className="text-stone-700 text-lg">+</span>
-            </div>
-            <div className="text-[9px] text-stone-700 font-mono text-center leading-relaxed">Upload<br />photo</div>
-          </div>
+      <div className="grid grid-cols-3 gap-4 mb-3">
+        {['front', 'side', 'back'].map(angle => (
+          <UploadZone
+            key={angle}
+            angle={angle}
+            signedUrl={photos[angle]}
+            uploading={progressPhotos.uploading[angle] ?? false}
+            error={progressPhotos.errors[angle] ?? null}
+            onUpload={(file) => handleUpload(file, angle)}
+            onDelete={() => handleDelete(angle)}
+          />
         ))}
       </div>
-      <div className="flex items-center gap-2 px-4 py-3 border border-stone-800/40 bg-stone-900/20">
-        <span className="text-[9px] uppercase tracking-wider font-mono text-stone-600">Pro feature</span>
-        <span className="text-stone-700">·</span>
-        <span className="text-[10px] font-mono text-stone-500">Photo upload coming soon — progress photos stored encrypted with signed-URL access</span>
+      <div className="text-[9px] font-mono text-stone-700 uppercase tracking-wider">
+        jpeg · png · webp · max 10MB · signed URLs expire in 1hr
       </div>
     </div>
   );
 }
 
+// -------------------- PHOTO COMPARISON --------------------
+function PhotoComparison({ progressPhotos, photoEntries, isPro }) {
+  const angles = ['front', 'side', 'back'];
+  const [activeAngle, setActiveAngle] = useState('front');
+  const [beforeDate, setBeforeDate]   = useState(photoEntries[0]?.logged_at ?? '');
+  const [afterDate, setAfterDate]     = useState(photoEntries[photoEntries.length - 1]?.logged_at ?? '');
+  const [beforeUrls, setBeforeUrls]   = useState({ front: null, side: null, back: null });
+  const [afterUrls, setAfterUrls]     = useState({ front: null, side: null, back: null });
+  const [loading, setLoading]         = useState(false);
+
+  useEffect(() => {
+    if (!isPro || (!beforeDate && !afterDate)) return;
+    setLoading(true);
+    progressPhotos.getComparisonPhotos(beforeDate || null, afterDate || null).then(({ before, after }) => {
+      setBeforeUrls(before);
+      setAfterUrls(after);
+      setLoading(false);
+    });
+  }, [beforeDate, afterDate, isPro]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!isPro) return null;
+
+  return (
+    <div className="border border-stone-800/60 bg-stone-950/40 p-6 mb-8">
+      <div className="flex items-baseline justify-between mb-5">
+        <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Before / After</h2>
+        <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">comparison view</span>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-4 mb-6">
+        <div>
+          <label className="block text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono mb-1.5">Before</label>
+          <input type="date" value={beforeDate} onChange={e => setBeforeDate(e.target.value)}
+            className="bg-stone-950/60 border border-stone-800 px-3 py-2 text-stone-300 font-mono text-xs focus:outline-none focus:border-orange-500/60 transition-colors" />
+        </div>
+        <div>
+          <label className="block text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono mb-1.5">After</label>
+          <input type="date" value={afterDate} onChange={e => setAfterDate(e.target.value)}
+            className="bg-stone-950/60 border border-stone-800 px-3 py-2 text-stone-300 font-mono text-xs focus:outline-none focus:border-orange-500/60 transition-colors" />
+        </div>
+        <div className="flex border border-stone-800">
+          {angles.map(a => (
+            <button key={a} onClick={() => setActiveAngle(a)}
+              className={`px-4 py-2 font-mono text-[9px] uppercase tracking-wider transition-colors ${activeAngle === a ? 'bg-orange-500 text-stone-950' : 'text-stone-500 hover:text-stone-300'}`}>
+              {a}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-2 gap-6">
+          {[0, 1].map(i => <div key={i} className="aspect-[3/5] bg-stone-800/40 animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-6">
+          {[{ label: 'Before', urls: beforeUrls }, { label: 'After', urls: afterUrls }].map(({ label, urls }) => (
+            <div key={label} className="flex flex-col border border-stone-800/60 bg-stone-950">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-stone-800/60 shrink-0">
+                <span className="font-anton text-sm uppercase text-stone-300">{label}</span>
+                <span className="text-[9px] uppercase tracking-wider font-mono text-stone-600">{activeAngle}</span>
+              </div>
+              <div className="flex-1 aspect-[3/5]">
+                {urls[activeAngle] ? (
+                  <img src={urls[activeAngle]} alt={`${label} ${activeAngle}`} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-stone-700 font-mono text-[10px] uppercase tracking-wider">
+                    No photo
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {photoEntries.length < 2 && (
+        <div className="mt-5 text-center text-[10px] font-mono text-stone-600 uppercase tracking-wider">
+          Upload photos on at least two different dates to use comparison
+        </div>
+      )}
+    </div>
+  );
+}
+
 // -------------------- ENTRY MODAL --------------------
-function EntryModal({ mode, initialEntry, rawEntries, onClose, onSave, unit, saving }) {
+function EntryModal({ mode, initialEntry, rawEntries, onClose, onSave, unit, saving, getPhotosForDate, isPro }) {
   const fixedDate = mode === 'today' ? todayLocalStr
     : mode === 'edit'  ? (initialEntry?.logged_at ?? todayLocalStr)
     : null;
@@ -297,10 +521,16 @@ function EntryModal({ mode, initialEntry, rawEntries, onClose, onSave, unit, sav
   const pastRow   = mode === 'past' ? (rawEntries.find(r => r.logged_at === selectedDate) ?? null) : null;
   const sourceRow = mode === 'past' ? pastRow : initialEntry;
 
-  const [weight, setWeight] = useState(sourceRow ? String(toDisplay(sourceRow.weight_kg, unit)) : '');
-  const [bf, setBf]         = useState(sourceRow?.body_fat_pct != null ? String(sourceRow.body_fat_pct) : '');
-  const [notes, setNotes]   = useState(sourceRow?.notes ?? '');
-  const [err, setErr]       = useState('');
+  const [weight, setWeight]     = useState(sourceRow ? String(toDisplay(sourceRow.weight_kg, unit)) : '');
+  const [bf, setBf]             = useState(sourceRow?.body_fat_pct != null ? String(sourceRow.body_fat_pct) : '');
+  const [notes, setNotes]       = useState(sourceRow?.notes ?? '');
+  const [err, setErr]           = useState('');
+  const [editPhotos, setEditPhotos] = useState({ front: null, side: null, back: null });
+
+  useEffect(() => {
+    if (mode !== 'edit' || !getPhotosForDate || !initialEntry?.logged_at) return;
+    getPhotosForDate(initialEntry.logged_at).then(result => setEditPhotos(result));
+  }, [mode, initialEntry?.logged_at]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (mode !== 'past') return;
@@ -362,6 +592,22 @@ function EntryModal({ mode, initialEntry, rawEntries, onClose, onSave, unit, sav
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Heavy sodium day, refeed…"
             className="w-full bg-stone-950/60 border border-stone-800 px-4 py-3 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors resize-none" />
         </div>
+        {mode === 'edit' && isPro && (editPhotos.front || editPhotos.side || editPhotos.back) && (
+          <div>
+            <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-2">Photos</div>
+            <div className="grid grid-cols-3 gap-2">
+              {['front', 'side', 'back'].map(angle => (
+                editPhotos[angle] ? (
+                  <img key={angle} src={editPhotos[angle]} alt={angle} className="aspect-[3/5] w-full object-cover border border-stone-800/60" />
+                ) : (
+                  <div key={angle} className="aspect-[3/5] border border-dashed border-stone-800/40 bg-stone-950/40 flex items-center justify-center">
+                    <span className="text-[9px] font-mono text-stone-700 uppercase">{angle}</span>
+                  </div>
+                )
+              ))}
+            </div>
+          </div>
+        )}
         {err && <div className="text-red-400 font-mono text-xs">{err}</div>}
         <div className="flex gap-3 pt-1">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-200 transition-colors">Cancel</button>
@@ -546,8 +792,13 @@ export default function BiometricVault() {
   const currentStreak  = profile?.current_streak  ?? 0;
   const longestStreak  = profile?.longest_streak  ?? 0;
 
-  const vault   = useBiometricVault(userId, goalWeightKg);
-  const checkin = useCheckin(userId);
+  const vault          = useBiometricVault(userId, goalWeightKg);
+  const checkin        = useCheckin(userId);
+  const progressPhotos = useProgressPhotos(userId);
+
+  const tier  = profile?.subscription_tier ?? 'basic';
+  const isPro = tier === 'pro' || tier === 'elite';
+  const photoEntries = vault.rawEntries.filter(e => e.photo_front_url || e.photo_side_url || e.photo_back_url);
 
   const [modalState, setModalState]     = useState(null);
   const [showCheckin, setShowCheckin]   = useState(false);
@@ -616,7 +867,7 @@ export default function BiometricVault() {
             </div>
           </div>
         </div>
-        {modalState && <EntryModal mode={modalState.mode} initialEntry={modalState.entry} rawEntries={vault.rawEntries} onClose={closeModal} onSave={vault.logEntry} unit={unit} saving={vault.saving} />}
+        {modalState && <EntryModal mode={modalState.mode} initialEntry={modalState.entry} rawEntries={vault.rawEntries} onClose={closeModal} onSave={vault.logEntry} unit={unit} saving={vault.saving} getPhotosForDate={progressPhotos.getPhotosForDate} isPro={isPro} />}
       </div>
     );
   }
@@ -709,6 +960,9 @@ export default function BiometricVault() {
             />
           </div>
         </div>
+
+        {/* BEFORE / AFTER COMPARISON */}
+        <PhotoComparison progressPhotos={progressPhotos} photoEntries={photoEntries} isPro={isPro} />
 
         {/* HEADLINE PROJECTION */}
         {projection?.date && !needsMoreData && (
@@ -808,7 +1062,7 @@ export default function BiometricVault() {
             <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Visual Progress</h2>
             <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">private · encrypted at rest</span>
           </div>
-          <PhotoPlaceholder />
+          <ProgressPhotoSection progressPhotos={progressPhotos} date={todayLocalStr} isPro={isPro} />
         </div>
 
         {/* CHECK-IN HISTORY */}
@@ -841,6 +1095,8 @@ export default function BiometricVault() {
           onSave={vault.logEntry}
           unit={unit}
           saving={vault.saving}
+          getPhotosForDate={progressPhotos.getPhotosForDate}
+          isPro={isPro}
         />
       )}
       {showCheckin && (
