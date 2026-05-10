@@ -5,6 +5,7 @@ import { useDashboard } from '../hooks/useDashboard';
 import { useProfileStore } from '../store/useProfileStore';
 import { useCheckin } from '../hooks/useCheckin';
 import { CheckinModal } from '../components/CheckinModal';
+import { supabase } from '../lib/supabase';
 
 const NAV_MODULES = [
   { id: 'home',       label: 'Home',       path: '/dashboard'  },
@@ -204,6 +205,7 @@ export default function Dashboard() {
   const [showCheckinBanner, setShowCheckinBanner] = useState(getCheckinBannerVisible);
   const [showCheckinModal, setShowCheckinModal]   = useState(false);
   const checkin = useCheckin(user?.id);
+  const [plateauAlerts, setPlateauAlerts] = useState([]);
 
   const isSunday = new Date().getDay() === 0;
 
@@ -217,6 +219,39 @@ export default function Dashboard() {
   useEffect(() => {
     if (showUpgradeBanner) setSearchParams({}, { replace: true });
   }, []);
+
+  // Load plateau alerts from recent workouts (last 7 days)
+  useEffect(() => {
+    if (!user?.id) return;
+    const since = new Date();
+    since.setDate(since.getDate() - 7);
+    supabase
+      .from('workouts')
+      .select('id')
+      .eq('user_id', user.id)
+      .not('completed_at', 'is', null)
+      .gte('completed_at', since.toISOString())
+      .then(async ({ data: recentWorkouts }) => {
+        if (!recentWorkouts?.length) return;
+        const ids = recentWorkouts.map(w => w.id);
+        const { data: plateaued } = await supabase
+          .from('workout_exercises')
+          .select('exercise_id, exercises(name)')
+          .in('workout_id', ids)
+          .eq('plateaued', true);
+        if (plateaued?.length) {
+          const seen = new Set();
+          const alerts = [];
+          for (const we of plateaued) {
+            if (!seen.has(we.exercise_id)) {
+              seen.add(we.exercise_id);
+              alerts.push({ exerciseId: we.exercise_id, exerciseName: we.exercises?.name ?? we.exercise_id });
+            }
+          }
+          setPlateauAlerts(alerts);
+        }
+      });
+  }, [user?.id]);
 
   // Safe derived values — work in both loading and loaded states
   const profile        = data?.profile        ?? {};
@@ -515,6 +550,31 @@ export default function Dashboard() {
               >
                 Review →
               </Link>
+            </div>
+          )}
+
+          {/* PLATEAU ALERT */}
+          {!loading && plateauAlerts.length > 0 && (
+            <div className="mb-8 space-y-2">
+              {plateauAlerts.map((p, i) => (
+                <div key={i} className="border border-orange-500/40 bg-orange-500/5 p-4 flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl shrink-0">⚠</span>
+                    <div>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-[9px] uppercase tracking-[0.2em] text-orange-400 font-mono">Plateau Detected</span>
+                      </div>
+                      <div className="font-anton text-lg uppercase tracking-tight text-stone-100">
+                        Your {p.exerciseName} hasn't improved in 3 sessions
+                      </div>
+                      <div className="text-xs text-stone-500 font-mono mt-0.5">Consider a deload, form check, or variation</div>
+                    </div>
+                  </div>
+                  <Link to="/exercises" className="shrink-0 px-4 py-2 border border-stone-700 text-stone-400 font-mono text-[10px] uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors no-underline">
+                    Find Variations →
+                  </Link>
+                </div>
+              ))}
             </div>
           )}
 

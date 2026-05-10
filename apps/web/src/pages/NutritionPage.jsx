@@ -3,6 +3,9 @@ import { useSession } from '../hooks/useSession';
 import { useSentinel } from '../hooks/useSentinel';
 import { FoodSearch } from '../components/FoodSearch';
 import AppNav from '../components/AppNav';
+import { useProfileStore } from '../store/useProfileStore';
+import { useMealTemplates } from '../hooks/useMealTemplates';
+import { useWaterTracker } from '../hooks/useWaterTracker';
 
 /* =========================================================================
  * SENTINEL — Module 1
@@ -305,7 +308,7 @@ function MacroBar({ label, consumed, target, color }) {
 }
 
 // -------------------- MEAL ENTRY --------------------
-function MealEntry({ meal, onDelete }) {
+function MealEntry({ meal, onDelete, onSaveTemplate }) {
   const [confirming, setConfirming] = useState(false);
   const time = new Date(meal.logged_at).toLocaleTimeString('en-US', {
     hour: '2-digit', minute: '2-digit', hour12: false,
@@ -355,15 +358,27 @@ function MealEntry({ meal, onDelete }) {
           </button>
         </div>
       ) : (
-        <button
-          onClick={() => setConfirming(true)}
-          className="shrink-0 text-stone-700 hover:text-stone-400 transition-colors p-1"
-          aria-label="Delete meal"
-        >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M2 3.5h10M5.5 3.5V2.5h3v1M11 3.5l-.75 8.5H3.75L3 3.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => onSaveTemplate(meal)}
+            className="shrink-0 text-stone-700 hover:text-amber-400 transition-colors p-1"
+            aria-label="Save as template"
+            title="Save as template"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M3 1h8v12L7 9.5 3 13V1z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setConfirming(true)}
+            className="shrink-0 text-stone-700 hover:text-stone-400 transition-colors p-1"
+            aria-label="Delete meal"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M2 3.5h10M5.5 3.5V2.5h3v1M11 3.5l-.75 8.5H3.75L3 3.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
       )}
     </div>
   );
@@ -371,6 +386,283 @@ function MealEntry({ meal, onDelete }) {
 
 // -------------------- ADD MEAL FORM --------------------
 // AddMealForm replaced by FoodSearch component (Open Food Facts + barcode)
+
+// -------------------- TEMPLATE PANEL --------------------
+function TemplatePanel({ templates, loading, onClose, onLog, onDelete, isPro }) {
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [toasting, setToasting]           = useState(false);
+
+  function handleLog(tmpl) {
+    onLog(tmpl);
+    setToasting(true);
+    setTimeout(() => setToasting(false), 1500);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-stone-950/80 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-[#0a0908] border-t border-stone-800 max-h-[80vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800">
+          <div>
+            <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">My Templates</h2>
+            <div className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono mt-0.5">sorted by most used</div>
+          </div>
+          <button onClick={onClose} className="text-stone-600 hover:text-stone-300 font-mono text-sm">✕</button>
+        </div>
+
+        {!isPro ? (
+          <div className="flex-1 flex items-center justify-center py-16 text-center px-6">
+            <div>
+              <div className="font-anton text-2xl uppercase text-stone-300 mb-2">Pro Feature</div>
+              <div className="text-[11px] font-mono text-stone-500 mb-4">Meal templates require a Pro or Elite subscription</div>
+              <a href="/settings" className="inline-block px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors">
+                Upgrade to Pro →
+              </a>
+            </div>
+          </div>
+        ) : loading ? (
+          <div className="flex-1 flex items-center justify-center py-12">
+            <div className="text-stone-600 font-mono text-xs uppercase tracking-wider">Loading…</div>
+          </div>
+        ) : templates.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center py-12 text-center px-6">
+            <div className="text-stone-600 font-mono text-xs uppercase tracking-wider leading-relaxed">
+              No templates yet<br />
+              <span className="text-stone-700">Save a meal to get started</span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto">
+            {templates.map(tmpl => (
+              <div key={tmpl.id} className="flex items-center gap-4 px-6 py-4 border-b border-stone-800/40 hover:bg-stone-900/40 transition-colors">
+                <button
+                  className="flex-1 text-left"
+                  onClick={() => handleLog(tmpl)}
+                >
+                  <div className="flex items-baseline gap-2 mb-0.5">
+                    <span className="text-stone-100 text-sm font-sans">{tmpl.name}</span>
+                    {tmpl.times_used > 0 && (
+                      <span className="text-[8px] font-mono text-stone-600 uppercase tracking-wider">{tmpl.times_used}×</span>
+                    )}
+                  </div>
+                  <div className="flex gap-3 text-[10px] font-mono tabular-nums text-stone-500">
+                    <span className="text-stone-400">{tmpl.kcal} kcal</span>
+                    <span>{tmpl.protein_g}g P</span>
+                    <span>{tmpl.carbs_g}g C</span>
+                    <span>{tmpl.fat_g}g F</span>
+                  </div>
+                </button>
+                {deleteConfirm === tmpl.id ? (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[9px] font-mono text-stone-500">Delete?</span>
+                    <button onClick={() => { onDelete(tmpl.id); setDeleteConfirm(null); }}
+                      className="text-[9px] font-mono px-2 py-1 border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-colors">Yes</button>
+                    <button onClick={() => setDeleteConfirm(null)}
+                      className="text-[9px] font-mono px-2 py-1 border border-stone-700 text-stone-500 hover:bg-stone-800 transition-colors">No</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setDeleteConfirm(tmpl.id)}
+                    className="shrink-0 text-stone-700 hover:text-red-400 transition-colors p-1">
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M2 3.5h10M5.5 3.5V2.5h3v1M11 3.5l-.75 8.5H3.75L3 3.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {toasting && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-stone-900/95 border border-orange-500/30 px-5 py-2.5 pointer-events-none">
+            <span className="text-orange-300 font-mono text-xs uppercase tracking-wider">Logged ✓</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -------------------- CONFIRM OVERWRITE MODAL --------------------
+function ConfirmOverwriteModal({ meal, onConfirm, onCancel }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-stone-950/90 flex items-center justify-center px-4">
+      <div className="w-full max-w-sm border border-stone-800 bg-[#0a0908] p-6 space-y-4">
+        <h2 className="font-anton text-xl uppercase tracking-tight text-stone-100">Update Template?</h2>
+        <p className="text-[11px] font-mono text-stone-400 leading-relaxed">
+          A template named <span className="text-stone-200">"{meal.name}"</span> already exists. Update it with the current values?
+        </p>
+        <div className="flex gap-3">
+          <button onClick={onCancel} className="flex-1 px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 transition-colors">Cancel</button>
+          <button onClick={onConfirm} className="flex-1 px-4 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors">Update</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -------------------- WATER TRACKER --------------------
+const ML_TO_OZ = 0.033814;
+function mlToDisplay(ml, unit) {
+  return unit === 'lbs' ? +(ml * ML_TO_OZ).toFixed(1) : ml;
+}
+function displayLabel(unit) { return unit === 'lbs' ? 'fl oz' : 'ml'; }
+
+function WaterTracker({ water, weightUnit }) {
+  const [editingTarget, setEditingTarget] = useState(false);
+  const [targetInput, setTargetInput]     = useState('');
+  const [customInput, setCustomInput]     = useState('');
+  const [editingCustom, setEditingCustom] = useState(false);
+
+  const { totalMl, targetMl, loading, addWater, setTarget } = water;
+  const pct = Math.min(totalMl / Math.max(targetMl, 1), 1.0);
+
+  const barColor = pct >= 1.0
+    ? '#4ade80'
+    : pct >= 0.75
+    ? '#93c5fd'
+    : pct >= 0.50
+    ? '#60a5fa'
+    : '#a8a29e';
+
+  const unit   = weightUnit ?? 'kg';
+  const dispTotal  = mlToDisplay(totalMl, unit);
+  const dispTarget = mlToDisplay(targetMl, unit);
+  const lbl        = displayLabel(unit);
+
+  const quickAdds = [250, 500, 750, 1000];
+
+  function handleTargetSave() {
+    const val = parseFloat(targetInput);
+    const ml  = unit === 'lbs' ? Math.round(val / ML_TO_OZ) : Math.round(val);
+    if (ml >= 500 && ml <= 10000) setTarget(ml);
+    setEditingTarget(false);
+  }
+
+  function handleCustomAdd() {
+    const val = parseFloat(customInput);
+    const ml  = unit === 'lbs' ? Math.round(val / ML_TO_OZ) : Math.round(val);
+    if (ml > 0 && ml <= 5000) addWater(ml);
+    setCustomInput('');
+    setEditingCustom(false);
+  }
+
+  return (
+    <div className="border border-stone-800/60 bg-stone-950/40 p-6 mb-8">
+      <div className="flex items-baseline justify-between mb-5">
+        <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Water Intake</h2>
+        <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">resets at midnight</span>
+      </div>
+
+      <div className="flex items-center gap-6 mb-5">
+        {/* Drop icon */}
+        <svg width="40" height="52" viewBox="0 0 40 52" fill="none" className="shrink-0">
+          <path d="M20 4 C20 4 4 22 4 34 C4 44.5 11.2 50 20 50 C28.8 50 36 44.5 36 34 C36 22 20 4 20 4Z"
+            fill={pct >= 1.0 ? '#4ade80' : pct >= 0.75 ? '#93c5fd' : pct >= 0.5 ? '#60a5fa' : '#60a5fa'}
+            opacity={0.15 + pct * 0.6}
+            stroke={pct >= 1.0 ? '#4ade80' : '#60a5fa'}
+            strokeWidth="1.5"
+          />
+          <clipPath id="water-clip">
+            <path d="M20 4 C20 4 4 22 4 34 C4 44.5 11.2 50 20 50 C28.8 50 36 44.5 36 34 C36 22 20 4 20 4Z" />
+          </clipPath>
+          <rect x="4" y={50 - (46 * pct)} width="32" height={46 * pct} fill={barColor} opacity="0.5" clipPath="url(#water-clip)" />
+        </svg>
+
+        {/* Current / Target */}
+        <div className="flex-1">
+          <div className="flex items-baseline gap-2 mb-1">
+            <button
+              className="font-anton text-4xl tabular-nums text-blue-300 hover:text-blue-200 transition-colors"
+              onClick={() => setEditingCustom(true)}
+              title="Tap to enter custom amount"
+            >
+              {loading ? '—' : dispTotal.toLocaleString()}
+            </button>
+            <span className="text-stone-500 font-mono text-base">/ </span>
+            <button
+              className="font-anton text-2xl tabular-nums text-stone-500 hover:text-stone-300 transition-colors"
+              onClick={() => { setTargetInput(String(dispTarget)); setEditingTarget(true); }}
+              title="Tap to edit target"
+            >
+              {dispTarget.toLocaleString()}
+            </button>
+            <span className="text-stone-600 font-mono text-sm">{lbl}</span>
+          </div>
+          {/* Progress bar */}
+          <div className="relative h-2 bg-stone-900 rounded-full overflow-hidden mb-1">
+            <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-500" style={{ width: `${Math.min(pct, 1) * 100}%`, backgroundColor: barColor }} />
+          </div>
+          <div className="font-mono text-[10px] text-stone-500 uppercase tracking-wider">
+            {pct >= 1.0
+              ? <span className="text-green-400">Goal reached! 💧</span>
+              : `${Math.round(pct * 100)}% of daily goal`}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick add buttons */}
+      <div className="flex gap-2 flex-wrap">
+        {quickAdds.map(ml => {
+          const display = unit === 'lbs' ? `+${(ml * ML_TO_OZ).toFixed(0)}oz` : `+${ml}ml`;
+          return (
+            <button
+              key={ml}
+              onClick={() => addWater(ml)}
+              className="px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-[11px] uppercase tracking-wider hover:border-blue-500/60 hover:text-blue-300 hover:bg-blue-500/5 transition-colors"
+            >
+              {display}
+            </button>
+          );
+        })}
+        <button
+          onClick={() => setEditingCustom(true)}
+          className="px-4 py-2.5 border border-dashed border-stone-700 text-stone-600 font-mono text-[11px] uppercase tracking-wider hover:border-stone-500 hover:text-stone-400 transition-colors"
+        >
+          Custom
+        </button>
+      </div>
+
+      {/* Custom amount input */}
+      {editingCustom && (
+        <div className="mt-4 flex items-center gap-2">
+          <input
+            type="number"
+            autoFocus
+            value={customInput}
+            onChange={e => setCustomInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleCustomAdd()}
+            placeholder={unit === 'lbs' ? 'fl oz' : 'ml'}
+            className="w-32 bg-stone-950/60 border border-stone-800 px-3 py-2 text-stone-100 font-mono text-sm focus:outline-none focus:border-blue-500/60 transition-colors"
+          />
+          <span className="text-stone-600 font-mono text-xs">{lbl}</span>
+          <button onClick={handleCustomAdd} className="px-4 py-2 bg-blue-600 text-stone-950 font-anton text-sm uppercase hover:bg-blue-500 transition-colors">Add</button>
+          <button onClick={() => { setEditingCustom(false); setCustomInput(''); }} className="text-stone-600 font-mono text-xs hover:text-stone-400 transition-colors">Cancel</button>
+        </div>
+      )}
+
+      {/* Edit target inline */}
+      {editingTarget && (
+        <div className="mt-4 flex items-center gap-2">
+          <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider">Daily target:</span>
+          <input
+            type="number"
+            autoFocus
+            value={targetInput}
+            onChange={e => setTargetInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleTargetSave()}
+            className="w-28 bg-stone-950/60 border border-stone-800 px-3 py-2 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors"
+          />
+          <span className="text-stone-600 font-mono text-xs">{lbl}</span>
+          <button onClick={handleTargetSave} className="px-4 py-2 bg-orange-500 text-stone-950 font-anton text-sm uppercase hover:bg-orange-400 transition-colors">Save</button>
+          <button onClick={() => setEditingTarget(false)} className="text-stone-600 font-mono text-xs hover:text-stone-400 transition-colors">Cancel</button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // -------------------- MAIN --------------------
 export default function VisionNutrition() {
@@ -382,9 +674,18 @@ export default function VisionNutrition() {
     calsBurned, eatBackCalories,
   } = useSentinel(user?.id);
 
+  const profile      = useProfileStore(s => s.profile);
+  const isPro        = ['pro', 'elite'].includes(profile?.subscription_tier ?? '');
+  const weightUnit   = profile?.settings?.weight_unit ?? 'kg';
+  const mealTemplates = useMealTemplates(user?.id);
+  const water         = useWaterTracker(user?.id);
+
   const [scanState, setScanState] = useState('results');
   const [selectedId, setSelectedId] = useState('a');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showTemplates, setShowTemplates]     = useState(false);
+  const [overwriteMeal, setOverwriteMeal]     = useState(null); // meal awaiting overwrite confirm
+  const [saveToast, setSaveToast]             = useState(false);
 
   // Date helpers
   const todayMidnight = new Date();
@@ -459,6 +760,26 @@ export default function VisionNutrition() {
     setTimeout(() => setScanState('idle'), 1800);
   };
 
+  async function handleSaveTemplate(meal) {
+    const result = await mealTemplates.saveTemplate({
+      name: meal.name, kcal: meal.kcal,
+      protein_g: meal.protein_g, carbs_g: meal.carbs_g, fat_g: meal.fat_g,
+    });
+    if (result?.exists) { setOverwriteMeal({ ...meal, existingId: result.existingId }); return; }
+    if (result?.success) { setSaveToast(true); setTimeout(() => setSaveToast(false), 2000); }
+  }
+
+  async function handleOverwriteConfirm() {
+    if (!overwriteMeal) return;
+    await mealTemplates.updateTemplate(overwriteMeal.existingId, {
+      name: overwriteMeal.name, kcal: overwriteMeal.kcal,
+      protein_g: overwriteMeal.protein_g, carbs_g: overwriteMeal.carbs_g, fat_g: overwriteMeal.fat_g,
+    });
+    setOverwriteMeal(null);
+    setSaveToast(true);
+    setTimeout(() => setSaveToast(false), 2000);
+  }
+
   return (
     <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
       <style>{`
@@ -515,13 +836,21 @@ export default function VisionNutrition() {
               )}
             </div>
           </div>
-          <button
-            onClick={startScan}
-            disabled={scanState !== 'idle' && scanState !== 'results'}
-            className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-lg uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {scanState === 'idle' ? 'Scan Meal' : scanState === 'results' ? 'Re-scan' : 'Scanning…'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowTemplates(true)}
+              className="px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-sm uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
+            >
+              My Templates
+            </button>
+            <button
+              onClick={startScan}
+              disabled={scanState !== 'idle' && scanState !== 'results'}
+              className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-lg uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {scanState === 'idle' ? 'Scan Meal' : scanState === 'results' ? 'Re-scan' : 'Scanning…'}
+            </button>
+          </div>
         </header>
 
         {/* WORKOUT BURN BANNER — shown when today has a completed workout with calories_burned */}
@@ -681,12 +1010,15 @@ export default function VisionNutrition() {
             ) : (
               <div>
                 {meals.map(m => (
-                  <MealEntry key={m.id} meal={m} onDelete={deleteMeal} />
+                  <MealEntry key={m.id} meal={m} onDelete={deleteMeal} onSaveTemplate={handleSaveTemplate} />
                 ))}
               </div>
             )}
           </div>
         </div>
+
+        {/* WATER TRACKER */}
+        <WaterTracker water={water} weightUnit={weightUnit} />
 
         {/* SCAN SECTION */}
         <div className="border border-stone-800/60 bg-stone-950/40 mb-8">
@@ -788,6 +1120,34 @@ export default function VisionNutrition() {
           <span>Provider: LogMeal · Fallback: Bite AI · Manual: anytime</span>
         </footer>
       </div>
+
+      {/* TEMPLATE PANEL */}
+      {showTemplates && (
+        <TemplatePanel
+          templates={mealTemplates.templates}
+          loading={mealTemplates.loading}
+          onClose={() => setShowTemplates(false)}
+          onLog={tmpl => mealTemplates.logFromTemplate(tmpl, addMeal)}
+          onDelete={mealTemplates.deleteTemplate}
+          isPro={isPro}
+        />
+      )}
+
+      {/* CONFIRM OVERWRITE MODAL */}
+      {overwriteMeal && (
+        <ConfirmOverwriteModal
+          meal={overwriteMeal}
+          onConfirm={handleOverwriteConfirm}
+          onCancel={() => setOverwriteMeal(null)}
+        />
+      )}
+
+      {/* SAVE TOAST */}
+      {saveToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 border border-amber-500/30 px-5 py-2.5 backdrop-blur-sm pointer-events-none">
+          <span className="text-amber-300 font-mono text-xs uppercase tracking-wider">Saved as template ✓</span>
+        </div>
+      )}
     </div>
   );
 }

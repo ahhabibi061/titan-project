@@ -105,10 +105,12 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
   const workoutRef        = useRef(null);
   const userIdRef         = useRef(null);
   const weightKgRef       = useRef(userWeightKg);
+  const exercisesRef      = useRef([]);
 
   useEffect(() => { workoutRef.current  = workout;      }, [workout]);
   useEffect(() => { userIdRef.current   = userId;       }, [userId]);
   useEffect(() => { weightKgRef.current = userWeightKg; }, [userWeightKg]);
+  useEffect(() => { exercisesRef.current = exercises;   }, [exercises]);
 
   // userId === undefined  → session still resolving; stay loading
   // userId === null       → confirmed no session
@@ -215,6 +217,38 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
     );
     setExercises(adapted);
     console.log('[useLogger] loaded', adapted.length, 'exercises for workout');
+  }
+
+  // ── Plateau Detection ─────────────────────────────────────────────────────
+
+  async function runPlateauDetection(workoutId) {
+    const exList = exercisesRef.current;
+    const plateaued = [];
+    for (const we of exList) {
+      const { exerciseId } = we;
+      const currentBest = Math.max(0, ...we.sets.map(s => (Number(s.reps)||0) * (Number(s.weight)||0)));
+      if (currentBest === 0) continue;
+      try {
+        const { data } = await supabase
+          .from('workout_exercises')
+          .select('id, sets(weight_kg, reps), workouts!inner(completed_at, id)')
+          .eq('exercise_id', exerciseId)
+          .not('workouts.completed_at', 'is', null);
+        const prev = (data ?? [])
+          .filter(pw => pw.workouts?.id !== workoutId && pw.workouts?.completed_at)
+          .sort((a, b) => new Date(b.workouts.completed_at) - new Date(a.workouts.completed_at))
+          .slice(0, 3);
+        if (prev.length < 3) continue;
+        const prevBests = prev.map(pw => Math.max(0, ...(pw.sets ?? []).map(s => (s.reps ?? 0) * (s.weight_kg ?? 0))));
+        if (prevBests.every(pb => currentBest <= pb)) {
+          await supabase.from('workout_exercises').update({ plateaued: true }).eq('id', we.id);
+          plateaued.push({ exerciseId, exerciseName: we._ex?.name ?? exerciseId });
+        }
+      } catch (e) {
+        console.error('[useLogger] plateau detection error for', exerciseId, e);
+      }
+    }
+    return plateaued;
   }
 
   // ── Mutations ─────────────────────────────────────────────────────────────
@@ -473,7 +507,9 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
     console.log('[useLogger] workout saved ✓ calsBurned:', calsBurned);
     setWorkout(w => w ? { ...w, completed_at: now, calories_burned: calsBurned } : w);
     setCompleted(true);
-    return { success: true, calsBurned };
+
+    const plateaus = await runPlateauDetection(wId);
+    return { success: true, calsBurned, plateaus };
   }, []);
 
   const clearError = useCallback(() => setError(null), []);

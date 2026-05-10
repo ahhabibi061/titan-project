@@ -1,9 +1,11 @@
-﻿import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useSession } from '../hooks/useSession';
 import { useLogger } from '../hooks/useLogger';
 import { useProfileStore } from '../store/useProfileStore';
 import { useBodyMap } from '../hooks/useBodyMap';
+import { useWorkoutTemplates } from '../hooks/useWorkoutTemplates';
+import { supabase } from '../lib/supabase';
 
 /* =========================================================================
  * IRONLAB LOGGER — Module 3 Proof-of-Concept
@@ -197,10 +199,18 @@ function OverloadBadge({ status }) {
 }
 
 // -------------------- SET ROW --------------------
-function SetRow({ set, idx, onChange, onRemove, isLast }) {
+function SetRow({ set, idx, onChange, onRemove, isLast, onSetComplete }) {
+  const wasCompleteRef = useRef(!!(Number(set.reps) > 0 && Number(set.weight) > 0));
   const status = overloadStatus(set);
   const vol = setVolume(set);
   const prevVol = setPrevVolume(set);
+
+  function handleChange(updated) {
+    const nowComplete = !!(Number(updated.reps) > 0 && Number(updated.weight) > 0);
+    if (nowComplete && !wasCompleteRef.current && onSetComplete) onSetComplete();
+    wasCompleteRef.current = nowComplete;
+    onChange(updated);
+  }
 
   return (
     <tr className="group transition-colors hover:bg-stone-900/40">
@@ -218,7 +228,7 @@ function SetRow({ set, idx, onChange, onRemove, isLast }) {
           type="number"
           inputMode="numeric"
           value={set.reps}
-          onChange={(e) => onChange({ ...set, reps: e.target.value === '' ? '' : Number(e.target.value) })}
+          onChange={(e) => handleChange({ ...set, reps: e.target.value === '' ? '' : Number(e.target.value) })}
           className="w-full bg-stone-950/60 border border-stone-800 px-2 py-1.5 text-stone-100 font-mono text-sm tabular-nums text-right focus:outline-none focus:border-orange-500/60 focus:bg-stone-950"
         />
       </td>
@@ -229,7 +239,7 @@ function SetRow({ set, idx, onChange, onRemove, isLast }) {
             inputMode="decimal"
             step="0.5"
             value={set.weight}
-            onChange={(e) => onChange({ ...set, weight: e.target.value === '' ? '' : Number(e.target.value) })}
+            onChange={(e) => handleChange({ ...set, weight: e.target.value === '' ? '' : Number(e.target.value) })}
             className="w-full bg-stone-950/60 border border-stone-800 px-2 py-1.5 pr-7 text-stone-100 font-mono text-sm tabular-nums text-right focus:outline-none focus:border-orange-500/60 focus:bg-stone-950"
           />
           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-600 font-mono pointer-events-none">kg</span>
@@ -254,7 +264,7 @@ function SetRow({ set, idx, onChange, onRemove, isLast }) {
 }
 
 // -------------------- EXERCISE CARD --------------------
-function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index }) {
+function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, onSetComplete }) {
   const totalVol = exerciseVolume(we);
 
   return (
@@ -323,6 +333,7 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index }) {
                   ...we,
                   sets: we.sets.filter(x => x.id !== s.id),
                 })}
+                onSetComplete={() => onSetComplete?.(we.exerciseId, exercise.name)}
               />
             ))}
           </tbody>
@@ -644,6 +655,203 @@ function Backdrop() {
   );
 }
 
+// -------------------- SAVE TEMPLATE MODAL --------------------
+const SPLIT_TYPES = ['PPL', 'Upper-Lower', 'Full Body', 'Custom'];
+
+function SaveTemplateModal({ workoutName, exercises, onSave, onClose, saving }) {
+  const [name, setName]           = useState(workoutName || '');
+  const [splitType, setSplitType] = useState('Custom');
+  return (
+    <div className="fixed inset-0 z-50 bg-stone-950/90 flex items-center justify-center px-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm border border-stone-800 bg-[#0a0908] p-6 space-y-5">
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Save Template</h2>
+          <button onClick={onClose} className="text-stone-600 hover:text-stone-300 font-mono text-xs">✕</button>
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-2">Template Name</label>
+          <input
+            autoFocus
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="w-full bg-stone-950/60 border border-stone-800 px-4 py-3 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-2">Split Type</label>
+          <div className="flex flex-wrap gap-2">
+            {SPLIT_TYPES.map(s => (
+              <button key={s} onClick={() => setSplitType(s)}
+                className={`px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider border transition-colors ${splitType === s ? 'border-orange-500/60 text-orange-300 bg-orange-500/10' : 'border-stone-700 text-stone-500 hover:text-stone-300'}`}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="text-[10px] font-mono text-stone-600 uppercase tracking-wider">
+          {exercises.length} exercise{exercises.length !== 1 ? 's' : ''}
+          {exercises.map(we => ` · ${we._ex?.name ?? we.exerciseId}`).join('')}
+        </div>
+        <div className="flex gap-3 pt-1">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 transition-colors">Cancel</button>
+          <button
+            onClick={() => onSave({ name: name.trim() || workoutName, splitType, exercises })}
+            disabled={saving || !name.trim()}
+            className="flex-1 px-4 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -------------------- LOAD TEMPLATE PICKER --------------------
+function LoadTemplatePicker({ templates, loading, onLoad, onClose, onDelete }) {
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-stone-950/80 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[#0a0908] border-t border-stone-800 max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800">
+          <div>
+            <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Load Template</h2>
+            <div className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono mt-0.5">select to pre-fill workout</div>
+          </div>
+          <button onClick={onClose} className="text-stone-600 hover:text-stone-300 font-mono text-sm">✕</button>
+        </div>
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center py-12">
+            <div className="text-stone-600 font-mono text-xs uppercase tracking-wider">Loading…</div>
+          </div>
+        ) : templates.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center py-12 text-center px-6">
+            <div className="text-stone-600 font-mono text-xs uppercase tracking-wider leading-relaxed">
+              No templates yet<br />
+              <span className="text-stone-700">Complete a workout and save it as a template</span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto">
+            {templates.map(tmpl => (
+              <div key={tmpl.id} className="flex items-center gap-4 px-6 py-4 border-b border-stone-800/40">
+                <button className="flex-1 text-left hover:bg-stone-900/40 -mx-2 px-2 py-1 transition-colors rounded" onClick={() => onLoad(tmpl)}>
+                  <div className="flex items-baseline gap-2 mb-0.5">
+                    <span className="font-anton text-lg uppercase text-stone-100">{tmpl.name}</span>
+                    {tmpl.split_type && <span className="text-[9px] font-mono text-stone-600 uppercase">{tmpl.split_type}</span>}
+                    {tmpl.times_used > 0 && <span className="text-[8px] font-mono text-stone-700">{tmpl.times_used}×</span>}
+                  </div>
+                  <div className="text-[10px] font-mono text-stone-500">
+                    {(tmpl.exercises ?? []).length} exercise{(tmpl.exercises ?? []).length !== 1 ? 's' : ''}
+                    {(tmpl.exercises ?? []).slice(0, 3).map(e => ` · ${e.name}`).join('')}
+                    {(tmpl.exercises ?? []).length > 3 && ` · +${(tmpl.exercises ?? []).length - 3} more`}
+                  </div>
+                </button>
+                {deleteConfirm === tmpl.id ? (
+                  <div className="flex gap-1.5 shrink-0">
+                    <button onClick={() => { onDelete(tmpl.id); setDeleteConfirm(null); }}
+                      className="text-[9px] font-mono px-2 py-1 border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-colors">Delete</button>
+                    <button onClick={() => setDeleteConfirm(null)}
+                      className="text-[9px] font-mono px-2 py-1 border border-stone-700 text-stone-500 hover:bg-stone-800 transition-colors">Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setDeleteConfirm(tmpl.id)} className="shrink-0 text-stone-700 hover:text-red-400 transition-colors p-1">
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M2 3.5h10M5.5 3.5V2.5h3v1M11 3.5l-.75 8.5H3.75L3 3.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -------------------- REST TIMER --------------------
+function RestTimer({ exerciseName, initialSeconds, onSkip, onComplete }) {
+  const [remaining, setRemaining] = useState(initialSeconds);
+  const [total, setTotal]         = useState(initialSeconds);
+  const [done, setDone]           = useState(false);
+  const doneRef = useRef(false);
+
+  useEffect(() => {
+    setRemaining(initialSeconds);
+    setTotal(initialSeconds);
+    setDone(false);
+    doneRef.current = false;
+  }, [exerciseName, initialSeconds]);
+
+  useEffect(() => {
+    if (done) return;
+    const t = setInterval(() => setRemaining(r => {
+      if (r <= 1) {
+        setDone(true);
+        doneRef.current = true;
+        if (navigator.vibrate) navigator.vibrate([200]);
+        return 0;
+      }
+      return r - 1;
+    }), 1000);
+    return () => clearInterval(t);
+  }, [done, exerciseName]);
+
+  useEffect(() => {
+    if (!done) return;
+    const t = setTimeout(onComplete, 3000);
+    return () => clearTimeout(t);
+  }, [done, onComplete]);
+
+  function adjust(delta) {
+    if (done) return;
+    setRemaining(r => Math.max(5, r + delta));
+    setTotal(t => Math.max(5, t + delta));
+  }
+
+  const pct = total > 0 ? remaining / total : 0;
+  const circumference = 2 * Math.PI * 28;
+
+  return (
+    <div className={`fixed bottom-0 left-0 right-0 z-40 border-t backdrop-blur-sm transition-colors ${done ? 'bg-green-950/95 border-green-500/40' : 'bg-stone-950/95 border-orange-500/40'}`}>
+      <div className="max-w-[1400px] mx-auto px-6 py-3 flex items-center gap-5">
+        {/* Ring */}
+        <div className="relative w-14 h-14 shrink-0">
+          <svg viewBox="0 0 64 64" className="w-full h-full -rotate-90">
+            <circle cx="32" cy="32" r="28" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="5" />
+            <circle cx="32" cy="32" r="28" fill="none"
+              stroke={done ? '#4ade80' : '#ed7a2a'} strokeWidth="5" strokeLinecap="round"
+              strokeDasharray={`${pct * circumference} ${circumference}`}
+              style={{ transition: 'stroke-dasharray 0.9s linear' }}
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="font-anton text-lg tabular-nums leading-none" style={{ color: done ? '#4ade80' : '#ed7a2a' }}>
+              {done ? '✓' : remaining}
+            </span>
+          </div>
+        </div>
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono truncate">{exerciseName}</div>
+          <div className={`font-mono text-sm ${done ? 'text-green-400' : 'text-stone-300'}`}>
+            {done ? 'Rest complete — log next set' : 'Rest period'}
+          </div>
+        </div>
+        {/* Controls */}
+        {!done && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={() => adjust(-30)} className="w-9 h-9 border border-stone-700 text-stone-400 hover:text-stone-200 font-mono text-[10px] flex items-center justify-center hover:border-stone-500 transition-colors">−30</button>
+            <button onClick={() => adjust(30)} className="w-9 h-9 border border-stone-700 text-stone-400 hover:text-stone-200 font-mono text-[10px] flex items-center justify-center hover:border-stone-500 transition-colors">+30</button>
+            <button onClick={onSkip} className="px-4 h-9 border border-stone-700 text-stone-500 hover:text-stone-300 font-mono text-[10px] uppercase tracking-wider hover:border-stone-500 transition-colors">Skip</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // -------------------- MAIN --------------------
 export default function IronLabLogger() {
   const { session, loading: sessionLoading } = useSession();
@@ -657,6 +865,7 @@ export default function IronLabLogger() {
 
   const logger   = useLogger(userId, workoutId, userWeightKg);
   const bodyMap  = useBodyMap(userId, logger.exercises);
+  const workoutTemplates = useWorkoutTemplates(userId);
 
   const [name, setName]             = useState('New Workout');
   const [seconds, setSeconds]       = useState(0);
@@ -664,6 +873,20 @@ export default function IronLabLogger() {
   const [summary, setSummary]       = useState(null);
   const [savedToast, setSavedToast] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+
+  // Template state
+  const [showSaveTemplate, setShowSaveTemplate]   = useState(false);
+  const [showLoadTemplate, setShowLoadTemplate]   = useState(false);
+  const [savingTemplate, setSavingTemplate]       = useState(false);
+  const [templateToast, setTemplateToast]         = useState(false);
+  const [pendingTemplate, setPendingTemplate]     = useState(null);
+
+  // Rest timer state
+  const [restTimer, setRestTimer]   = useState(null); // { exerciseName, exerciseId, seconds }
+  const [restPrefs, setRestPrefs]   = useState({});   // { exerciseId: seconds }
+
+  // Plateau alerts
+  const [plateauAlerts, setPlateauAlerts] = useState([]);
 
   // Sync workout name from Supabase into local input
   useEffect(() => {
@@ -701,6 +924,31 @@ export default function IronLabLogger() {
     const t = setTimeout(() => navigate('/dashboard'), 3000);
     return () => clearTimeout(t);
   }, [logger.completed, navigate]);
+
+  // Load rest prefs on mount
+  useEffect(() => {
+    if (!userId) return;
+    supabase.from('rest_timer_prefs').select('exercise_id, rest_seconds').eq('user_id', userId)
+      .then(({ data }) => {
+        if (data) {
+          const prefs = {};
+          data.forEach(r => { prefs[r.exercise_id] = r.rest_seconds; });
+          setRestPrefs(prefs);
+        }
+      });
+  }, [userId]);
+
+  // Handle template load after workout starts
+  useEffect(() => {
+    if (!logger.workout || !pendingTemplate) return;
+    (async () => {
+      for (const ex of pendingTemplate.exercises ?? []) {
+        const fullEx = library.find(e => e.id === ex.exercise_id);
+        if (fullEx) await hookAdd(fullEx);
+      }
+      setPendingTemplate(null);
+    })();
+  }, [logger.workout?.id]); // eslint-disable-line
 
   // Picker library: DB exercises first, EXERCISE_LIBRARY fallback
   const library = logger.allExercises.length > 0 ? logger.allExercises : EXERCISE_LIBRARY;
@@ -744,6 +992,34 @@ export default function IronLabLogger() {
   const mins    = String(Math.floor(seconds / 60)).padStart(2, '0');
   const secs    = String(seconds % 60).padStart(2, '0');
 
+  // Rest timer start
+  function startRestTimer(exerciseId, exerciseName) {
+    const secs = restPrefs[exerciseId] ?? 90;
+    setRestTimer({ exerciseId, exerciseName, seconds: secs });
+  }
+
+  // Template save handler
+  async function handleSaveTemplate({ name: tmplName, splitType, exercises }) {
+    setSavingTemplate(true);
+    const result = await workoutTemplates.saveTemplate({ name: tmplName, splitType, exercises: logger.exercises });
+    setSavingTemplate(false);
+    if (result?.success) {
+      setShowSaveTemplate(false);
+      setTemplateToast(true);
+      setTimeout(() => setTemplateToast(false), 2000);
+    }
+  }
+
+  // Template load handler
+  async function handleLoadTemplate(tmpl) {
+    setShowLoadTemplate(false);
+    const loaded = await workoutTemplates.useTemplate(tmpl.id);
+    if (loaded) {
+      setName(loaded.name);
+      setPendingTemplate(loaded);
+    }
+  }
+
   const handleComplete = async () => {
     const topEntry    = Object.entries(volumes).sort(([, a], [, b]) => b - a)[0];
     const prsHit      = workout.reduce(
@@ -754,6 +1030,7 @@ export default function IronLabLogger() {
     const result = await logger.completeWorkout();
     if (result?.success) {
       setSummary(prev => ({ ...prev, calsBurned: result.calsBurned }));
+      if (result.plateaus?.length) setPlateauAlerts(result.plateaus);
       setShowComplete(true);
     }
   };
@@ -829,6 +1106,12 @@ export default function IronLabLogger() {
               Start Workout
             </button>
             <button
+              onClick={() => setShowLoadTemplate(true)}
+              className="w-full px-8 py-3 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
+            >
+              Load Template
+            </button>
+            <button
               onClick={() => navigate('/dashboard')}
               className="w-full px-8 py-3 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-200 transition-colors"
             >
@@ -836,6 +1119,23 @@ export default function IronLabLogger() {
             </button>
           </div>
         </div>
+
+        {/* Load template picker (pre-workout) */}
+        {showLoadTemplate && (
+          <LoadTemplatePicker
+            templates={workoutTemplates.templates}
+            loading={workoutTemplates.loading}
+            onLoad={async (tmpl) => {
+              setShowLoadTemplate(false);
+              setName(tmpl.name);
+              // Start the workout then populate exercises
+              await logger.startWorkout(tmpl.name);
+              setPendingTemplate(tmpl);
+            }}
+            onClose={() => setShowLoadTemplate(false)}
+            onDelete={workoutTemplates.deleteTemplate}
+          />
+        )}
       </div>
     );
   }
@@ -864,7 +1164,7 @@ export default function IronLabLogger() {
       {/* COMPLETION OVERLAY */}
       {showComplete && summary && (
         <div className="fixed inset-0 z-50 bg-stone-950/96 flex items-center justify-center backdrop-blur-sm">
-          <div className="text-center space-y-8 px-6">
+          <div className="text-center space-y-8 px-6 max-w-2xl w-full">
             <div className="font-anton text-6xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">
               Workout Complete
             </div>
@@ -902,6 +1202,27 @@ export default function IronLabLogger() {
                 </div>
               )}
             </div>
+
+            {/* PLATEAU ALERTS */}
+            {plateauAlerts.length > 0 && (
+              <div className="space-y-2 mt-4 max-w-md mx-auto">
+                {plateauAlerts.map((p, i) => (
+                  <div key={i} className="border border-orange-500/40 bg-orange-500/5 px-4 py-3 text-left">
+                    <div className="flex items-start gap-3">
+                      <span className="text-lg shrink-0">⚠</span>
+                      <div>
+                        <div className="font-anton text-base uppercase text-orange-300">{p.exerciseName} — 3 sessions without improvement</div>
+                        <div className="text-[10px] font-mono text-stone-500 mt-0.5">Consider: deload, form check, or variation change</div>
+                        {/* TODO: pass plateaued exercises to Oracle rule gate — plateau on compound lift = consider deload week */}
+                      </div>
+                      <button onClick={() => setPlateauAlerts(prev => prev.filter((_, j) => j !== i))}
+                        className="shrink-0 text-stone-600 hover:text-stone-400 font-mono text-xs">✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <p className="text-stone-600 font-mono text-xs">Redirecting to dashboard…</p>
           </div>
         </div>
@@ -957,6 +1278,15 @@ export default function IronLabLogger() {
             />
           </div>
           <div className="flex items-center gap-3">
+            {/* Save as Template button — only when exercises exist and not viewing a completed workout */}
+            {!workoutId && logger.exercises.length > 0 && (
+              <button
+                onClick={() => setShowSaveTemplate(true)}
+                className="px-4 py-2 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
+              >
+                Save Template
+              </button>
+            )}
             {!workoutId && (
               <div className="text-right">
                 <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono">Session</div>
@@ -1005,6 +1335,7 @@ export default function IronLabLogger() {
                   onUpdate={(updated) => updateExercise(we.id, () => updated)}
                   onRemove={() => hookRemove(we.id)}
                   onAddSet={() => addSetToExercise(we.id)}
+                  onSetComplete={(exerciseId, exerciseName) => startRestTimer(exerciseId, exerciseName)}
                 />
               );
             })}
@@ -1050,6 +1381,45 @@ export default function IronLabLogger() {
           <span>Vol formula: Σ(reps × weight) · primary 1.0 · secondary 0.5</span>
         </footer>
       </div>
+
+      {/* TEMPLATE TOAST */}
+      {templateToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 border border-orange-500/30 px-5 py-2.5 backdrop-blur-sm pointer-events-none">
+          <span className="text-orange-300 font-mono text-xs uppercase tracking-wider">Template saved ✓</span>
+        </div>
+      )}
+
+      {/* REST TIMER */}
+      {restTimer && (
+        <RestTimer
+          exerciseName={restTimer.exerciseName}
+          initialSeconds={restTimer.seconds}
+          onSkip={() => setRestTimer(null)}
+          onComplete={() => setRestTimer(null)}
+        />
+      )}
+
+      {/* SAVE TEMPLATE MODAL */}
+      {showSaveTemplate && (
+        <SaveTemplateModal
+          workoutName={name}
+          exercises={logger.exercises}
+          onSave={handleSaveTemplate}
+          onClose={() => setShowSaveTemplate(false)}
+          saving={savingTemplate}
+        />
+      )}
+
+      {/* LOAD TEMPLATE PICKER (active workout) */}
+      {showLoadTemplate && (
+        <LoadTemplatePicker
+          templates={workoutTemplates.templates}
+          loading={workoutTemplates.loading}
+          onLoad={handleLoadTemplate}
+          onClose={() => setShowLoadTemplate(false)}
+          onDelete={workoutTemplates.deleteTemplate}
+        />
+      )}
     </div>
   );
 }
