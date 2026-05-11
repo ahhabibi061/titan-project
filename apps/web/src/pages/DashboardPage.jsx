@@ -571,9 +571,8 @@ export default function Dashboard() {
                 <div key={i} className="relative border border-orange-500/40 bg-orange-500/5 p-4 flex items-start justify-between gap-4">
                   <button
                     onClick={() => dismissPlateauAlert(p)}
-                    className="absolute top-2 right-2 text-stone-500 font-mono text-[10px] leading-none hover:text-orange-400 transition-colors"
-                    aria-label="Dismiss plateau alert"
-                  >×</button>
+                    className="absolute top-2 right-2 text-stone-500 font-mono text-[10px] uppercase tracking-wider hover:text-orange-400 transition-colors"
+                  >dismiss</button>
                   <div className="flex items-start gap-3">
                     <span className="text-xl shrink-0">⚠</span>
                     <div>
