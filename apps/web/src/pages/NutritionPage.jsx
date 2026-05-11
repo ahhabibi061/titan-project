@@ -376,7 +376,7 @@ function MealEntry({ meal, onDelete }) {
 // AddMealForm replaced by FoodSearch component (Open Food Facts + barcode)
 
 // -------------------- TEMPLATE PANEL (MEAL BUNDLES) --------------------
-function TemplatePanel({ templates, loading, onClose, onLogAll, onSave, onDelete, isPro }) {
+function TemplatePanel({ templates, loading, onClose, onLogAll, onSave, onDelete, isPro, userId }) {
   const [tab, setTab]                     = useState('list');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [bundleName, setBundleName]       = useState('');
@@ -577,6 +577,7 @@ function TemplatePanel({ templates, loading, onClose, onLogAll, onSave, onDelete
                       onAdd={addToBundle}
                       onCancel={() => setShowFoodSearch(false)}
                       confirmLabel="Add to Bundle →"
+                      userId={userId}
                     />
                   ) : (
                     <button
@@ -1273,7 +1274,7 @@ export default function VisionNutrition() {
 
           {showAddForm && (
             <div className="border-t border-stone-800/60">
-              <FoodSearch onAdd={addMeal} onCancel={() => setShowAddForm(false)} />
+              <FoodSearch onAdd={addMeal} onCancel={() => setShowAddForm(false)} userId={user?.id} />
             </div>
           )}
         </div>
@@ -1367,6 +1368,7 @@ export default function VisionNutrition() {
           onSave={mealTemplates.saveTemplate}
           onDelete={mealTemplates.deleteTemplate}
           isPro={isPro}
+          userId={user?.id}
         />
       )}
     </div>

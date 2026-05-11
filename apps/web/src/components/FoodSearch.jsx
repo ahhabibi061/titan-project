@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { supabase } from '../lib/supabase';
 
 /* =========================================================================
  * FoodSearch — USDA FoodData Central text search + OFF barcode scan
@@ -35,6 +36,41 @@ async function searchUsda(query, signal) {
   const res  = await fetch(USDA_URL(query), { signal });
   const json = await res.json();
   return (json.foods ?? []).filter(f => f.description).map(normalizeUsda);
+}
+
+// ---- Personal food history (nutrition_logs) ----
+async function searchHistory(q, userId) {
+  const { data } = await supabase
+    .from('nutrition_logs')
+    .select('meal_name, kcal, protein_g, carbs_g, fat_g, logged_at')
+    .eq('user_id', userId)
+    .ilike('meal_name', `%${q}%`)
+    .order('logged_at', { ascending: false })
+    .limit(100);
+
+  const map = new Map();
+  for (const row of data ?? []) {
+    if (!map.has(row.meal_name)) {
+      map.set(row.meal_name, { ...row, count: 1 });
+    } else {
+      map.get(row.meal_name).count++;
+    }
+  }
+  return [...map.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5)
+    .map(row => ({
+      id:                'hist_' + row.meal_name,
+      source:            'history',
+      name:              row.meal_name,
+      brand:             '',
+      servingSize:       1,
+      servingSizeUnit:   'serving',
+      kcalPerServing:    row.kcal,
+      proteinPerServing: row.protein_g,
+      carbsPerServing:   row.carbs_g,
+      fatPerServing:     row.fat_g,
+    }));
 }
 
 // ---- Deduplication by name+brand ----
@@ -370,8 +406,8 @@ function ServingSelector({ product, onConfirm, onBack, confirmLabel = 'Log Meal 
 }
 
 // -------------------- MANUAL FALLBACK FORM --------------------
-function ManualFallback({ onAdd, onBack }) {
-  const [name,    setName]    = useState('');
+function ManualFallback({ onAdd, onBack, initialName = '' }) {
+  const [name,    setName]    = useState(initialName);
   const [kcal,    setKcal]    = useState('');
   const [protein, setProtein] = useState('');
   const [carbs,   setCarbs]   = useState('');
@@ -451,39 +487,53 @@ function ManualFallback({ onAdd, onBack }) {
 }
 
 // -------------------- MAIN FOOD SEARCH --------------------
-export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
-  const [query,         setQuery]         = useState('');
-  const [results,       setResults]       = useState([]);
-  const [searching,     setSearching]     = useState(false);
-  const [noResults,     setNoResults]     = useState(false);
-  const [selected,      setSelected]      = useState(null);
-  const [showCamera,    setShowCamera]    = useState(false);
-  const [barcodeError,  setBarcodeError]  = useState(null);
+export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
+  const [query,          setQuery]          = useState('');
+  const [historyResults, setHistoryResults] = useState([]);
+  const [usdaResults,    setUsdaResults]    = useState([]);
+  const [usdaSearching,  setUsdaSearching]  = useState(false);
+  const [selected,       setSelected]       = useState(null);
+  const [showCamera,     setShowCamera]     = useState(false);
+  const [barcodeError,   setBarcodeError]   = useState(null);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
-  const [view,          setView]          = useState('search'); // 'search' | 'serving' | 'manual'
-  const [cameraAvail]  = useState(() => !!navigator.mediaDevices?.getUserMedia);
+  const [view,           setView]           = useState('search'); // 'search' | 'serving' | 'manual'
+  const [cameraAvail]   = useState(() => !!navigator.mediaDevices?.getUserMedia);
 
-  const timerRef = useRef(null);
-  const abortRef = useRef(null);
-  const cacheRef = useRef(new Map());
+  const timerRef        = useRef(null);
+  const abortRef        = useRef(null);
+  const usdaCacheRef    = useRef(new Map());
+  const historyCacheRef = useRef(new Map());
 
   useEffect(() => {
     const q = query.trim();
 
     if (!q || q.length < 2) {
-      setResults([]); setNoResults(false); setSearching(false);
+      setHistoryResults([]); setUsdaResults([]); setUsdaSearching(false);
       if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
       clearTimeout(timerRef.current);
       return;
     }
 
-    if (cacheRef.current.has(q)) {
-      const cached = cacheRef.current.get(q);
-      setResults(cached); setNoResults(cached.length === 0); setSearching(false);
+    // History: fire immediately, no debounce
+    if (userId) {
+      if (historyCacheRef.current.has(q)) {
+        setHistoryResults(historyCacheRef.current.get(q));
+      } else {
+        searchHistory(q, userId).then(items => {
+          historyCacheRef.current.set(q, items);
+          setHistoryResults(items);
+        });
+      }
+    }
+
+    // USDA: cache hit is instant, otherwise debounce 250ms
+    if (usdaCacheRef.current.has(q)) {
+      setUsdaResults(usdaCacheRef.current.get(q));
+      setUsdaSearching(false);
       return;
     }
 
-    setSearching(true);
+    setUsdaSearching(true);
     clearTimeout(timerRef.current);
 
     timerRef.current = setTimeout(() => {
@@ -495,20 +545,19 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
       searchUsda(q, signal)
         .then(items => {
           if (signal.aborted) return;
-          cacheRef.current.set(q, items);
-          setResults(items);
-          setNoResults(items.length === 0);
-          setSearching(false);
+          usdaCacheRef.current.set(q, items);
+          setUsdaResults(items);
+          setUsdaSearching(false);
         })
         .catch(() => {
           if (!signal.aborted) {
-            setResults([]); setNoResults(true); setSearching(false);
+            setUsdaResults([]); setUsdaSearching(false);
           }
         });
     }, 250);
 
     return () => clearTimeout(timerRef.current);
-  }, [query]);
+  }, [query, userId]);
 
   const handleSelectFood = (food) => {
     setSelected(food);
@@ -553,7 +602,7 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
 
   // ---- MANUAL FALLBACK VIEW ----
   if (view === 'manual') {
-    return <ManualFallback onAdd={handleConfirm} onBack={() => setView('search')} />;
+    return <ManualFallback onAdd={handleConfirm} onBack={() => setView('search')} initialName={query} />;
   }
 
   // ---- SEARCH VIEW ----
@@ -577,11 +626,11 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
               type="text"
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search USDA food database…"
+              placeholder="Search foods…"
               autoFocus
               className="w-full pl-9 pr-4 py-2.5 bg-stone-900/60 border border-stone-700 text-stone-100 font-mono text-sm placeholder-stone-600 focus:outline-none focus:border-orange-500/60 transition-colors"
             />
-            {searching && (
+            {usdaSearching && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-mono uppercase tracking-wider text-stone-600">
                 searching…
               </div>
@@ -625,53 +674,65 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
           </div>
         )}
 
-        {/* Results list */}
-        {results.length > 0 && (
+        {/* MY FOODS — personal history, appears instantly */}
+        {historyResults.length > 0 && (
           <div className="border border-stone-800/60 bg-stone-950/60 mb-3">
-            {results.map(f => (
+            <div className="px-4 py-1.5 border-b border-stone-800/60 bg-orange-500/5">
+              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-orange-400">My Foods</span>
+            </div>
+            {historyResults.map(f => (
               <ResultRow key={f.id} food={f} onSelect={handleSelectFood} />
             ))}
-            {searching && (
-              <div className="px-4 py-2 text-[9px] font-mono uppercase tracking-wider text-stone-700 border-t border-stone-800/40">
-                Loading more results…
-              </div>
-            )}
           </div>
         )}
 
-        {/* Skeleton while searching with no results yet */}
-        {searching && results.length === 0 && (
-          <div className="space-y-2 mb-3">
-            <Sk h="h-12" />
-            <Sk h="h-12" />
-            <Sk h="h-12" />
-          </div>
-        )}
-
-        {/* No results */}
-        {noResults && !searching && (
-          <div className="border border-stone-800/60 bg-stone-950/40 p-5 mb-3 text-center">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-stone-700 font-mono mb-1">Not found</div>
-            <div className="text-stone-600 text-xs mb-4">
-              No USDA results for "{query}".
+        {/* USDA results */}
+        {usdaResults.length > 0 && (
+          <div className="border border-stone-800/60 bg-stone-950/60 mb-3">
+            <div className="px-4 py-1.5 border-b border-stone-800/60">
+              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-stone-600">USDA Database</span>
             </div>
+            {usdaResults.map(f => (
+              <ResultRow key={f.id} food={f} onSelect={handleSelectFood} />
+            ))}
+          </div>
+        )}
+
+        {/* USDA skeleton while loading */}
+        {usdaSearching && usdaResults.length === 0 && (
+          <div className="border border-stone-800/60 bg-stone-950/60 mb-3">
+            <div className="px-4 py-1.5 border-b border-stone-800/60">
+              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-stone-600">USDA Database</span>
+            </div>
+            <div className="p-3 space-y-2">
+              <Sk h="h-12" />
+              <Sk h="h-12" />
+              <Sk h="h-12" />
+            </div>
+          </div>
+        )}
+
+        {/* No results — both sources empty and USDA done */}
+        {!usdaSearching && usdaResults.length === 0 && historyResults.length === 0 && query.trim().length >= 2 && (
+          <div className="border border-stone-800/60 bg-stone-950/40 p-5 mb-3 text-center">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-stone-700 font-mono mb-3">Not found</div>
             <button
               onClick={() => setView('manual')}
-              className="px-4 py-2 border border-stone-700 text-stone-300 font-anton text-sm uppercase tracking-wider hover:bg-stone-800 transition-colors"
+              className="w-full py-3 border border-orange-500/40 text-orange-300 font-mono text-[11px] uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
             >
-              Enter manually →
+              Add manually: {query.trim()}
             </button>
           </div>
         )}
 
         {/* Idle state */}
-        {!query && !searching && results.length === 0 && (
+        {!query && historyResults.length === 0 && usdaResults.length === 0 && !usdaSearching && (
           <div className="text-center py-6">
             <div className="text-[10px] uppercase tracking-[0.18em] text-stone-700 font-mono mb-1">
-              Search Open Food Facts + USDA simultaneously
+              Search USDA · your logged foods appear first
             </div>
             <div className="text-stone-700 text-xs">
-              Type 2+ characters · results stream as each source responds
+              Type 2+ characters to search
             </div>
             <button
               onClick={() => setView('manual')}
