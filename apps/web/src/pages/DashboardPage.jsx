@@ -286,7 +286,11 @@ export default function Dashboard() {
   const totalWorkoutDays = weeklyAdherence.filter(d => !d.rest && !d.future).length;
 
   const displayName   = profile?.display_name || 'Athlete';
-  const initials      = (displayName[0] ?? 'A').toUpperCase();
+  const initials      = (() => {
+    const parts = displayName.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return parts[0].slice(0, 2).toUpperCase();
+  })();
   const tier          = profile?.subscription_tier ?? 'basic';
   const tierLabel     = tier.toUpperCase();
   const goalLabel     = profile?.goal ? `goal: ${profile.goal}` : 'loading';
@@ -346,16 +350,11 @@ export default function Dashboard() {
               <Link
                 to="/settings"
                 title="Settings"
-                className="w-8 h-8 flex items-center justify-center text-stone-500 hover:text-orange-400 border border-transparent hover:border-stone-700 transition-colors"
+                className="w-7 h-7 rounded-full flex items-center justify-center font-anton text-xs text-stone-950 shrink-0 hover:opacity-90 transition-opacity"
+                style={{ background: 'linear-gradient(135deg, #fbbf24, #ff5a2a)' }}
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                  <circle cx="8" cy="8" r="2.5" />
-                  <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06" />
-                </svg>
-              </Link>
-              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center font-anton text-stone-950 text-base">
                 {initials}
-              </div>
+              </Link>
             </div>
           </div>
         </nav>
