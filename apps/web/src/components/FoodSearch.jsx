@@ -7,31 +7,70 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
  * Serving size selector with live macro preview.
  * ========================================================================= */
 
-// ---- FatSecret — proxied through Supabase Edge Function (secret stays server-side) ----
-const FS_FUNCTION_URL =
-  (import.meta.env.VITE_SUPABASE_URL ?? '') +
-  '/functions/v1/food-search';
+// ---- FatSecret OAuth 2.0 (client credentials, module-level token cache) ----
+let cachedToken = null;
+let tokenExpiry = 0;
 
-async function searchFatSecret(query, signal) {
-  console.log('[FS] calling edge function with query:', query)
-  const res = await fetch(FS_FUNCTION_URL, {
+async function getToken() {
+  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
+  const res = await fetch('https://oauth.fatsecret.com/connect/token', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Authorization': 'Basic ' + btoa(
+        import.meta.env.VITE_FATSECRET_CLIENT_ID + ':' +
+        import.meta.env.VITE_FATSECRET_CLIENT_SECRET
+      ),
     },
-    body: JSON.stringify({ query }),
+    body: 'grant_type=client_credentials&scope=basic',
+  });
+  const data = await res.json();
+  cachedToken = data.access_token;
+  tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000;
+  return cachedToken;
+}
+
+function parseFsDesc(desc = '') {
+  return {
+    kcal:    parseInt(desc.match(/Calories:\s*([\d.]+)/)?.[1]  || 0),
+    fat:     parseFloat(desc.match(/Fat:\s*([\d.]+)/)?.[1]     || 0),
+    carbs:   parseFloat(desc.match(/Carbs:\s*([\d.]+)/)?.[1]   || 0),
+    protein: parseFloat(desc.match(/Protein:\s*([\d.]+)/)?.[1] || 0),
+  };
+}
+
+function normalizeFatSecret(food) {
+  const { kcal, fat, carbs, protein } = parseFsDesc(food.food_description);
+  return {
+    id:               'fs_' + food.food_id,
+    source:           'FatSecret',
+    name:             food.food_name || 'Unknown Food',
+    brand:            food.brand_name || '',
+    servingSize:      100,
+    servingSizeUnit:  'g',
+    kcalPerServing:   Math.round(kcal),
+    proteinPerServing: Math.round(protein * 10) / 10,
+    carbsPerServing:  Math.round(carbs   * 10) / 10,
+    fatPerServing:    Math.round(fat     * 10) / 10,
+  };
+}
+
+async function searchFatSecret(query, signal) {
+  console.log('[FS] searching for:', query);
+  const token = await getToken();
+  const url = 'https://platform.fatsecret.com/rest/server.api' +
+    `?method=foods.search&search_expression=${encodeURIComponent(query)}&format=json&max_results=10&page_number=0`;
+  const res = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${token}` },
     signal,
   });
-  console.log('[FS] response status:', res.status)
-  if (!res.ok) {
-    const text = await res.text()
-    console.error('[FS] error response:', text)
-    return [];
-  }
+  console.log('[FS] response status:', res.status);
   const data = await res.json();
-  console.log('[FS] foods returned:', data.foods?.length ?? 0)
-  return data.foods ?? [];
+  const raw = data?.foods?.food;
+  console.log('[FS] foods found:', raw ? (Array.isArray(raw) ? raw.length : 1) : 0);
+  if (!raw) return [];
+  const arr = Array.isArray(raw) ? raw : [raw];
+  return arr.map(normalizeFatSecret);
 }
 
 // ---- USDA FoodData Central ----
