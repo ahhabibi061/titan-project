@@ -53,13 +53,13 @@ export function useSentinel(userId) {
 
     const { data } = await supabase
       .from('nutrition_logs')
-      .select('id, logged_at, name, kcal, protein_g, carbs_g, fat_g, source')
+      .select('id, logged_at, meal_name, kcal, protein_g, carbs_g, fat_g, source')
       .eq('user_id', userId)
       .gte('logged_at', dateStr)
       .lt('logged_at', nextStr)
       .order('logged_at', { ascending: true });
 
-    setMeals(data ?? []);
+    setMeals((data ?? []).map(m => ({ ...m, name: m.meal_name })));
     setLoading(false);
   }, [userId, selectedDate]);
 
@@ -77,22 +77,23 @@ export function useSentinel(userId) {
     { kcal: 0, protein: 0, carbs: 0, fat: 0 }
   );
 
-  const addMeal = async ({ name, kcal, protein_g, carbs_g, fat_g }) => {
+  const addMeal = async ({ name, kcal, protein_g, carbs_g, fat_g, source = 'manual' }) => {
     const tempId = `opt-${Date.now()}`;
     const now = new Date().toISOString();
-    const optimistic = { id: tempId, user_id: userId, logged_at: now, name, kcal, protein_g, carbs_g, fat_g, source: 'manual' };
+    const optimistic = { id: tempId, user_id: userId, logged_at: now, name, kcal, protein_g, carbs_g, fat_g, source };
     setMeals(prev => [...prev, optimistic]);
 
     const { data, error } = await supabase
       .from('nutrition_logs')
-      .insert({ user_id: userId, logged_at: now, name, kcal, protein_g, carbs_g, fat_g, source: 'manual' })
-      .select('id, logged_at, name, kcal, protein_g, carbs_g, fat_g, source')
+      .insert({ user_id: userId, logged_at: now, meal_name: name, kcal, protein_g, carbs_g, fat_g, source })
+      .select('id, logged_at, meal_name, kcal, protein_g, carbs_g, fat_g, source')
       .single();
 
     if (error) {
+      console.error('[useSentinel] addMeal error:', error);
       setMeals(prev => prev.filter(m => m.id !== tempId));
     } else {
-      setMeals(prev => prev.map(m => m.id === tempId ? data : m));
+      setMeals(prev => prev.map(m => m.id === tempId ? { ...data, name: data.meal_name } : m));
     }
   };
 

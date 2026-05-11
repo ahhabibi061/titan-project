@@ -8,7 +8,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
  * ========================================================================= */
 
 const OFF_SEARCH = (q) =>
-  `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&json=1&page_size=10&fields=product_name,brands,nutriments,serving_size,code`;
+  `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&json=1&page_size=8&fields=product_name,brands,nutriments,serving_size,code&action=process`;
 
 const OFF_BARCODE = (code) =>
   `https://world.openfoodfacts.org/api/v0/product/${code}.json`;
@@ -476,27 +476,43 @@ export function FoodSearch({ onAdd, onCancel }) {
   const [view, setView] = useState('search'); // 'search' | 'serving' | 'manual'
   const [barcodeError, setBarcodeError] = useState(null);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
-  const timerRef = useRef(null);
+  const timerRef  = useRef(null);
+  const abortRef  = useRef(null);
+  const cacheRef  = useRef(new Map());
 
-  // Debounced search
+  // Debounced search with abort controller and session cache
   useEffect(() => {
-    if (!query.trim()) { setResults([]); setNoResults(false); return; }
+    if (!query.trim()) {
+      setResults([]); setNoResults(false); setSearching(false);
+      if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
+      clearTimeout(timerRef.current);
+      return;
+    }
+    // Instant cache hit — no spinner
+    if (cacheRef.current.has(query)) {
+      const cached = cacheRef.current.get(query);
+      setResults(cached); setNoResults(cached.length === 0); setSearching(false);
+      return;
+    }
+    // Show skeleton immediately while debounce ticks
+    setSearching(true);
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
-      setSearching(true);
-      setNoResults(false);
+      if (abortRef.current) abortRef.current.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
       try {
-        const res = await fetch(OFF_SEARCH(query));
+        const res  = await fetch(OFF_SEARCH(query), { signal: controller.signal });
         const json = await res.json();
         const products = (json.products ?? []).filter(p => p.product_name);
+        cacheRef.current.set(query, products);
         setResults(products);
         setNoResults(products.length === 0);
-      } catch {
-        setResults([]);
-        setNoResults(true);
+      } catch (e) {
+        if (e.name !== 'AbortError') { setResults([]); setNoResults(true); }
       }
       setSearching(false);
-    }, 400);
+    }, 250);
     return () => clearTimeout(timerRef.current);
   }, [query]);
 

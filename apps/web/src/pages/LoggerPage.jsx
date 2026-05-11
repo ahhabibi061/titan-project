@@ -199,18 +199,10 @@ function OverloadBadge({ status }) {
 }
 
 // -------------------- SET ROW --------------------
-function SetRow({ set, idx, onChange, onRemove, isLast, onSetComplete }) {
-  const wasCompleteRef = useRef(!!(Number(set.reps) > 0 && Number(set.weight) > 0));
+function SetRow({ set, idx, onChange, onRemove, isLast }) {
   const status = overloadStatus(set);
   const vol = setVolume(set);
   const prevVol = setPrevVolume(set);
-
-  function handleChange(updated) {
-    const nowComplete = !!(Number(updated.reps) > 0 && Number(updated.weight) > 0);
-    if (nowComplete && !wasCompleteRef.current && onSetComplete) onSetComplete();
-    wasCompleteRef.current = nowComplete;
-    onChange(updated);
-  }
 
   return (
     <tr className="group transition-colors hover:bg-stone-900/40">
@@ -228,7 +220,7 @@ function SetRow({ set, idx, onChange, onRemove, isLast, onSetComplete }) {
           type="number"
           inputMode="numeric"
           value={set.reps}
-          onChange={(e) => handleChange({ ...set, reps: e.target.value === '' ? '' : Number(e.target.value) })}
+          onChange={(e) => onChange({ ...set, reps: e.target.value === '' ? '' : Number(e.target.value) })}
           className="w-full bg-stone-950/60 border border-stone-800 px-2 py-1.5 text-stone-100 font-mono text-sm tabular-nums text-right focus:outline-none focus:border-orange-500/60 focus:bg-stone-950"
         />
       </td>
@@ -239,7 +231,7 @@ function SetRow({ set, idx, onChange, onRemove, isLast, onSetComplete }) {
             inputMode="decimal"
             step="0.5"
             value={set.weight}
-            onChange={(e) => handleChange({ ...set, weight: e.target.value === '' ? '' : Number(e.target.value) })}
+            onChange={(e) => onChange({ ...set, weight: e.target.value === '' ? '' : Number(e.target.value) })}
             className="w-full bg-stone-950/60 border border-stone-800 px-2 py-1.5 pr-7 text-stone-100 font-mono text-sm tabular-nums text-right focus:outline-none focus:border-orange-500/60 focus:bg-stone-950"
           />
           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-600 font-mono pointer-events-none">kg</span>
@@ -263,8 +255,88 @@ function SetRow({ set, idx, onChange, onRemove, isLast, onSetComplete }) {
   );
 }
 
+// -------------------- INLINE REST TIMER --------------------
+function InlineRestTimer({ onRemove }) {
+  const [seconds, setSeconds]       = useState(90);
+  const [maxSeconds, setMaxSeconds] = useState(90);
+  const [running, setRunning]       = useState(false);
+  const [done, setDone]             = useState(false);
+
+  useEffect(() => {
+    if (!running || done) return;
+    const t = setInterval(() => {
+      setSeconds(s => {
+        if (s <= 1) {
+          setDone(true);
+          setRunning(false);
+          if (navigator.vibrate) navigator.vibrate([200]);
+          return 0;
+        }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [running, done]);
+
+  function handleStart() {
+    setMaxSeconds(seconds);
+    setRunning(true);
+    setDone(false);
+  }
+
+  function adjust(delta) {
+    if (running || done) return;
+    const v = Math.max(5, seconds + delta);
+    setSeconds(v);
+    setMaxSeconds(v);
+  }
+
+  const pct = (running || done) ? seconds / Math.max(maxSeconds, 1) : 1;
+  const r   = 20;
+  const circ = 2 * Math.PI * r;
+
+  return (
+    <div className={`border-t border-stone-800/60 px-4 py-3 flex items-center gap-4 ${done ? 'bg-green-950/20' : ''}`}>
+      <div className="relative w-12 h-12 shrink-0">
+        <svg viewBox="0 0 48 48" className="w-full h-full -rotate-90">
+          <circle cx="24" cy="24" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4" />
+          <circle cx="24" cy="24" r={r} fill="none"
+            stroke={done ? '#4ade80' : '#ed7a2a'} strokeWidth="4" strokeLinecap="round"
+            strokeDasharray={`${pct * circ} ${circ}`}
+            style={{ transition: running ? 'stroke-dasharray 1s linear' : 'none' }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className={`font-anton text-sm tabular-nums leading-none ${done ? 'text-green-400' : 'text-orange-400'}`}>
+            {done ? '✓' : seconds}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex-1 flex items-center gap-2">
+        {!running && !done && (
+          <>
+            <button onClick={() => adjust(-30)} className="w-8 h-7 border border-stone-700 text-stone-400 hover:text-stone-200 font-mono text-[9px] flex items-center justify-center hover:border-stone-500 transition-colors">-30</button>
+            <button onClick={() => adjust(30)}  className="w-8 h-7 border border-stone-700 text-stone-400 hover:text-stone-200 font-mono text-[9px] flex items-center justify-center hover:border-stone-500 transition-colors">+30</button>
+            <button onClick={handleStart} className="px-3 h-7 bg-orange-500/80 text-stone-950 font-mono text-[9px] uppercase tracking-wider hover:bg-orange-500 transition-colors">▶ Start</button>
+          </>
+        )}
+        {running && (
+          <button onClick={() => setRunning(false)} className="px-3 h-7 border border-stone-700 text-stone-400 font-mono text-[9px] uppercase tracking-wider hover:border-stone-500 transition-colors">⏹ Stop</button>
+        )}
+        {done && (
+          <span className="font-mono text-xs text-green-400 uppercase tracking-wider">Rest complete</span>
+        )}
+      </div>
+
+      <button onClick={onRemove} className="w-7 h-7 border border-stone-700 text-stone-500 hover:text-red-400 hover:border-red-500/50 font-mono text-xs flex items-center justify-center transition-colors shrink-0">✕</button>
+    </div>
+  );
+}
+
 // -------------------- EXERCISE CARD --------------------
-function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, onSetComplete }) {
+function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index }) {
+  const [showTimer, setShowTimer] = useState(false);
   const totalVol = exerciseVolume(we);
 
   return (
@@ -333,20 +405,30 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, onSet
                   ...we,
                   sets: we.sets.filter(x => x.id !== s.id),
                 })}
-                onSetComplete={() => onSetComplete?.(we.exerciseId, exercise.name)}
               />
             ))}
           </tbody>
         </table>
       </div>
 
+      {showTimer && <InlineRestTimer onRemove={() => setShowTimer(false)} />}
       <footer className="px-3 py-2 border-t border-stone-800/60 bg-stone-950/40 flex justify-between items-center">
-        <button
-          onClick={onAddSet}
-          className="text-[10px] uppercase tracking-wider font-mono text-stone-500 hover:text-orange-300 px-3 py-1 border border-stone-800 hover:border-orange-500/40 transition-colors"
-        >
-          + Add Set
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onAddSet}
+            className="text-[10px] uppercase tracking-wider font-mono text-stone-500 hover:text-orange-300 px-3 py-1 border border-stone-800 hover:border-orange-500/40 transition-colors"
+          >
+            + Add Set
+          </button>
+          {!showTimer && (
+            <button
+              onClick={() => setShowTimer(true)}
+              className="text-[9px] font-mono uppercase tracking-wider text-stone-600 hover:text-orange-300 px-2 py-1 border border-stone-800 hover:border-orange-500/30 transition-colors"
+            >
+              ⏱ REST TIMER
+            </button>
+          )}
+        </div>
         <div className="text-[10px] font-mono tabular-nums text-stone-600">
           TOTAL <span className="text-stone-400">{fmt(totalVol)}</span> KG·REPS
         </div>
@@ -881,10 +963,6 @@ export default function IronLabLogger() {
   const [templateToast, setTemplateToast]         = useState(false);
   const [pendingTemplate, setPendingTemplate]     = useState(null);
 
-  // Rest timer state
-  const [restTimer, setRestTimer]   = useState(null); // { exerciseName, exerciseId, seconds }
-  const [restPrefs, setRestPrefs]   = useState({});   // { exerciseId: seconds }
-
   // Plateau alerts
   const [plateauAlerts, setPlateauAlerts] = useState([]);
 
@@ -924,19 +1002,6 @@ export default function IronLabLogger() {
     const t = setTimeout(() => navigate('/dashboard'), 3000);
     return () => clearTimeout(t);
   }, [logger.completed, navigate]);
-
-  // Load rest prefs on mount
-  useEffect(() => {
-    if (!userId) return;
-    supabase.from('rest_timer_prefs').select('exercise_id, rest_seconds').eq('user_id', userId)
-      .then(({ data }) => {
-        if (data) {
-          const prefs = {};
-          data.forEach(r => { prefs[r.exercise_id] = r.rest_seconds; });
-          setRestPrefs(prefs);
-        }
-      });
-  }, [userId]);
 
   // Handle template load after workout starts
   useEffect(() => {
@@ -991,12 +1056,6 @@ export default function IronLabLogger() {
   const usedIds = new Set(workout.map(we => we.exerciseId));
   const mins    = String(Math.floor(seconds / 60)).padStart(2, '0');
   const secs    = String(seconds % 60).padStart(2, '0');
-
-  // Rest timer start
-  function startRestTimer(exerciseId, exerciseName) {
-    const secs = restPrefs[exerciseId] ?? 90;
-    setRestTimer({ exerciseId, exerciseName, seconds: secs });
-  }
 
   // Template save handler
   async function handleSaveTemplate({ name: tmplName, splitType, exercises }) {
@@ -1105,12 +1164,14 @@ export default function IronLabLogger() {
             >
               Start Workout
             </button>
-            <button
-              onClick={() => setShowLoadTemplate(true)}
-              className="w-full px-8 py-3 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
-            >
-              Load Template
-            </button>
+            {!workoutTemplates.loading && workoutTemplates.templates.length > 0 && (
+              <button
+                onClick={() => setShowLoadTemplate(true)}
+                className="w-full px-8 py-3 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
+              >
+                Load Template
+              </button>
+            )}
             <button
               onClick={() => navigate('/dashboard')}
               className="w-full px-8 py-3 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-200 transition-colors"
@@ -1335,7 +1396,6 @@ export default function IronLabLogger() {
                   onUpdate={(updated) => updateExercise(we.id, () => updated)}
                   onRemove={() => hookRemove(we.id)}
                   onAddSet={() => addSetToExercise(we.id)}
-                  onSetComplete={(exerciseId, exerciseName) => startRestTimer(exerciseId, exerciseName)}
                 />
               );
             })}
@@ -1387,16 +1447,6 @@ export default function IronLabLogger() {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 border border-orange-500/30 px-5 py-2.5 backdrop-blur-sm pointer-events-none">
           <span className="text-orange-300 font-mono text-xs uppercase tracking-wider">Template saved ✓</span>
         </div>
-      )}
-
-      {/* REST TIMER */}
-      {restTimer && (
-        <RestTimer
-          exerciseName={restTimer.exerciseName}
-          initialSeconds={restTimer.seconds}
-          onSkip={() => setRestTimer(null)}
-          onComplete={() => setRestTimer(null)}
-        />
       )}
 
       {/* SAVE TEMPLATE MODAL */}

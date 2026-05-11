@@ -34,8 +34,11 @@ export function useWaterTracker(userId) {
     setTotalMl(prev => prev + amountMl);
     const { error } = await supabase
       .from('water_logs')
-      .insert({ user_id: userId, amount_ml: amountMl, log_date: today });
-    if (error) setTotalMl(prev => prev - amountMl);
+      .insert({ user_id: userId, amount_ml: amountMl, log_date: today, logged_at: new Date().toISOString() });
+    if (error) {
+      console.error('[useWaterTracker] addWater error:', error);
+      setTotalMl(prev => prev - amountMl);
+    }
   }, [userId, today]);
 
   const setTarget = useCallback(async (ml) => {
