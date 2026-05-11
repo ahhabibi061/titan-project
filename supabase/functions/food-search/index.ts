@@ -15,28 +15,38 @@ let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
 async function getToken(): Promise<string> {
-  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
+  if (cachedToken && Date.now() < tokenExpiry) {
+    console.log('[FS] using cached token')
+    return cachedToken
+  }
 
-  const clientId     = Deno.env.get('FATSECRET_CLIENT_ID')!;
-  const clientSecret = Deno.env.get('FATSECRET_CLIENT_SECRET')!;
+  console.log('[FS] fetching new token...')
+  const FATSECRET_CLIENT_ID     = Deno.env.get('FATSECRET_CLIENT_ID')!;
+  const FATSECRET_CLIENT_SECRET = Deno.env.get('FATSECRET_CLIENT_SECRET')!;
+  const credentials = btoa(`${FATSECRET_CLIENT_ID}:${FATSECRET_CLIENT_SECRET}`)
+  console.log('[FS] client_id present:', !!FATSECRET_CLIENT_ID)
+  console.log('[FS] client_secret present:', !!FATSECRET_CLIENT_SECRET)
 
   const res = await fetch('https://oauth.fatsecret.com/connect/token', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': 'Basic ' + btoa(clientId + ':' + clientSecret),
+      'Authorization': `Basic ${credentials}`
     },
-    body: 'grant_type=client_credentials&scope=basic',
-  });
+    body: 'grant_type=client_credentials&scope=basic'
+  })
 
-  if (!res.ok) {
-    throw new Error(`FatSecret token error: ${res.status}`);
+  console.log('[FS] token response status:', res.status)
+  const data = await res.json()
+  console.log('[FS] token response:', JSON.stringify(data))
+
+  if (!data.access_token) {
+    throw new Error('No access token returned: ' + JSON.stringify(data))
   }
 
-  const data = await res.json();
-  cachedToken  = data.access_token;
-  tokenExpiry  = Date.now() + (data.expires_in * 1000) - 60_000;
-  return cachedToken!;
+  cachedToken = data.access_token
+  tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000
+  return cachedToken
 }
 
 function parseFsDesc(desc: string) {

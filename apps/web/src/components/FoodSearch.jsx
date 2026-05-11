@@ -547,6 +547,7 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
       // FatSecret — primary, renders first
       searchFatSecret(q, signal)
         .then(items => {
+          console.log('[FS] items received in UI:', items.length, items.slice(0,2))
           if (signal.aborted) return;
           fsItems = items;
           // Show FS results immediately without waiting for USDA
