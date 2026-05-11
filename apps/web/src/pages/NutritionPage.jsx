@@ -308,7 +308,7 @@ function MacroBar({ label, consumed, target, color }) {
 }
 
 // -------------------- MEAL ENTRY --------------------
-function MealEntry({ meal, onDelete, onSaveTemplate }) {
+function MealEntry({ meal, onDelete }) {
   const [confirming, setConfirming] = useState(false);
   const time = new Date(meal.logged_at).toLocaleTimeString('en-US', {
     hour: '2-digit', minute: '2-digit', hour12: false,
@@ -358,27 +358,15 @@ function MealEntry({ meal, onDelete, onSaveTemplate }) {
           </button>
         </div>
       ) : (
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={() => onSaveTemplate(meal)}
-            className="shrink-0 text-stone-700 hover:text-amber-400 transition-colors p-1"
-            aria-label="Save as template"
-            title="Save as template"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M3 1h8v12L7 9.5 3 13V1z" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <button
-            onClick={() => setConfirming(true)}
-            className="shrink-0 text-stone-700 hover:text-stone-400 transition-colors p-1"
-            aria-label="Delete meal"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M2 3.5h10M5.5 3.5V2.5h3v1M11 3.5l-.75 8.5H3.75L3 3.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
+        <button
+          onClick={() => setConfirming(true)}
+          className="shrink-0 text-stone-700 hover:text-stone-400 transition-colors p-1"
+          aria-label="Delete meal"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M2 3.5h10M5.5 3.5V2.5h3v1M11 3.5l-.75 8.5H3.75L3 3.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
       )}
     </div>
   );
@@ -387,28 +375,51 @@ function MealEntry({ meal, onDelete, onSaveTemplate }) {
 // -------------------- ADD MEAL FORM --------------------
 // AddMealForm replaced by FoodSearch component (Open Food Facts + barcode)
 
-// -------------------- TEMPLATE PANEL --------------------
-function TemplatePanel({ templates, loading, onClose, onLog, onDelete, isPro }) {
+// -------------------- TEMPLATE PANEL (MEAL BUNDLES) --------------------
+function TemplatePanel({ templates, loading, onClose, onLogAll, onSave, onDelete, isPro }) {
+  const [tab, setTab]                     = useState('list');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [toasting, setToasting]           = useState(false);
+  const [bundleName, setBundleName]       = useState('');
+  const [bundleItems, setBundleItems]     = useState([]);
+  const [showFoodSearch, setShowFoodSearch] = useState(false);
+  const [saving, setSaving]               = useState(false);
+  const [toast, setToast]                 = useState('');
 
-  function handleLog(tmpl) {
-    onLog(tmpl);
-    setToasting(true);
-    setTimeout(() => setToasting(false), 1500);
+  const bundleTotals = bundleItems.reduce(
+    (acc, item) => ({
+      kcal:      acc.kcal      + (item.kcal      ?? 0),
+      protein_g: acc.protein_g + (item.protein_g ?? 0),
+      carbs_g:   acc.carbs_g   + (item.carbs_g   ?? 0),
+      fat_g:     acc.fat_g     + (item.fat_g     ?? 0),
+    }),
+    { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
+  );
+
+  function addToBundle(item) {
+    setBundleItems(prev => [...prev, { name: item.name, kcal: item.kcal, protein_g: item.protein_g, carbs_g: item.carbs_g, fat_g: item.fat_g }]);
+    setShowFoodSearch(false);
+  }
+
+  async function handleSave() {
+    if (!bundleName.trim() || bundleItems.length === 0) return;
+    setSaving(true);
+    await onSave({ name: bundleName.trim(), items: bundleItems, ...bundleTotals });
+    setSaving(false);
+    setBundleName('');
+    setBundleItems([]);
+    setTab('list');
+    setToast('Bundle saved ✓');
+    setTimeout(() => setToast(''), 2000);
   }
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end bg-stone-950/80 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="bg-[#0a0908] border-t border-stone-800 max-h-[80vh] flex flex-col"
+        className="bg-[#0a0908] border-t border-stone-800 max-h-[85vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800">
-          <div>
-            <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">My Templates</h2>
-            <div className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono mt-0.5">sorted by most used</div>
-          </div>
+          <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Meal Templates</h2>
           <button onClick={onClose} className="text-stone-600 hover:text-stone-300 font-mono text-sm">✕</button>
         </div>
 
@@ -422,82 +433,180 @@ function TemplatePanel({ templates, loading, onClose, onLog, onDelete, isPro }) 
               </a>
             </div>
           </div>
-        ) : loading ? (
-          <div className="flex-1 flex items-center justify-center py-12">
-            <div className="text-stone-600 font-mono text-xs uppercase tracking-wider">Loading…</div>
-          </div>
-        ) : templates.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center py-12 text-center px-6">
-            <div className="text-stone-600 font-mono text-xs uppercase tracking-wider leading-relaxed">
-              No templates yet<br />
-              <span className="text-stone-700">Save a meal to get started</span>
-            </div>
-          </div>
         ) : (
-          <div className="flex-1 overflow-y-auto">
-            {templates.map(tmpl => (
-              <div key={tmpl.id} className="flex items-center gap-4 px-6 py-4 border-b border-stone-800/40 hover:bg-stone-900/40 transition-colors">
+          <>
+            {/* Tabs */}
+            <div className="flex border-b border-stone-800">
+              {['list', 'build'].map(t => (
                 <button
-                  className="flex-1 text-left"
-                  onClick={() => handleLog(tmpl)}
+                  key={t}
+                  onClick={() => { setTab(t); setShowFoodSearch(false); }}
+                  className={`flex-1 py-3 font-mono text-xs uppercase tracking-[0.15em] transition-colors ${
+                    tab === t
+                      ? 'text-orange-300 border-b-2 border-orange-500'
+                      : 'text-stone-600 hover:text-stone-400'
+                  }`}
                 >
-                  <div className="flex items-baseline gap-2 mb-0.5">
-                    <span className="text-stone-100 text-sm font-sans">{tmpl.name}</span>
-                    {tmpl.times_used > 0 && (
-                      <span className="text-[8px] font-mono text-stone-600 uppercase tracking-wider">{tmpl.times_used}×</span>
-                    )}
-                  </div>
-                  <div className="flex gap-3 text-[10px] font-mono tabular-nums text-stone-500">
-                    <span className="text-stone-400">{tmpl.kcal} kcal</span>
-                    <span>{tmpl.protein_g}g P</span>
-                    <span>{tmpl.carbs_g}g C</span>
-                    <span>{tmpl.fat_g}g F</span>
-                  </div>
+                  {t === 'list' ? 'My Templates' : 'Build New'}
                 </button>
-                {deleteConfirm === tmpl.id ? (
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[9px] font-mono text-stone-500">Delete?</span>
-                    <button onClick={() => { onDelete(tmpl.id); setDeleteConfirm(null); }}
-                      className="text-[9px] font-mono px-2 py-1 border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-colors">Yes</button>
-                    <button onClick={() => setDeleteConfirm(null)}
-                      className="text-[9px] font-mono px-2 py-1 border border-stone-700 text-stone-500 hover:bg-stone-800 transition-colors">No</button>
+              ))}
+            </div>
+
+            {/* MY TEMPLATES tab */}
+            {tab === 'list' && (
+              loading ? (
+                <div className="flex-1 flex items-center justify-center py-12">
+                  <div className="text-stone-600 font-mono text-xs uppercase tracking-wider">Loading…</div>
+                </div>
+              ) : templates.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center py-12 text-center px-6 gap-4">
+                  <div className="text-stone-600 font-mono text-xs uppercase tracking-wider leading-relaxed">
+                    No bundles yet<br />
+                    <span className="text-stone-700">Build one in the Build New tab</span>
                   </div>
-                ) : (
-                  <button onClick={() => setDeleteConfirm(tmpl.id)}
-                    className="shrink-0 text-stone-700 hover:text-red-400 transition-colors p-1">
-                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M2 3.5h10M5.5 3.5V2.5h3v1M11 3.5l-.75 8.5H3.75L3 3.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
+                  <button
+                    onClick={() => setTab('build')}
+                    className="px-5 py-2.5 border border-orange-500/40 text-orange-300 font-mono text-xs uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+                  >
+                    Build New Bundle →
                   </button>
-                )}
+                </div>
+              ) : (
+                <div className="flex-1 overflow-y-auto">
+                  {templates.map(tmpl => (
+                    <div key={tmpl.id} className="flex items-center gap-4 px-6 py-4 border-b border-stone-800/40 hover:bg-stone-900/40 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 mb-0.5">
+                          <span className="text-stone-100 text-sm">{tmpl.name}</span>
+                          {tmpl.times_used > 0 && (
+                            <span className="text-[8px] font-mono text-stone-600 uppercase tracking-wider">{tmpl.times_used}×</span>
+                          )}
+                        </div>
+                        <div className="flex gap-3 text-[10px] font-mono tabular-nums text-stone-500 mb-1">
+                          <span className="text-stone-400">{tmpl.kcal} kcal</span>
+                          <span>{tmpl.protein_g}g P</span>
+                          <span>{tmpl.carbs_g}g C</span>
+                          <span>{tmpl.fat_g}g F</span>
+                        </div>
+                        {tmpl.items?.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {tmpl.items.map((item, i) => (
+                              <span key={i} className="text-[9px] font-mono px-1.5 py-0.5 bg-stone-800/60 text-stone-600 border border-stone-700/50">
+                                {item.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => { onLogAll(tmpl); setToast('Logged ✓'); setTimeout(() => setToast(''), 2000); }}
+                          className="px-3 py-2 border border-orange-500/40 text-orange-300 font-mono text-[10px] uppercase tracking-wider hover:bg-orange-500/10 transition-colors whitespace-nowrap"
+                        >
+                          Log All →
+                        </button>
+                        {deleteConfirm === tmpl.id ? (
+                          <>
+                            <button onClick={() => { onDelete(tmpl.id); setDeleteConfirm(null); }}
+                              className="text-[9px] font-mono px-2 py-1.5 border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-colors">Del</button>
+                            <button onClick={() => setDeleteConfirm(null)}
+                              className="text-[9px] font-mono px-2 py-1.5 border border-stone-700 text-stone-500 hover:bg-stone-800 transition-colors">✕</button>
+                          </>
+                        ) : (
+                          <button onClick={() => setDeleteConfirm(tmpl.id)}
+                            className="p-1.5 text-stone-700 hover:text-red-400 transition-colors">
+                            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <path d="M2 3.5h10M5.5 3.5V2.5h3v1M11 3.5l-.75 8.5H3.75L3 3.5" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* BUILD NEW tab */}
+            {tab === 'build' && (
+              <div className="flex-1 overflow-y-auto flex flex-col">
+                <div className="p-6 space-y-4 flex-1">
+                  <div>
+                    <label className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono block mb-1.5">Bundle Name</label>
+                    <input
+                      type="text"
+                      value={bundleName}
+                      onChange={e => setBundleName(e.target.value)}
+                      placeholder="e.g. Pre-Workout Meal"
+                      className="w-full bg-stone-900/60 border border-stone-700 px-3 py-2.5 text-stone-100 font-sans text-sm focus:outline-none focus:border-orange-500/60 transition-colors placeholder-stone-700"
+                    />
+                  </div>
+
+                  {bundleItems.length > 0 && (
+                    <div>
+                      <div className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono mb-2">Items</div>
+                      <div className="space-y-1">
+                        {bundleItems.map((item, idx) => (
+                          <div key={idx} className="flex items-center gap-3 py-2 border-b border-stone-800/40 last:border-0">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-stone-200 text-sm truncate">{item.name}</div>
+                              <div className="text-[10px] font-mono text-stone-600">
+                                {item.kcal} kcal · {item.protein_g}p · {item.carbs_g}c · {item.fat_g}f
+                              </div>
+                            </div>
+                            <button onClick={() => setBundleItems(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-stone-700 hover:text-red-400 transition-colors p-1">
+                              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <path d="M2 2L10 10M10 2L2 10" strokeLinecap="round" />
+                              </svg>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 pt-3 border-t border-stone-800/60 flex gap-4 text-[10px] font-mono tabular-nums">
+                        <span className="text-stone-400">{Math.round(bundleTotals.kcal)} kcal</span>
+                        <span className="text-stone-500">{Math.round(bundleTotals.protein_g)}g P</span>
+                        <span className="text-stone-500">{Math.round(bundleTotals.carbs_g)}g C</span>
+                        <span className="text-stone-500">{Math.round(bundleTotals.fat_g)}g F</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {showFoodSearch ? (
+                    <FoodSearch
+                      onAdd={addToBundle}
+                      onCancel={() => setShowFoodSearch(false)}
+                      confirmLabel="Add to Bundle →"
+                    />
+                  ) : (
+                    <button
+                      onClick={() => setShowFoodSearch(true)}
+                      className="w-full py-3 border border-dashed border-stone-700 text-stone-600 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
+                    >
+                      + Add Food
+                    </button>
+                  )}
+                </div>
+
+                <div className="px-6 py-4 border-t border-stone-800 bg-stone-950/60">
+                  <button
+                    onClick={handleSave}
+                    disabled={!bundleName.trim() || bundleItems.length === 0 || saving}
+                    className="w-full py-3 bg-orange-500 text-stone-950 font-anton text-base uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {saving ? 'Saving…' : 'Save Bundle →'}
+                  </button>
+                </div>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
 
-        {toasting && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-stone-900/95 border border-orange-500/30 px-5 py-2.5 pointer-events-none">
-            <span className="text-orange-300 font-mono text-xs uppercase tracking-wider">Logged ✓</span>
+        {toast && (
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-stone-900/95 border border-orange-500/30 px-5 py-2.5 pointer-events-none">
+            <span className="text-orange-300 font-mono text-xs uppercase tracking-wider">{toast}</span>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-// -------------------- CONFIRM OVERWRITE MODAL --------------------
-function ConfirmOverwriteModal({ meal, onConfirm, onCancel }) {
-  return (
-    <div className="fixed inset-0 z-50 bg-stone-950/90 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm border border-stone-800 bg-[#0a0908] p-6 space-y-4">
-        <h2 className="font-anton text-xl uppercase tracking-tight text-stone-100">Update Template?</h2>
-        <p className="text-[11px] font-mono text-stone-400 leading-relaxed">
-          A template named <span className="text-stone-200">"{meal.name}"</span> already exists. Update it with the current values?
-        </p>
-        <div className="flex gap-3">
-          <button onClick={onCancel} className="flex-1 px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 transition-colors">Cancel</button>
-          <button onClick={onConfirm} className="flex-1 px-4 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors">Update</button>
-        </div>
       </div>
     </div>
   );
@@ -845,12 +954,10 @@ export default function VisionNutrition() {
   const mealTemplates = useMealTemplates(user?.id);
   const water         = useWaterTracker(user?.id);
 
-  const [scanState, setScanState] = useState('results');
-  const [selectedId, setSelectedId] = useState('a');
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [showTemplates, setShowTemplates]     = useState(false);
-  const [overwriteMeal, setOverwriteMeal]     = useState(null); // meal awaiting overwrite confirm
-  const [saveToast, setSaveToast]             = useState(false);
+  const [scanState, setScanState]       = useState('results');
+  const [selectedId, setSelectedId]     = useState('a');
+  const [showAddForm, setShowAddForm]   = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
 
   // Date helpers
   const todayMidnight = new Date();
@@ -859,7 +966,6 @@ export default function VisionNutrition() {
   selMidnight.setHours(0, 0, 0, 0);
   const isToday = selMidnight.getTime() === todayMidnight.getTime();
 
-  // Resolved targets with fallbacks — adjust kcal if eat-back is enabled and today has a burn
   const baseTgt = {
     kcal:    targets?.kcal    ?? 2200,
     protein: targets?.protein ?? 180,
@@ -925,26 +1031,6 @@ export default function VisionNutrition() {
     setTimeout(() => setScanState('idle'), 1800);
   };
 
-  async function handleSaveTemplate(meal) {
-    const result = await mealTemplates.saveTemplate({
-      name: meal.name, kcal: meal.kcal,
-      protein_g: meal.protein_g, carbs_g: meal.carbs_g, fat_g: meal.fat_g,
-    });
-    if (result?.exists) { setOverwriteMeal({ ...meal, existingId: result.existingId }); return; }
-    if (result?.success) { setSaveToast(true); setTimeout(() => setSaveToast(false), 2000); }
-  }
-
-  async function handleOverwriteConfirm() {
-    if (!overwriteMeal) return;
-    await mealTemplates.updateTemplate(overwriteMeal.existingId, {
-      name: overwriteMeal.name, kcal: overwriteMeal.kcal,
-      protein_g: overwriteMeal.protein_g, carbs_g: overwriteMeal.carbs_g, fat_g: overwriteMeal.fat_g,
-    });
-    setOverwriteMeal(null);
-    setSaveToast(true);
-    setTimeout(() => setSaveToast(false), 2000);
-  }
-
   return (
     <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
       <style>{`
@@ -1006,7 +1092,7 @@ export default function VisionNutrition() {
               onClick={() => setShowTemplates(true)}
               className="px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-sm uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
             >
-              My Templates
+              Meal Templates
             </button>
             <button
               onClick={startScan}
@@ -1018,7 +1104,7 @@ export default function VisionNutrition() {
           </div>
         </header>
 
-        {/* WORKOUT BURN BANNER — shown when today has a completed workout with calories_burned */}
+        {/* WORKOUT BURN BANNER */}
         {isToday && calsBurned != null && (
           <div className="flex items-center gap-3 flex-wrap border border-orange-500/30 bg-orange-500/08 px-5 py-3 mb-6">
             <span className="text-base">🔥</span>
@@ -1052,11 +1138,11 @@ export default function VisionNutrition() {
           )}
         </div>
 
-        {/* TOP DASHBOARD */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mb-10">
+        {/* DASHBOARD — 2 cols: CalorieRing + MacroBars */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
 
           {/* Calorie ring */}
-          <div className="md:col-span-4 border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col items-center justify-center">
+          <div className="border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col items-center justify-center">
             {loading ? (
               <div className="w-48 h-48 flex items-center justify-center">
                 <Sk w="w-40" h="h-40" />
@@ -1081,7 +1167,7 @@ export default function VisionNutrition() {
           </div>
 
           {/* Macro bars */}
-          <div className="md:col-span-4 border border-stone-800/60 bg-stone-950/40 p-6">
+          <div className="border border-stone-800/60 bg-stone-950/40 p-6">
             <div className="flex items-baseline justify-between mb-5">
               <h2 className="font-anton text-xl uppercase tracking-tight text-stone-100">Macros</h2>
               <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">target split</span>
@@ -1115,43 +1201,49 @@ export default function VisionNutrition() {
               ))}
             </div>
           </div>
+        </div>
 
-          {/* Meal log with date nav */}
-          <div className="md:col-span-4 border border-stone-800/60 bg-stone-950/40 p-6">
-            {/* Date nav */}
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-anton text-xl uppercase tracking-tight text-stone-100">{fmtDate()}</h2>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={prevDay}
-                  className="p-1.5 text-stone-500 hover:text-stone-300 border border-stone-800 hover:border-stone-700 transition-colors"
-                >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M8 2L4 6L8 10" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                {!isToday && (
-                  <button
-                    onClick={() => setSelectedDate(new Date())}
-                    className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 border border-stone-800 text-stone-600 hover:text-stone-400 transition-colors"
-                  >
-                    today
+        {/* MEAL LOG + ADD MEAL — full width */}
+        <div className="border border-stone-800/60 bg-stone-950/40 mb-8">
+          <div className="flex items-center justify-between p-6 pb-4 border-b border-stone-800/60">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">{fmtDate()}</h2>
+                <div className="flex items-center gap-1">
+                  <button onClick={prevDay} className="p-1.5 text-stone-500 hover:text-stone-300 border border-stone-800 hover:border-stone-700 transition-colors">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M8 2L4 6L8 10" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </button>
-                )}
-                <button
-                  onClick={nextDay}
-                  disabled={isToday}
-                  className="p-1.5 text-stone-500 hover:text-stone-300 border border-stone-800 hover:border-stone-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M4 2L8 6L4 10" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
+                  {!isToday && (
+                    <button onClick={() => setSelectedDate(new Date())}
+                      className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 border border-stone-800 text-stone-600 hover:text-stone-400 transition-colors">
+                      today
+                    </button>
+                  )}
+                  <button onClick={nextDay} disabled={isToday}
+                    className="p-1.5 text-stone-500 hover:text-stone-300 border border-stone-800 hover:border-stone-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M4 2L8 6L4 10" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
               </div>
+              <div className="text-[10px] font-mono uppercase tracking-wider text-stone-600">daily meal log</div>
             </div>
+            {!showAddForm && (
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="px-4 py-2 border border-orange-500/40 text-orange-400 font-anton text-sm uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+              >
+                + Add Meal
+              </button>
+            )}
+          </div>
 
+          <div className="p-6">
             {loading ? (
-              <div className="space-y-3 mt-2">
+              <div className="space-y-3">
                 <Sk w="w-full" h="h-10" />
                 <Sk w="w-full" h="h-10" />
                 <Sk w="w-4/5"  h="h-10" />
@@ -1167,23 +1259,24 @@ export default function VisionNutrition() {
                 </div>
                 <div className="text-[10px] uppercase tracking-[0.2em] text-stone-700 font-mono mb-1">Nothing logged yet</div>
                 <div className="text-stone-600 text-xs leading-relaxed">
-                  {isToday
-                    ? 'Scan a meal or add one manually below.'
-                    : 'Nothing was logged on this day.'}
+                  {isToday ? 'Scan a meal or add one manually.' : 'Nothing was logged on this day.'}
                 </div>
               </div>
             ) : (
               <div>
                 {meals.map(m => (
-                  <MealEntry key={m.id} meal={m} onDelete={deleteMeal} onSaveTemplate={handleSaveTemplate} />
+                  <MealEntry key={m.id} meal={m} onDelete={deleteMeal} />
                 ))}
               </div>
             )}
           </div>
-        </div>
 
-        {/* WATER TRACKER */}
-        <WaterTracker water={water} weightUnit={weightUnit} />
+          {showAddForm && (
+            <div className="border-t border-stone-800/60">
+              <FoodSearch onAdd={addMeal} onCancel={() => setShowAddForm(false)} />
+            </div>
+          )}
+        </div>
 
         {/* SCAN SECTION */}
         <div className="border border-stone-800/60 bg-stone-950/40 mb-8">
@@ -1237,30 +1330,8 @@ export default function VisionNutrition() {
           </div>
         </div>
 
-        {/* FOOD DATABASE */}
-        <div className="border border-stone-800/60 bg-stone-950/40 mb-8">
-          <div className="flex items-baseline justify-between p-6 pb-4 border-b border-stone-800/60">
-            <div>
-              <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Add Meal</h2>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-stone-600 mt-1">search 3M+ products · open food facts · barcode scan</div>
-            </div>
-            {!showAddForm && (
-              <button
-                onClick={() => setShowAddForm(true)}
-                className="px-4 py-2 border border-orange-500/40 text-orange-400 font-anton text-sm uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
-              >
-                + Add Meal
-              </button>
-            )}
-          </div>
-          {showAddForm ? (
-            <FoodSearch onAdd={addMeal} onCancel={() => setShowAddForm(false)} />
-          ) : (
-            <div className="p-6 text-center text-stone-700 text-[11px] font-mono uppercase tracking-[0.18em]">
-              Search food database or scan a barcode to log a meal
-            </div>
-          )}
-        </div>
+        {/* WATER TRACKER */}
+        <WaterTracker water={water} weightUnit={weightUnit} />
 
         {/* SAFETY NOTE */}
         <div className="border border-stone-800/60 bg-stone-950/40 p-5 mb-8">
@@ -1292,26 +1363,11 @@ export default function VisionNutrition() {
           templates={mealTemplates.templates}
           loading={mealTemplates.loading}
           onClose={() => setShowTemplates(false)}
-          onLog={tmpl => mealTemplates.logFromTemplate(tmpl, addMeal)}
+          onLogAll={tmpl => mealTemplates.logFromTemplate(tmpl, addMeal)}
+          onSave={mealTemplates.saveTemplate}
           onDelete={mealTemplates.deleteTemplate}
           isPro={isPro}
         />
-      )}
-
-      {/* CONFIRM OVERWRITE MODAL */}
-      {overwriteMeal && (
-        <ConfirmOverwriteModal
-          meal={overwriteMeal}
-          onConfirm={handleOverwriteConfirm}
-          onCancel={() => setOverwriteMeal(null)}
-        />
-      )}
-
-      {/* SAVE TOAST */}
-      {saveToast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 border border-amber-500/30 px-5 py-2.5 backdrop-blur-sm pointer-events-none">
-          <span className="text-amber-300 font-mono text-xs uppercase tracking-wider">Saved as template ✓</span>
-        </div>
       )}
     </div>
   );
