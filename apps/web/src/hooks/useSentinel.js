@@ -78,14 +78,23 @@ export function useSentinel(userId) {
   );
 
   const addMeal = async ({ name, kcal, protein_g, carbs_g, fat_g, source = 'manual' }) => {
+    const safeName    = name?.trim() || 'Unknown Food';
+    const safeKcal    = isNaN(Number(kcal))      ? 0 : Math.round(Number(kcal));
+    const safeProtein = isNaN(Number(protein_g)) ? 0 : Math.round(Number(protein_g));
+    const safeCarbs   = isNaN(Number(carbs_g))   ? 0 : Math.round(Number(carbs_g));
+    const safeFat     = isNaN(Number(fat_g))     ? 0 : Math.round(Number(fat_g));
+
     const tempId = `opt-${Date.now()}`;
     const now = new Date().toISOString();
-    const optimistic = { id: tempId, user_id: userId, logged_at: now, name, kcal, protein_g, carbs_g, fat_g, source };
+    const optimistic = { id: tempId, user_id: userId, logged_at: now, name: safeName, kcal: safeKcal, protein_g: safeProtein, carbs_g: safeCarbs, fat_g: safeFat, source };
     setMeals(prev => [...prev, optimistic]);
+
+    const payload = { user_id: userId, logged_at: now, meal_name: safeName, kcal: safeKcal, protein_g: safeProtein, carbs_g: safeCarbs, fat_g: safeFat, source, confidence: 100 };
+    console.log('[useSentinel] addMeal insert:', payload);
 
     const { data, error } = await supabase
       .from('nutrition_logs')
-      .insert({ user_id: userId, logged_at: now, meal_name: name, kcal, protein_g, carbs_g, fat_g, source })
+      .insert(payload)
       .select('id, logged_at, meal_name, kcal, protein_g, carbs_g, fat_g, source')
       .single();
 

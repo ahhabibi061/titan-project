@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 /* =========================================================================
- * FoodSearch — Open Food Facts powered meal-add flow
+ * FoodSearch — USDA FoodData Central powered meal-add flow
  * Search by name (debounced) or barcode scan (BarcodeDetector / @zxing).
  * Serving size selector with live macro preview.
  * Matches Sentinel page design exactly.
  * ========================================================================= */
 
-const OFF_SEARCH = (q) =>
-  `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&json=1&page_size=8&fields=product_name,brands,nutriments,serving_size,code&action=process`;
+const USDA_SEARCH = (q) => {
+  const key = import.meta.env.VITE_USDA_API_KEY ?? '';
+  return `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(q)}&api_key=${key}&pageSize=10&dataType=Branded,Survey(FNDDS)`;
+};
 
 const OFF_BARCODE = (code) =>
   `https://world.openfoodfacts.org/api/v0/product/${code}.json`;
@@ -18,34 +20,45 @@ const Sk = ({ w = 'w-full', h = 'h-8' }) => (
   <div className={`${w} ${h} bg-stone-800 animate-pulse rounded-sm`} />
 );
 
-function scaleMacros(nutriments, servingG) {
-  const per100 = {
-    kcal:    nutriments?.['energy-kcal_100g'] ?? nutriments?.['energy-kcal'] ?? 0,
-    protein: nutriments?.['proteins_100g']    ?? 0,
-    carbs:   nutriments?.['carbohydrates_100g'] ?? 0,
-    fat:     nutriments?.['fat_100g']          ?? 0,
-  };
-  const factor = servingG / 100;
+// USDA: look up a nutrient by ID from the foodNutrients array
+const getNutrient = (nutrients, id) =>
+  nutrients?.find(n => n.nutrientId === id)?.value || 0;
+
+// Normalize a USDA food object into a standard shape for ServingSelector
+function normalizeUsda(food) {
   return {
-    kcal:    Math.round(per100.kcal    * factor),
-    protein: Math.round(per100.protein * factor * 10) / 10,
-    carbs:   Math.round(per100.carbs   * factor * 10) / 10,
-    fat:     Math.round(per100.fat     * factor * 10) / 10,
-    per100,
+    name:             food.description?.trim() || 'Unknown Food',
+    brand:            food.brandOwner || food.brandName || '',
+    servingSize:      food.servingSize || 100,
+    servingSizeUnit:  (food.servingSizeUnit || 'g').toLowerCase(),
+    kcalPerServing:    getNutrient(food.foodNutrients, 1008),
+    proteinPerServing: getNutrient(food.foodNutrients, 1003),
+    carbsPerServing:   getNutrient(food.foodNutrients, 1005),
+    fatPerServing:     getNutrient(food.foodNutrients, 1004),
   };
 }
 
+// Normalize an Open Food Facts barcode product into the same shape
 function parseServingG(raw) {
-  // e.g. "30g", "250 ml", "1 serving" → attempt to extract a number
   if (!raw) return null;
   const m = raw.match(/[\d.]+/);
   return m ? parseFloat(m[0]) : null;
 }
 
-function productLabel(p) {
-  const brand = p.brands?.split(',')[0]?.trim() ?? '';
-  const name  = p.product_name ?? 'Unknown product';
-  return brand ? `${brand} — ${name}` : name;
+function normalizeOff(product) {
+  const n = product.nutriments ?? {};
+  const servingG = parseServingG(product.serving_size) ?? 100;
+  const factor = servingG / 100;
+  return {
+    name:             product.product_name?.trim() || 'Unknown Food',
+    brand:            product.brands?.split(',')[0]?.trim() ?? '',
+    servingSize:      servingG,
+    servingSizeUnit:  'g',
+    kcalPerServing:    Math.round((n['energy-kcal_100g'] ?? n['energy-kcal'] ?? 0) * factor),
+    proteinPerServing: Math.round((n['proteins_100g'] ?? 0) * factor * 10) / 10,
+    carbsPerServing:   Math.round((n['carbohydrates_100g'] ?? 0) * factor * 10) / 10,
+    fatPerServing:     Math.round((n['fat_100g'] ?? 0) * factor * 10) / 10,
+  };
 }
 
 // -------------------- BARCODE SCANNER --------------------
@@ -194,33 +207,35 @@ function BarcodeOverlay({ onResult, onClose }) {
 }
 
 // -------------------- SEARCH RESULT ROW --------------------
-function ResultRow({ product, onSelect }) {
-  const n = product.nutriments ?? {};
-  const kcal = n['energy-kcal_100g'] ?? n['energy-kcal'] ?? null;
+function ResultRow({ food, onSelect }) {
+  const kcal = getNutrient(food.foodNutrients, 1008);
+  const brand = food.brandOwner || food.brandName || '';
+  const serving = food.servingSize
+    ? `${food.servingSize}${(food.servingSizeUnit || 'g').toLowerCase()}`
+    : null;
   return (
     <button
-      onClick={() => onSelect(product)}
+      onClick={() => onSelect(food)}
       className="w-full text-left px-4 py-3 border-b border-stone-800/60 last:border-b-0 hover:bg-stone-900/60 transition-colors group"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          {product.brands && (
-            <div className="text-[9px] uppercase tracking-wider text-orange-400 font-mono mb-0.5">
-              {product.brands.split(',')[0].trim()}
+          {brand && (
+            <div className="text-[9px] uppercase tracking-wider text-orange-400 font-mono mb-0.5 truncate">
+              {brand}
             </div>
           )}
           <div className="text-stone-200 text-sm truncate group-hover:text-stone-100 transition-colors">
-            {product.product_name ?? 'Unknown product'}
+            {food.description ?? 'Unknown product'}
           </div>
         </div>
         <div className="shrink-0 text-right">
-          {kcal !== null ? (
-            <div className="font-mono text-[11px] tabular-nums text-stone-400">
-              <span className="text-stone-200">{Math.round(kcal)}</span>
-              <span className="text-stone-600"> kcal/100g</span>
-            </div>
-          ) : (
-            <div className="text-[10px] font-mono text-stone-700">no data</div>
+          <div className="font-mono text-[11px] tabular-nums text-stone-400">
+            <span className="text-stone-200">{Math.round(kcal)}</span>
+            <span className="text-stone-600"> kcal</span>
+          </div>
+          {serving && (
+            <div className="text-[9px] font-mono text-stone-700 mt-0.5">per {serving}</div>
           )}
         </div>
       </div>
@@ -229,32 +244,27 @@ function ResultRow({ product, onSelect }) {
 }
 
 // -------------------- SERVING SELECTOR --------------------
+// Receives a normalized product (from normalizeUsda or normalizeOff)
 function ServingSelector({ product, source, onConfirm, onBack }) {
-  const n = product.nutriments ?? {};
-  const defaultServing = parseServingG(product.serving_size) ?? 100;
+  const [qty, setQty] = useState('1');
 
-  const [qty,  setQty]  = useState(String(defaultServing));
-  const [unit, setUnit] = useState('g');
-
-  // Convert qty to grams for scaling
-  const servingG = (() => {
-    const v = parseFloat(qty) || 0;
-    if (unit === 'serving') return defaultServing * v;
-    return v; // g and ml treated as 1:1 for macro scaling
-  })();
-
-  const macros = scaleMacros(n, servingG);
-  const label  = productLabel(product);
+  const numQty = parseFloat(qty) || 0;
+  const macros = {
+    kcal:    Math.round((product.kcalPerServing    || 0) * numQty),
+    protein: Math.round((product.proteinPerServing || 0) * numQty * 10) / 10,
+    carbs:   Math.round((product.carbsPerServing   || 0) * numQty * 10) / 10,
+    fat:     Math.round((product.fatPerServing     || 0) * numQty * 10) / 10,
+  };
 
   const inputClass = 'bg-stone-900/60 border border-stone-700 px-3 py-2 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors';
 
   const handleConfirm = () => {
     onConfirm({
-      name:      label,
-      kcal:      macros.kcal,
-      protein_g: macros.protein,
-      carbs_g:   macros.carbs,
-      fat_g:     macros.fat,
+      name:      product.name || 'Unknown Food',
+      kcal:      isNaN(macros.kcal)    ? 0 : macros.kcal,
+      protein_g: isNaN(macros.protein) ? 0 : macros.protein,
+      carbs_g:   isNaN(macros.carbs)   ? 0 : macros.carbs,
+      fat_g:     isNaN(macros.fat)     ? 0 : macros.fat,
       source,
     });
   };
@@ -270,12 +280,14 @@ function ServingSelector({ product, source, onConfirm, onBack }) {
             </svg>
           </button>
           <div>
-            {product.brands && (
-              <div className="text-[9px] uppercase tracking-wider text-orange-400 font-mono mb-0.5">
-                {product.brands.split(',')[0].trim()}
+            {product.brand && (
+              <div className="text-[9px] uppercase tracking-wider text-orange-400 font-mono mb-0.5 truncate max-w-xs">
+                {product.brand}
               </div>
             )}
-            <div className="font-anton text-lg uppercase tracking-tight text-stone-100">{product.product_name}</div>
+            <div className="font-anton text-lg uppercase tracking-tight text-stone-100 leading-tight">
+              {product.name}
+            </div>
             {source === 'barcode' && (
               <span className="inline-block mt-1 text-[8px] uppercase tracking-wider px-1.5 py-0.5 bg-stone-700/40 text-stone-400 border border-stone-700/50 font-mono">
                 ▣ barcode scan
@@ -285,65 +297,41 @@ function ServingSelector({ product, source, onConfirm, onBack }) {
         </div>
       </div>
 
-      {/* Per 100g reference */}
+      {/* Per-serving reference */}
       <div className="mb-5 p-3 bg-stone-900/40 border border-stone-800/60">
-        <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-2">Per 100g</div>
+        <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-2">
+          Per serving ({product.servingSize}{product.servingSizeUnit})
+        </div>
         <div className="flex gap-4 text-[11px] font-mono tabular-nums">
-          <span className="text-stone-300">{Math.round(macros.per100.kcal)} <span className="text-stone-600">kcal</span></span>
-          <span className="text-orange-300">{macros.per100.protein.toFixed(1)}g <span className="text-stone-600">P</span></span>
-          <span className="text-stone-400">{macros.per100.carbs.toFixed(1)}g <span className="text-stone-600">C</span></span>
-          <span className="text-stone-400">{macros.per100.fat.toFixed(1)}g <span className="text-stone-600">F</span></span>
+          <span className="text-stone-300">{Math.round(product.kcalPerServing || 0)} <span className="text-stone-600">kcal</span></span>
+          <span className="text-orange-300">{(product.proteinPerServing || 0).toFixed(1)}g <span className="text-stone-600">P</span></span>
+          <span className="text-stone-400">{(product.carbsPerServing || 0).toFixed(1)}g <span className="text-stone-600">C</span></span>
+          <span className="text-stone-400">{(product.fatPerServing || 0).toFixed(1)}g <span className="text-stone-600">F</span></span>
         </div>
       </div>
 
-      {/* Serving size input */}
+      {/* Servings input */}
       <div className="mb-5">
-        <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-2">Serving size</div>
-        <div className="flex gap-2">
+        <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-2">Number of servings</div>
+        <div className="flex gap-2 items-center">
           <input
             type="number"
-            min="1"
+            min="0.25"
+            step="0.25"
             value={qty}
             onChange={e => setQty(e.target.value)}
             className={`${inputClass} w-28 tabular-nums`}
           />
-          <div className="flex border border-stone-700">
-            {['g', 'ml', 'serving'].map(u => (
-              <button
-                key={u}
-                type="button"
-                onClick={() => setUnit(u)}
-                className={`px-3 py-2 text-[10px] font-mono uppercase tracking-wider transition-colors ${
-                  unit === u
-                    ? 'bg-orange-500 text-stone-950'
-                    : 'text-stone-500 hover:text-stone-300 hover:bg-stone-800'
-                }`}
-              >
-                {u}
-              </button>
-            ))}
-          </div>
-          {product.serving_size && (
-            <button
-              type="button"
-              onClick={() => { setQty(String(defaultServing)); setUnit('g'); }}
-              className="text-[9px] font-mono uppercase tracking-wider text-stone-600 hover:text-stone-400 px-2 border border-stone-800 hover:border-stone-700 transition-colors"
-            >
-              reset
-            </button>
-          )}
+          <span className="text-[11px] font-mono text-stone-500">
+            × {product.servingSize}{product.servingSizeUnit} per serving
+          </span>
         </div>
-        {product.serving_size && (
-          <div className="mt-1.5 text-[9px] font-mono text-stone-700">
-            Product serving: {product.serving_size}
-          </div>
-        )}
       </div>
 
       {/* Live macro preview */}
       <div className="mb-6 border border-orange-500/20 bg-orange-500/5 p-4">
         <div className="text-[9px] uppercase tracking-[0.2em] text-orange-400 font-mono mb-3">
-          Macros for {qty || '0'}{unit === 'serving' ? ' serving' : unit}
+          Macros for {qty || '0'} serving{parseFloat(qty) !== 1 ? 's' : ''}
         </div>
         <div className="grid grid-cols-4 gap-3 text-center">
           {[
@@ -502,12 +490,12 @@ export function FoodSearch({ onAdd, onCancel }) {
       const controller = new AbortController();
       abortRef.current = controller;
       try {
-        const res  = await fetch(OFF_SEARCH(query), { signal: controller.signal });
-        const json = await res.json();
-        const products = (json.products ?? []).filter(p => p.product_name);
-        cacheRef.current.set(query, products);
-        setResults(products);
-        setNoResults(products.length === 0);
+        const res   = await fetch(USDA_SEARCH(query), { signal: controller.signal });
+        const json  = await res.json();
+        const foods = (json.foods ?? []).filter(f => f.description);
+        cacheRef.current.set(query, foods);
+        setResults(foods);
+        setNoResults(foods.length === 0);
       } catch (e) {
         if (e.name !== 'AbortError') { setResults([]); setNoResults(true); }
       }
@@ -516,8 +504,9 @@ export function FoodSearch({ onAdd, onCancel }) {
     return () => clearTimeout(timerRef.current);
   }, [query]);
 
-  const handleSelectProduct = (product) => {
-    setSelected(product);
+  const handleSelectProduct = (food) => {
+    setScanSource('search');
+    setSelected(normalizeUsda(food));
     setView('serving');
   };
 
@@ -530,7 +519,7 @@ export function FoodSearch({ onAdd, onCancel }) {
       const json = await res.json();
       if (json.status === 1 && json.product?.product_name) {
         setScanSource('barcode');
-        setSelected(json.product);
+        setSelected(normalizeOff(json.product));
         setView('serving');
       } else {
         setBarcodeError(`Barcode ${code} not found in database.`);
@@ -643,8 +632,8 @@ export function FoodSearch({ onAdd, onCancel }) {
         {/* Results list */}
         {results.length > 0 && (
           <div className="border border-stone-800/60 bg-stone-950/60 mb-3">
-            {results.map((p, i) => (
-              <ResultRow key={p.code ?? i} product={p} onSelect={handleSelectProduct} />
+            {results.map((f, i) => (
+              <ResultRow key={f.fdcId ?? i} food={f} onSelect={handleSelectProduct} />
             ))}
           </div>
         )}
@@ -663,7 +652,7 @@ export function FoodSearch({ onAdd, onCancel }) {
           <div className="border border-stone-800/60 bg-stone-950/40 p-5 mb-3 text-center">
             <div className="text-[10px] uppercase tracking-[0.2em] text-stone-700 font-mono mb-1">Not found in database</div>
             <div className="text-stone-600 text-xs mb-4">
-              "{query}" returned no matches in Open Food Facts.
+              "{query}" returned no matches in USDA FoodData Central.
             </div>
             <button
               onClick={() => setView('manual')}
@@ -678,7 +667,7 @@ export function FoodSearch({ onAdd, onCancel }) {
         {!query && !searching && results.length === 0 && (
           <div className="text-center py-6">
             <div className="text-[10px] uppercase tracking-[0.18em] text-stone-700 font-mono mb-1">
-              Search 3M+ products · Open Food Facts
+              Search USDA FoodData Central database
             </div>
             <div className="text-stone-700 text-xs">
               Type to search or{cameraAvail ? ' scan a barcode.' : ' type a product name.'}
