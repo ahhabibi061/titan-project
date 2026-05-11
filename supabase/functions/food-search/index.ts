@@ -82,18 +82,21 @@ function normalizeFatSecret(food: FatSecretFood) {
 }
 
 async function searchFatSecret(query: string) {
-  const token = await getToken();
-  const url   = 'https://platform.fatsecret.com/rest/server.api' +
-    `?method=foods.search&search_expression=${encodeURIComponent(query)}&format=json&max_results=10&page_number=0`;
+  const token = await getToken()
+  const url = `https://platform.fatsecret.com/rest/server.api?method=foods.search&search_expression=${encodeURIComponent(query)}&format=json&max_results=10&page_number=0`
 
-  const res  = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-  if (!res.ok) throw new Error(`FatSecret search error: ${res.status}`);
+  console.log('[FS] searching for:', query)
+  const res = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  })
+  console.log('[FS] search response status:', res.status)
+  const data = await res.json()
+  console.log('[FS] raw response:', JSON.stringify(data).slice(0, 500))
 
-  const data = await res.json();
-  const raw  = data?.foods?.food;
-  if (!raw) return [];
+  const foods = data.foods?.food || []
+  console.log('[FS] foods found:', Array.isArray(foods) ? foods.length : 1)
 
-  const arr: FatSecretFood[] = Array.isArray(raw) ? raw : [raw];
+  const arr: FatSecretFood[] = Array.isArray(foods) ? foods : [foods];
   return arr.map(normalizeFatSecret);
 }
 
