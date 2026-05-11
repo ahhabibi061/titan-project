@@ -216,6 +216,14 @@ export default function Dashboard() {
     setShowCheckinBanner(false);
   }
 
+  async function dismissPlateauAlert(alert) {
+    setPlateauAlerts(prev => prev.filter(p => p.exerciseId !== alert.exerciseId));
+    await supabase
+      .from('workout_exercises')
+      .update({ plateaued: false })
+      .in('id', alert.weIds);
+  }
+
   useEffect(() => {
     if (showUpgradeBanner) setSearchParams({}, { replace: true });
   }, []);
@@ -236,19 +244,22 @@ export default function Dashboard() {
         const ids = recentWorkouts.map(w => w.id);
         const { data: plateaued } = await supabase
           .from('workout_exercises')
-          .select('exercise_id, exercises(name)')
+          .select('id, exercise_id, exercises(name)')
           .in('workout_id', ids)
           .eq('plateaued', true);
         if (plateaued?.length) {
-          const seen = new Set();
-          const alerts = [];
+          const exerciseMap = new Map();
           for (const we of plateaued) {
-            if (!seen.has(we.exercise_id)) {
-              seen.add(we.exercise_id);
-              alerts.push({ exerciseId: we.exercise_id, exerciseName: we.exercises?.name ?? we.exercise_id });
+            if (!exerciseMap.has(we.exercise_id)) {
+              exerciseMap.set(we.exercise_id, {
+                exerciseId:   we.exercise_id,
+                exerciseName: we.exercises?.name ?? we.exercise_id,
+                weIds:        [],
+              });
             }
+            exerciseMap.get(we.exercise_id).weIds.push(we.id);
           }
-          setPlateauAlerts(alerts);
+          setPlateauAlerts([...exerciseMap.values()]);
         }
       });
   }, [user?.id]);
@@ -557,7 +568,12 @@ export default function Dashboard() {
           {!loading && plateauAlerts.length > 0 && (
             <div className="mb-8 space-y-2">
               {plateauAlerts.map((p, i) => (
-                <div key={i} className="border border-orange-500/40 bg-orange-500/5 p-4 flex items-start justify-between gap-4">
+                <div key={i} className="relative border border-orange-500/40 bg-orange-500/5 p-4 flex items-start justify-between gap-4">
+                  <button
+                    onClick={() => dismissPlateauAlert(p)}
+                    className="absolute top-2 right-2 text-stone-500 font-mono text-[10px] leading-none hover:text-orange-400 transition-colors"
+                    aria-label="Dismiss plateau alert"
+                  >×</button>
                   <div className="flex items-start gap-3">
                     <span className="text-xl shrink-0">⚠</span>
                     <div>
