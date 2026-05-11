@@ -510,13 +510,108 @@ function mlToDisplay(ml, unit) {
 }
 function displayLabel(unit) { return unit === 'lbs' ? 'fl oz' : 'ml'; }
 
+function WaterLogEntry({ entry, unit, onUpdate, onDelete }) {
+  const [editing, setEditing]       = useState(false);
+  const [editVal, setEditVal]       = useState('');
+  const [delConfirm, setDelConfirm] = useState(false);
+
+  const displayAmt = unit === 'lbs' ? +(entry.amount_ml * ML_TO_OZ).toFixed(0) : entry.amount_ml;
+  const lbl = unit === 'lbs' ? 'oz' : 'ml';
+  const time = new Date(entry.logged_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+  function startEdit() {
+    setEditVal(String(displayAmt));
+    setEditing(true);
+    setDelConfirm(false);
+  }
+
+  function confirmEdit() {
+    const val = parseFloat(editVal);
+    if (isNaN(val) || val <= 0) { setEditing(false); return; }
+    const ml = unit === 'lbs' ? Math.round(val / ML_TO_OZ) : Math.round(val);
+    onUpdate(entry.id, ml);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2 py-2.5 border-b border-stone-800/40 last:border-b-0">
+        <input
+          type="number"
+          autoFocus
+          value={editVal}
+          onChange={e => setEditVal(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') confirmEdit(); if (e.key === 'Escape') setEditing(false); }}
+          className="w-20 bg-stone-950/60 border border-blue-500/60 px-2 py-1 text-stone-100 font-mono text-sm focus:outline-none"
+        />
+        <span className="text-stone-600 font-mono text-xs">{lbl}</span>
+        <button
+          onClick={confirmEdit}
+          className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors"
+        >✓</button>
+        <button
+          onClick={() => setEditing(false)}
+          className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 border border-stone-700 text-stone-500 hover:bg-stone-800 transition-colors"
+        >✕</button>
+      </div>
+    );
+  }
+
+  if (delConfirm) {
+    return (
+      <div className="flex items-center gap-2 py-2.5 border-b border-stone-800/40 last:border-b-0">
+        <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider flex-1">Remove this entry?</span>
+        <button
+          onClick={() => { onDelete(entry.id); setDelConfirm(false); }}
+          className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-colors"
+        >Remove</button>
+        <button
+          onClick={() => setDelConfirm(false)}
+          className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 border border-stone-700 text-stone-500 hover:bg-stone-800 transition-colors"
+        >Cancel</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 py-2.5 border-b border-stone-800/40 last:border-b-0 group">
+      <span className="font-mono text-[11px] tabular-nums text-blue-300/80 w-16 shrink-0">
+        {displayAmt}{lbl}
+      </span>
+      <span className="font-mono text-[10px] text-stone-600 flex-1">— {time}</span>
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+        <button
+          onClick={startEdit}
+          className="p-1.5 text-stone-700 hover:text-blue-400 transition-colors"
+          aria-label="Edit entry"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M8.5 1.5L10.5 3.5L4 10H2V8L8.5 1.5Z" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <button
+          onClick={() => setDelConfirm(true)}
+          className="p-1.5 text-stone-700 hover:text-red-400 transition-colors"
+          aria-label="Delete entry"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M1.5 3h9M4 3V2h4v1M9.5 3L9 10H3L2.5 3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function WaterTracker({ water, weightUnit }) {
   const [editingTarget, setEditingTarget] = useState(false);
   const [targetInput, setTargetInput]     = useState('');
   const [customInput, setCustomInput]     = useState('');
   const [editingCustom, setEditingCustom] = useState(false);
+  const [showSetTotal, setShowSetTotal]   = useState(false);
+  const [setTotalInput, setSetTotalInput] = useState('');
 
-  const { totalMl, targetMl, loading, addWater, setTarget } = water;
+  const { logs, totalMl, targetMl, loading, addWater, updateWater, deleteWater, setTotal, setTarget } = water;
   const pct = Math.min(totalMl / Math.max(targetMl, 1), 1.0);
 
   const barColor = pct >= 1.0
@@ -527,7 +622,7 @@ function WaterTracker({ water, weightUnit }) {
     ? '#60a5fa'
     : '#a8a29e';
 
-  const unit   = weightUnit ?? 'kg';
+  const unit       = weightUnit ?? 'kg';
   const dispTotal  = mlToDisplay(totalMl, unit);
   const dispTarget = mlToDisplay(targetMl, unit);
   const lbl        = displayLabel(unit);
@@ -547,6 +642,14 @@ function WaterTracker({ water, weightUnit }) {
     if (ml > 0 && ml <= 5000) addWater(ml);
     setCustomInput('');
     setEditingCustom(false);
+  }
+
+  function handleSetTotal() {
+    const val = parseFloat(setTotalInput);
+    const ml  = unit === 'lbs' ? Math.round(val / ML_TO_OZ) : Math.round(val);
+    if (!isNaN(ml) && ml >= 0) setTotal(ml);
+    setShowSetTotal(false);
+    setSetTotalInput('');
   }
 
   return (
@@ -576,8 +679,8 @@ function WaterTracker({ water, weightUnit }) {
           <div className="flex items-baseline gap-2 mb-1">
             <button
               className="font-anton text-4xl tabular-nums text-blue-300 hover:text-blue-200 transition-colors"
-              onClick={() => setEditingCustom(true)}
-              title="Tap to enter custom amount"
+              onClick={() => { setSetTotalInput(String(dispTotal)); setShowSetTotal(true); }}
+              title="Tap to set total"
             >
               {loading ? '—' : dispTotal.toLocaleString()}
             </button>
@@ -643,6 +746,22 @@ function WaterTracker({ water, weightUnit }) {
         </div>
       )}
 
+      {/* Today's log entries */}
+      {!loading && logs.length > 0 && (
+        <div className="mt-5 pt-5 border-t border-stone-800/60">
+          <div className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono mb-1">Today's entries</div>
+          {logs.map(entry => (
+            <WaterLogEntry
+              key={entry.id}
+              entry={entry}
+              unit={unit}
+              onUpdate={updateWater}
+              onDelete={deleteWater}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Edit target inline */}
       {editingTarget && (
         <div className="mt-4 flex items-center gap-2">
@@ -658,6 +777,52 @@ function WaterTracker({ water, weightUnit }) {
           <span className="text-stone-600 font-mono text-xs">{lbl}</span>
           <button onClick={handleTargetSave} className="px-4 py-2 bg-orange-500 text-stone-950 font-anton text-sm uppercase hover:bg-orange-400 transition-colors">Save</button>
           <button onClick={() => setEditingTarget(false)} className="text-stone-600 font-mono text-xs hover:text-stone-400 transition-colors">Cancel</button>
+        </div>
+      )}
+
+      {/* Set Total Modal */}
+      {showSetTotal && (
+        <div
+          className="fixed inset-0 z-50 bg-stone-950/90 flex items-center justify-center px-4"
+          onClick={() => setShowSetTotal(false)}
+        >
+          <div
+            className="w-full max-w-xs border border-stone-800 bg-[#0a0908] p-6 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div>
+              <div className="font-anton text-xl uppercase tracking-tight text-stone-100">Set Total</div>
+              <div className="text-[10px] font-mono text-stone-600 uppercase tracking-wider mt-0.5">
+                Replaces all today's entries with one
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                autoFocus
+                value={setTotalInput}
+                onChange={e => setSetTotalInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSetTotal()}
+                placeholder="0"
+                className="flex-1 bg-stone-900/60 border border-stone-700 px-3 py-2 text-stone-100 font-mono text-sm focus:outline-none focus:border-blue-500/60 transition-colors"
+              />
+              <span className="text-stone-500 font-mono text-sm">{lbl}</span>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowSetTotal(false)}
+                className="flex-1 px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSetTotal}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-blue-500 transition-colors"
+              >
+                Set →
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
