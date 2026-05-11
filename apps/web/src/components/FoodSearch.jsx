@@ -1,76 +1,20 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 /* =========================================================================
- * FoodSearch — FatSecret (primary) + USDA FoodData Central (fallback)
- * Both fire simultaneously; FatSecret renders first as it resolves.
- * Barcode scan still uses Open Food Facts (unchanged).
+ * FoodSearch — Open Food Facts + USDA FoodData Central parallel search
+ * Both fire simultaneously; results stream in as each source responds.
+ * Barcode scan also uses Open Food Facts (same API, different endpoint).
  * Serving size selector with live macro preview.
  * ========================================================================= */
 
-// ---- FatSecret OAuth 2.0 (client credentials, module-level token cache) ----
-let cachedToken = null;
-let tokenExpiry = 0;
-
-async function getToken() {
-  if (cachedToken && Date.now() < tokenExpiry) return cachedToken;
-  const res = await fetch('https://oauth.fatsecret.com/connect/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': 'Basic ' + btoa(
-        import.meta.env.VITE_FATSECRET_CLIENT_ID + ':' +
-        import.meta.env.VITE_FATSECRET_CLIENT_SECRET
-      ),
-    },
-    body: 'grant_type=client_credentials&scope=basic',
-  });
-  const data = await res.json();
-  cachedToken = data.access_token;
-  tokenExpiry = Date.now() + (data.expires_in * 1000) - 60000;
-  return cachedToken;
-}
-
-function parseFsDesc(desc = '') {
-  return {
-    kcal:    parseInt(desc.match(/Calories:\s*([\d.]+)/)?.[1]  || 0),
-    fat:     parseFloat(desc.match(/Fat:\s*([\d.]+)/)?.[1]     || 0),
-    carbs:   parseFloat(desc.match(/Carbs:\s*([\d.]+)/)?.[1]   || 0),
-    protein: parseFloat(desc.match(/Protein:\s*([\d.]+)/)?.[1] || 0),
-  };
-}
-
-function normalizeFatSecret(food) {
-  const { kcal, fat, carbs, protein } = parseFsDesc(food.food_description);
-  return {
-    id:               'fs_' + food.food_id,
-    source:           'FatSecret',
-    name:             food.food_name || 'Unknown Food',
-    brand:            food.brand_name || '',
-    servingSize:      100,
-    servingSizeUnit:  'g',
-    kcalPerServing:   Math.round(kcal),
-    proteinPerServing: Math.round(protein * 10) / 10,
-    carbsPerServing:  Math.round(carbs   * 10) / 10,
-    fatPerServing:    Math.round(fat     * 10) / 10,
-  };
-}
-
-async function searchFatSecret(query, signal) {
-  console.log('[FS] searching for:', query);
-  const token = await getToken();
-  const url = 'https://platform.fatsecret.com/rest/server.api' +
-    `?method=foods.search&search_expression=${encodeURIComponent(query)}&format=json&max_results=10&page_number=0`;
-  const res = await fetch(url, {
-    headers: { 'Authorization': `Bearer ${token}` },
-    signal,
-  });
-  console.log('[FS] response status:', res.status);
-  const data = await res.json();
-  const raw = data?.foods?.food;
-  console.log('[FS] foods found:', raw ? (Array.isArray(raw) ? raw.length : 1) : 0);
-  if (!raw) return [];
-  const arr = Array.isArray(raw) ? raw : [raw];
-  return arr.map(normalizeFatSecret);
+// ---- Open Food Facts text search ----
+async function searchOff(query, signal) {
+  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=10&search_simple=1&action=process`;
+  const res  = await fetch(url, { signal });
+  const json = await res.json();
+  return (json.products ?? [])
+    .filter(p => p.product_name)
+    .map(p => normalizeOff(p, 'OFF'));
 }
 
 // ---- USDA FoodData Central ----
@@ -124,13 +68,13 @@ function parseServingG(raw) {
   return m ? parseFloat(m[0]) : null;
 }
 
-function normalizeOff(product) {
+function normalizeOff(product, source = 'barcode') {
   const n = product.nutriments ?? {};
   const servingG = parseServingG(product.serving_size) ?? 100;
   const factor = servingG / 100;
   return {
-    id:               'off_' + (product.code || Date.now()),
-    source:           'barcode',
+    id:               'off_' + (product.code || product.id || Date.now()),
+    source,
     name:             product.product_name?.trim() || 'Unknown Food',
     brand:            product.brands?.split(',')[0]?.trim() ?? '',
     servingSize:      servingG,
@@ -279,11 +223,11 @@ function BarcodeOverlay({ onResult, onClose }) {
 }
 
 // -------------------- SEARCH RESULT ROW --------------------
-// Accepts the unified normalized shape (not raw USDA/FS objects)
+// Accepts the unified normalized shape
 function ResultRow({ food, onSelect }) {
-  const badge = food.source === 'FatSecret'
-    ? <span className="shrink-0 px-1 py-0.5 bg-orange-400/20 text-orange-300 border border-orange-400/30 font-mono text-[8px] uppercase tracking-wider">FS</span>
-    : <span className="shrink-0 px-1 py-0.5 bg-blue-400/20 text-blue-300 border border-blue-400/30 font-mono text-[8px] uppercase tracking-wider">USDA</span>;
+  const badge = food.source === 'USDA'
+    ? <span className="shrink-0 px-1 py-0.5 bg-blue-400/20 text-blue-300 border border-blue-400/30 font-mono text-[8px] uppercase tracking-wider">USDA</span>
+    : <span className="shrink-0 px-1 py-0.5 bg-green-400/20 text-green-300 border border-green-400/30 font-mono text-[8px] uppercase tracking-wider">OFF</span>;
 
   return (
     <button
@@ -583,13 +527,11 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
         }
       }
 
-      // FatSecret — primary, renders first
-      searchFatSecret(q, signal)
+      // Open Food Facts — renders first
+      searchOff(q, signal)
         .then(items => {
-          console.log('[FS] items received in UI:', items.length, items.slice(0,2))
           if (signal.aborted) return;
           fsItems = items;
-          // Show FS results immediately without waiting for USDA
           setResults(prev => dedup([...items, ...prev.filter(r => r.source === 'USDA')]));
           setNoResults(items.length === 0);
           finish();
@@ -767,7 +709,7 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
         {!query && !searching && results.length === 0 && (
           <div className="text-center py-6">
             <div className="text-[10px] uppercase tracking-[0.18em] text-stone-700 font-mono mb-1">
-              Search FatSecret + USDA simultaneously
+              Search Open Food Facts + USDA simultaneously
             </div>
             <div className="text-stone-700 text-xs">
               Type 2+ characters · results stream as each source responds
