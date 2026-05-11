@@ -13,7 +13,8 @@ const FS_FUNCTION_URL =
   '/functions/v1/food-search';
 
 async function searchFatSecret(query, signal) {
-  const res  = await fetch(FS_FUNCTION_URL, {
+  console.log('[FS] calling edge function with query:', query)
+  const res = await fetch(FS_FUNCTION_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -22,8 +23,14 @@ async function searchFatSecret(query, signal) {
     body: JSON.stringify({ query }),
     signal,
   });
-  if (!res.ok) return [];
+  console.log('[FS] response status:', res.status)
+  if (!res.ok) {
+    const text = await res.text()
+    console.error('[FS] error response:', text)
+    return [];
+  }
   const data = await res.json();
+  console.log('[FS] foods returned:', data.foods?.length ?? 0)
   return data.foods ?? [];
 }
 
