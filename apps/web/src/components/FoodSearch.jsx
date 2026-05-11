@@ -29,6 +29,64 @@ function normalizeUsda(food) {
     proteinPerServing: Math.round(getNutrient(food.foodNutrients, 1003) * 10) / 10,
     carbsPerServing:  Math.round(getNutrient(food.foodNutrients, 1005) * 10) / 10,
     fatPerServing:    Math.round(getNutrient(food.foodNutrients, 1004) * 10) / 10,
+    // Micronutrients
+    fiberG:         Math.round(getNutrient(food.foodNutrients, 1079) * 10) / 10,
+    sugarG:         Math.round(getNutrient(food.foodNutrients, 2000) * 10) / 10,
+    sodiumMg:       Math.round(getNutrient(food.foodNutrients, 1093)),
+    potassiumMg:    Math.round(getNutrient(food.foodNutrients, 1092)),
+    cholesterolMg:  Math.round(getNutrient(food.foodNutrients, 1253)),
+    saturatedFatG:  Math.round(getNutrient(food.foodNutrients, 1258) * 10) / 10,
+    vitaminAIu:     Math.round(getNutrient(food.foodNutrients, 1104)),
+    vitaminCMg:     Math.round(getNutrient(food.foodNutrients, 1162) * 10) / 10,
+    calciumMg:      Math.round(getNutrient(food.foodNutrients, 1087)),
+    ironMg:         Math.round(getNutrient(food.foodNutrients, 1089) * 10) / 10,
+  };
+}
+
+// ---- Serving unit conversion ----
+const UNIT_TO_G = { g: 1, oz: 28.35, cup: 240, tbsp: 15, tsp: 5, ml: 1 };
+
+function computeNutrition(product, amount, unit) {
+  const qty = parseFloat(amount) || 0;
+  let factor;
+  if (unit === 'serving') {
+    factor = qty;
+    return {
+      kcal:            Math.round((product.kcalPerServing    || 0) * factor),
+      protein:         Math.round((product.proteinPerServing || 0) * factor * 10) / 10,
+      carbs:           Math.round((product.carbsPerServing   || 0) * factor * 10) / 10,
+      fat:             Math.round((product.fatPerServing     || 0) * factor * 10) / 10,
+      fiber_g:         Math.round((product.fiberG        || 0) * factor * 10) / 10,
+      sugar_g:         Math.round((product.sugarG        || 0) * factor * 10) / 10,
+      sodium_mg:       Math.round((product.sodiumMg      || 0) * factor),
+      potassium_mg:    Math.round((product.potassiumMg   || 0) * factor),
+      cholesterol_mg:  Math.round((product.cholesterolMg || 0) * factor),
+      saturated_fat_g: Math.round((product.saturatedFatG || 0) * factor * 10) / 10,
+      vitamin_a_iu:    Math.round((product.vitaminAIu    || 0) * factor),
+      vitamin_c_mg:    Math.round((product.vitaminCMg    || 0) * factor * 10) / 10,
+      calcium_mg:      Math.round((product.calciumMg     || 0) * factor),
+      iron_mg:         Math.round((product.ironMg        || 0) * factor * 10) / 10,
+    };
+  }
+  const grams = qty * (UNIT_TO_G[unit] || 1);
+  const servingSizeG = (product.servingSizeUnit === 'g' || product.servingSizeUnit === 'ml')
+    ? (product.servingSize || 100) : 100;
+  factor = servingSizeG > 0 ? grams / servingSizeG : 0;
+  return {
+    kcal:            Math.round((product.kcalPerServing    || 0) * factor),
+    protein:         Math.round((product.proteinPerServing || 0) * factor * 10) / 10,
+    carbs:           Math.round((product.carbsPerServing   || 0) * factor * 10) / 10,
+    fat:             Math.round((product.fatPerServing     || 0) * factor * 10) / 10,
+    fiber_g:         Math.round((product.fiberG        || 0) * factor * 10) / 10,
+    sugar_g:         Math.round((product.sugarG        || 0) * factor * 10) / 10,
+    sodium_mg:       Math.round((product.sodiumMg      || 0) * factor),
+    potassium_mg:    Math.round((product.potassiumMg   || 0) * factor),
+    cholesterol_mg:  Math.round((product.cholesterolMg || 0) * factor),
+    saturated_fat_g: Math.round((product.saturatedFatG || 0) * factor * 10) / 10,
+    vitamin_a_iu:    Math.round((product.vitaminAIu    || 0) * factor),
+    vitamin_c_mg:    Math.round((product.vitaminCMg    || 0) * factor * 10) / 10,
+    calcium_mg:      Math.round((product.calciumMg     || 0) * factor),
+    iron_mg:         Math.round((product.ironMg        || 0) * factor * 10) / 10,
   };
 }
 
@@ -284,15 +342,11 @@ function ResultRow({ food, onSelect }) {
 
 // -------------------- SERVING SELECTOR --------------------
 function ServingSelector({ product, onConfirm, onBack, confirmLabel = 'Log Meal →' }) {
-  const [qty, setQty] = useState('1');
+  const canUseWeight = product.servingSizeUnit === 'g' || product.servingSizeUnit === 'ml';
+  const [amount, setAmount] = useState('1');
+  const [unit,   setUnit]   = useState('serving');
 
-  const numQty = parseFloat(qty) || 0;
-  const macros = {
-    kcal:    Math.round((product.kcalPerServing    || 0) * numQty),
-    protein: Math.round((product.proteinPerServing || 0) * numQty * 10) / 10,
-    carbs:   Math.round((product.carbsPerServing   || 0) * numQty * 10) / 10,
-    fat:     Math.round((product.fatPerServing     || 0) * numQty * 10) / 10,
-  };
+  const nutrition = computeNutrition(product, amount, unit);
 
   const inputClass = 'bg-stone-900/60 border border-stone-700 px-3 py-2 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors';
 
@@ -301,11 +355,23 @@ function ServingSelector({ product, onConfirm, onBack, confirmLabel = 'Log Meal 
       (product.brand ? ' - ' + product.brand : '');
     onConfirm({
       name:      mealName,
-      kcal:      isNaN(macros.kcal)    ? 0 : macros.kcal,
-      protein_g: isNaN(macros.protein) ? 0 : macros.protein,
-      carbs_g:   isNaN(macros.carbs)   ? 0 : macros.carbs,
-      fat_g:     isNaN(macros.fat)     ? 0 : macros.fat,
-      source:    'manual',
+      kcal:      isNaN(nutrition.kcal)    ? 0 : nutrition.kcal,
+      protein_g: isNaN(nutrition.protein) ? 0 : nutrition.protein,
+      carbs_g:   isNaN(nutrition.carbs)   ? 0 : nutrition.carbs,
+      fat_g:     isNaN(nutrition.fat)     ? 0 : nutrition.fat,
+      source:             'manual',
+      serving_amount:     parseFloat(amount) || 1,
+      serving_unit:       unit,
+      fiber_g:            nutrition.fiber_g,
+      sugar_g:            nutrition.sugar_g,
+      sodium_mg:          nutrition.sodium_mg,
+      potassium_mg:       nutrition.potassium_mg,
+      cholesterol_mg:     nutrition.cholesterol_mg,
+      saturated_fat_g:    nutrition.saturated_fat_g,
+      vitamin_a_iu:       nutrition.vitamin_a_iu,
+      vitamin_c_mg:       nutrition.vitamin_c_mg,
+      calcium_mg:         nutrition.calcium_mg,
+      iron_mg:            nutrition.iron_mg,
     });
   };
 
@@ -349,32 +415,51 @@ function ServingSelector({ product, onConfirm, onBack, confirmLabel = 'Log Meal 
       </div>
 
       <div className="mb-5">
-        <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-2">Number of servings</div>
-        <div className="flex gap-2 items-center">
+        <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-2">Amount</div>
+        <div className="flex gap-2 items-center flex-wrap">
           <input
             type="number"
-            min="0.25"
-            step="0.25"
-            value={qty}
-            onChange={e => setQty(e.target.value)}
+            min="0.1"
+            step="0.1"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
             className={`${inputClass} w-28 tabular-nums`}
           />
-          <span className="text-[11px] font-mono text-stone-500">
-            × {product.servingSize}{product.servingSizeUnit} per serving
-          </span>
+          <select
+            value={unit}
+            onChange={e => setUnit(e.target.value)}
+            className={`${inputClass} cursor-pointer bg-stone-900/60`}
+          >
+            <option value="serving">serving</option>
+            {canUseWeight && (
+              <>
+                <option value="g">g</option>
+                <option value="oz">oz</option>
+                <option value="cup">cup</option>
+                <option value="tbsp">tbsp</option>
+                <option value="tsp">tsp</option>
+                <option value="ml">ml</option>
+              </>
+            )}
+          </select>
+          {unit === 'serving' && (
+            <span className="text-[11px] font-mono text-stone-600">
+              × {product.servingSize}{product.servingSizeUnit}
+            </span>
+          )}
         </div>
       </div>
 
       <div className="mb-6 border border-orange-500/20 bg-orange-500/5 p-4">
         <div className="text-[9px] uppercase tracking-[0.2em] text-orange-400 font-mono mb-3">
-          Macros for {qty || '0'} serving{parseFloat(qty) !== 1 ? 's' : ''}
+          Macros for {amount || '0'} {unit}
         </div>
         <div className="grid grid-cols-4 gap-3 text-center">
           {[
-            { l: 'kcal',    v: macros.kcal,    unit: '',  color: 'text-stone-100' },
-            { l: 'Protein', v: macros.protein,  unit: 'g', color: 'text-orange-300' },
-            { l: 'Carbs',   v: macros.carbs,    unit: 'g', color: 'text-stone-300' },
-            { l: 'Fat',     v: macros.fat,      unit: 'g', color: 'text-stone-300' },
+            { l: 'kcal',    v: nutrition.kcal,    unit: '',  color: 'text-stone-100' },
+            { l: 'Protein', v: nutrition.protein,  unit: 'g', color: 'text-orange-300' },
+            { l: 'Carbs',   v: nutrition.carbs,    unit: 'g', color: 'text-stone-300' },
+            { l: 'Fat',     v: nutrition.fat,      unit: 'g', color: 'text-stone-300' },
           ].map(m => (
             <div key={m.l}>
               <div className={`font-anton text-xl tabular-nums ${m.color}`}>
@@ -389,7 +474,7 @@ function ServingSelector({ product, onConfirm, onBack, confirmLabel = 'Log Meal 
       <div className="flex items-center gap-3">
         <button
           onClick={handleConfirm}
-          disabled={!qty || parseFloat(qty) <= 0}
+          disabled={!amount || parseFloat(amount) <= 0}
           className="px-6 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {confirmLabel}
@@ -498,6 +583,14 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
   const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [view,           setView]           = useState('search'); // 'search' | 'serving' | 'manual'
   const [cameraAvail]   = useState(() => !!navigator.mediaDevices?.getUserMedia);
+  const [showTip, setShowTip] = useState(() => {
+    try { return !localStorage.getItem('food_search_tip_dismissed'); } catch { return true; }
+  });
+
+  function dismissTip() {
+    try { localStorage.setItem('food_search_tip_dismissed', '1'); } catch {}
+    setShowTip(false);
+  }
 
   const timerRef        = useRef(null);
   const abortRef        = useRef(null);
@@ -613,6 +706,21 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
       )}
 
       <div className="p-6">
+        {/* Guidance tip */}
+        {showTip && (
+          <div className="mb-3 flex items-start gap-2 bg-stone-900/60 border border-stone-800 px-3 py-2.5">
+            <span className="text-orange-400 font-mono text-[9px] mt-px shrink-0">ⓘ</span>
+            <div className="flex-1 min-w-0 text-[11px] text-stone-500 leading-relaxed">
+              Scan barcode for packaged products<br />
+              Search by name for whole foods &amp; ingredients
+            </div>
+            <button
+              onClick={dismissTip}
+              className="shrink-0 text-stone-700 hover:text-stone-400 font-mono text-sm leading-none transition-colors"
+            >×</button>
+          </div>
+        )}
+
         {/* Search bar */}
         <div className="flex gap-2 mb-4">
           <div className="relative flex-1">
@@ -643,18 +751,20 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
               onClick={() => { setBarcodeError(null); setShowCamera(true); }}
               disabled={barcodeLoading}
               title="Scan barcode"
-              className="px-3 py-2.5 border border-stone-700 text-stone-400 hover:text-orange-300 hover:border-orange-500/40 transition-colors disabled:opacity-50"
+              className="px-3 py-2 border border-stone-700 text-stone-400 hover:text-orange-300 hover:border-orange-500/40 transition-colors disabled:opacity-50 flex flex-col items-center justify-center gap-0.5"
             >
               {barcodeLoading ? (
                 <div className="w-4 h-4 border border-stone-600 border-t-orange-400 rounded-full animate-spin" />
               ) : (
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <rect x="1" y="1" width="4" height="14" rx="0.5" />
-                  <rect x="7" y="1" width="2" height="14" rx="0.5" />
-                  <rect x="11" y="1" width="1" height="14" rx="0.5" />
-                  <rect x="13" y="1" width="2" height="14" rx="0.5" />
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M3 8V6a2 2 0 0 1 2-2h2"/>
+                  <path d="M3 16v2a2 2 0 0 0 2 2h2"/>
+                  <path d="M16 3h2a2 2 0 0 1 2 2v2"/>
+                  <path d="M16 21h2a2 2 0 0 0 2-2v-2"/>
+                  <line x1="7" y1="12" x2="17" y2="12" strokeDasharray="2 1"/>
                 </svg>
               )}
+              <span className="font-mono text-[8px] uppercase tracking-wider text-stone-400">SCAN</span>
             </button>
           )}
 

@@ -1003,6 +1003,13 @@ export default function IronLabLogger() {
     return () => clearTimeout(t);
   }, [logger.completed, navigate]);
 
+  // Auto-start: if loading finishes with no active workout, create one immediately
+  useEffect(() => {
+    if (logger.loading || logger.workout || workoutId || !userId) return;
+    const day = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()];
+    logger.startWorkout(`Workout — ${day}`);
+  }, [logger.loading, logger.workout?.id, workoutId, userId]); // eslint-disable-line
+
   // Handle template load after workout starts
   useEffect(() => {
     if (!logger.workout || !pendingTemplate) return;
@@ -1109,9 +1116,8 @@ export default function IronLabLogger() {
     );
   }
 
-  // ---- No active workout ----
+  // ---- No active workout (auto-starting via useEffect) ----
   if (!logger.workout) {
-    // If a workoutId was in the URL but not found, show an error state
     if (workoutId) {
       return (
         <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased flex items-center justify-center">
@@ -1129,74 +1135,14 @@ export default function IronLabLogger() {
         </div>
       );
     }
-
     return (
       <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased flex items-center justify-center">
         <style>{FONT_STYLE}</style>
         <Backdrop />
-        <div className="fixed top-6 left-6 z-10">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="text-[10px] uppercase tracking-wider font-mono text-stone-400 hover:text-orange-400 transition-colors"
-          >
-            ← Dashboard
-          </button>
+        <div className="relative z-10 flex flex-col items-center gap-3">
+          <div className="font-mono text-xs uppercase tracking-wider text-stone-600">Starting workout…</div>
+          <div className="w-5 h-5 border border-stone-700 border-t-orange-400 rounded-full animate-spin" />
         </div>
-        <div className="relative z-10 text-center space-y-8 px-6 w-full max-w-sm">
-          <div className="flex items-baseline gap-2 justify-center">
-            <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">IRONLAB</span>
-            <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Logger</span>
-          </div>
-          <p className="text-stone-500 font-mono text-xs uppercase tracking-wider">No active session today</p>
-          <div className="space-y-3">
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              placeholder="Workout name…"
-              className="w-full bg-stone-950/60 border border-stone-800 px-4 py-3 text-stone-100 font-mono text-sm placeholder:text-stone-600 focus:outline-none focus:border-orange-500/60"
-            />
-            <button
-              onClick={() => {
-                console.log('[Logger] Start Workout clicked — userId:', userId, 'sessionLoading:', sessionLoading);
-                logger.startWorkout(name || 'New Workout');
-              }}
-              className="w-full px-8 py-4 bg-orange-500 text-stone-950 font-anton text-2xl uppercase tracking-wider hover:bg-orange-400 transition-colors"
-            >
-              Start Workout
-            </button>
-            {!workoutTemplates.loading && workoutTemplates.templates.length > 0 && (
-              <button
-                onClick={() => setShowLoadTemplate(true)}
-                className="w-full px-8 py-3 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
-              >
-                Load Template
-              </button>
-            )}
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="w-full px-8 py-3 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-200 transition-colors"
-            >
-              Return to Dashboard
-            </button>
-          </div>
-        </div>
-
-        {/* Load template picker (pre-workout) */}
-        {showLoadTemplate && (
-          <LoadTemplatePicker
-            templates={workoutTemplates.templates}
-            loading={workoutTemplates.loading}
-            onLoad={async (tmpl) => {
-              setShowLoadTemplate(false);
-              setName(tmpl.name);
-              // Start the workout then populate exercises
-              await logger.startWorkout(tmpl.name);
-              setPendingTemplate(tmpl);
-            }}
-            onClose={() => setShowLoadTemplate(false)}
-            onDelete={workoutTemplates.deleteTemplate}
-          />
-        )}
       </div>
     );
   }
@@ -1327,10 +1273,7 @@ export default function IronLabLogger() {
         {/* HEADER */}
         <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
           <div className="flex items-baseline gap-4 flex-wrap">
-            <div className="flex items-baseline gap-2">
-              <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">IRONLAB</span>
-              <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Logger</span>
-            </div>
+            <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">FORGE</span>
             <span className="hidden md:inline-block w-px h-8 bg-stone-800" />
             <input
               value={name}
@@ -1339,7 +1282,16 @@ export default function IronLabLogger() {
             />
           </div>
           <div className="flex items-center gap-3">
-            {/* Save as Template button — only when exercises exist and not viewing a completed workout */}
+            {/* Load Template button — always visible in active workout */}
+            {!workoutId && (
+              <button
+                onClick={() => setShowLoadTemplate(true)}
+                className="px-4 py-2 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
+              >
+                Load Template
+              </button>
+            )}
+            {/* Save as Template button — only when exercises exist */}
             {!workoutId && logger.exercises.length > 0 && (
               <button
                 onClick={() => setShowSaveTemplate(true)}
@@ -1437,7 +1389,7 @@ export default function IronLabLogger() {
 
         {/* FOOTER */}
         <footer className="mt-12 pt-6 border-t border-stone-800/60 flex items-center justify-between text-[10px] uppercase tracking-wider text-stone-600 font-mono">
-          <span>IRONLAB v0.3 · Module 3 · Workout Engine</span>
+          <span>Forge v0.4 · Module 3 · Workout Engine</span>
           <span>Vol formula: Σ(reps × weight) · primary 1.0 · secondary 0.5</span>
         </footer>
       </div>

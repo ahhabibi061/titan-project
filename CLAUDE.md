@@ -16,6 +16,7 @@ Full project context in HANDOFF.md. Full technical spec in PRD.md.
 - AI pattern: Rule gate decides, Claude narrates. AI never makes the decision.
 
 ## MODULE NAMES (display text only — routes/filenames unchanged)
+- Logger / Workout Logger → **Forge**
 - Vision / Vision Nutrition → **Sentinel**
 - Library / Exercise Library → **Codex**
 - Coach / Coach Engine → **Oracle**

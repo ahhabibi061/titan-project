@@ -1,16 +1,31 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useSession } from '../hooks/useSession';
+import { useProfileStore } from '../store/useProfileStore';
 
 const NAV_LINKS = [
   { label: 'Home',       path: '/dashboard'  },
-  { label: 'IRONLAB',    path: '/logger'     },
+  { label: 'Forge',      path: '/logger'     },
   { label: 'Sentinel',   path: '/nutrition'  },
   { label: 'Biometrics', path: '/biometrics' },
   { label: 'Codex',      path: '/exercises'  },
   { label: 'Oracle',     path: '/coach'      },
 ];
 
+function getInitials(displayName, email) {
+  if (displayName?.trim()) {
+    const parts = displayName.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  if (email) return email[0].toUpperCase();
+  return '?';
+}
+
 export default function AppNav() {
   const { pathname } = useLocation();
+  const { session }  = useSession();
+  const profile      = useProfileStore(s => s.profile);
+  const initials     = getInitials(profile?.display_name, session?.user?.email);
 
   return (
     <nav className="border-b border-stone-800/60 bg-stone-950/40 backdrop-blur-sm sticky top-0 z-20">
@@ -42,12 +57,10 @@ export default function AppNav() {
         <Link
           to="/settings"
           title="Settings"
-          className="w-8 h-8 flex items-center justify-center text-stone-500 hover:text-orange-400 border border-transparent hover:border-stone-700 transition-colors"
+          className="w-7 h-7 rounded-full flex items-center justify-center font-anton text-xs text-stone-950 shrink-0 hover:opacity-90 transition-opacity"
+          style={{ background: 'linear-gradient(135deg, #fbbf24, #ff5a2a)' }}
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <circle cx="8" cy="8" r="2.5" />
-            <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06" />
-          </svg>
+          {initials}
         </Link>
       </div>
     </nav>

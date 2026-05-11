@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase';
 
 const NAV_MODULES = [
   { id: 'home',       label: 'Home',       path: '/dashboard'  },
-  { id: 'logger',     label: 'IRONLAB',    path: '/logger'     },
+  { id: 'logger',     label: 'Forge',      path: '/logger'     },
   { id: 'vision',     label: 'Sentinel',   path: '/nutrition'  },
   { id: 'biometrics', label: 'Biometrics', path: '/biometrics' },
   { id: 'library',    label: 'Codex',      path: '/exercises'  },
