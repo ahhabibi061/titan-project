@@ -30,7 +30,7 @@ async function searchFatSecret(query, signal) {
 // ---- USDA FoodData Central ----
 const USDA_URL = (q) => {
   const key = import.meta.env.VITE_USDA_API_KEY ?? '';
-  return `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(q)}&api_key=${key}&pageSize=10&dataType=Branded,Foundation,SR%20Legacy`;
+  return `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(q)}&api_key=${key}&pageSize=10&dataType=Branded%2CFoundation%2CSR%20Legacy`;
 };
 
 const getNutrient = (nutrients, id) =>
