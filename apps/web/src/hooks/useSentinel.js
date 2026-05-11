@@ -91,6 +91,7 @@ export function useSentinel(userId) {
 
     const payload = { user_id: userId, logged_at: now, meal_name: safeName, kcal: safeKcal, protein_g: safeProtein, carbs_g: safeCarbs, fat_g: safeFat, source, confidence: 100 };
     console.log('[useSentinel] addMeal insert:', payload);
+    console.log('[SOURCE VALUE]', typeof payload.source, JSON.stringify(payload.source));
 
     const { data, error } = await supabase
       .from('nutrition_logs')

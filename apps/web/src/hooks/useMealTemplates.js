@@ -10,47 +10,56 @@ export function useMealTemplates(userId) {
     setLoading(true);
     const { data } = await supabase
       .from('meal_templates')
-      .select('id, name, kcal, protein_g, carbs_g, fat_g, notes, times_used')
+      .select('id, name, kcal, protein_g, carbs_g, fat_g, items, times_used')
       .eq('user_id', userId)
       .order('times_used', { ascending: false })
       .order('created_at', { ascending: false });
-    setTemplates(data ?? []);
+    setTemplates((data ?? []).map(t => ({ ...t, items: t.items ?? [] })));
     setLoading(false);
   }, [userId]);
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
 
-  // Returns { success } | { exists, existingId } | { error }
-  const saveTemplate = useCallback(async ({ name, kcal, protein_g, carbs_g, fat_g, notes }) => {
-    if (!userId) return { error: 'Not authenticated' };
-    const existing = templates.find(t => t.name.toLowerCase() === name.trim().toLowerCase());
-    if (existing) return { exists: true, existingId: existing.id };
-    const { data, error } = await supabase
-      .from('meal_templates')
-      .insert({ user_id: userId, name: name.trim(), kcal, protein_g, carbs_g, fat_g, notes: notes || null })
-      .select('id, name, kcal, protein_g, carbs_g, fat_g, notes, times_used')
-      .single();
-    if (error) return { error: error.message };
-    setTemplates(prev => [data, ...prev]);
-    return { success: true };
-  }, [userId, templates]);
-
-  const updateTemplate = useCallback(async (id, { name, kcal, protein_g, carbs_g, fat_g, notes }) => {
+  // Save a new bundle template
+  const saveTemplate = useCallback(async ({ name, items = [], kcal, protein_g, carbs_g, fat_g }) => {
     if (!userId) return { error: 'Not authenticated' };
     const { data, error } = await supabase
       .from('meal_templates')
-      .update({ name: name.trim(), kcal, protein_g, carbs_g, fat_g, notes: notes || null })
-      .eq('id', id).eq('user_id', userId)
-      .select('id, name, kcal, protein_g, carbs_g, fat_g, notes, times_used')
+      .insert({ user_id: userId, name: name.trim(), items, kcal, protein_g, carbs_g, fat_g })
+      .select('id, name, kcal, protein_g, carbs_g, fat_g, items, times_used')
       .single();
     if (error) return { error: error.message };
-    setTemplates(prev => prev.map(t => t.id === id ? data : t));
+    setTemplates(prev => [{ ...data, items: data.items ?? [] }, ...prev]);
     return { success: true };
   }, [userId]);
 
+  const updateTemplate = useCallback(async (id, { name, items = [], kcal, protein_g, carbs_g, fat_g }) => {
+    if (!userId) return { error: 'Not authenticated' };
+    const { data, error } = await supabase
+      .from('meal_templates')
+      .update({ name: name.trim(), items, kcal, protein_g, carbs_g, fat_g })
+      .eq('id', id).eq('user_id', userId)
+      .select('id, name, kcal, protein_g, carbs_g, fat_g, items, times_used')
+      .single();
+    if (error) return { error: error.message };
+    setTemplates(prev => prev.map(t => t.id === id ? { ...data, items: data.items ?? [] } : t));
+    return { success: true };
+  }, [userId]);
+
+  // Log every item in the bundle as a separate nutrition_logs row
   const logFromTemplate = useCallback(async (template, addMeal) => {
     if (!userId) return { error: 'Not authenticated' };
-    await addMeal({ name: template.name, kcal: template.kcal, protein_g: template.protein_g, carbs_g: template.carbs_g, fat_g: template.fat_g });
+    const items = template.items ?? [];
+    for (const item of items) {
+      await addMeal({
+        name:      item.name,
+        kcal:      item.kcal,
+        protein_g: item.protein_g,
+        carbs_g:   item.carbs_g,
+        fat_g:     item.fat_g,
+        source:    'manual',
+      });
+    }
     const newCount = (template.times_used || 0) + 1;
     setTemplates(prev =>
       prev.map(t => t.id === template.id ? { ...t, times_used: newCount } : t)

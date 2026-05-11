@@ -213,12 +213,7 @@ function BarcodeOverlay({ onResult, onClose }) {
 }
 
 // -------------------- SEARCH RESULT ROW --------------------
-// Accepts the unified normalized shape
 function ResultRow({ food, onSelect }) {
-  const badge = food.source === 'USDA'
-    ? <span className="shrink-0 px-1 py-0.5 bg-blue-400/20 text-blue-300 border border-blue-400/30 font-mono text-[8px] uppercase tracking-wider">USDA</span>
-    : <span className="shrink-0 px-1 py-0.5 bg-green-400/20 text-green-300 border border-green-400/30 font-mono text-[8px] uppercase tracking-wider">SCAN</span>;
-
   return (
     <button
       onClick={() => onSelect(food)}
@@ -235,7 +230,6 @@ function ResultRow({ food, onSelect }) {
             <div className="text-stone-200 text-sm truncate group-hover:text-stone-100 transition-colors">
               {food.name}
             </div>
-            {badge}
           </div>
         </div>
         <div className="shrink-0 text-right">

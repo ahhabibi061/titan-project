@@ -27,6 +27,12 @@ Full project context in HANDOFF.md. Full technical spec in PRD.md.
 - Dashboard wired to real Supabase data via useDashboard hook
 - Next: add Supabase secrets, run pending migrations
 
+## FOOD SEARCH
+- Food search: USDA FoodData Central only (text search).
+- Open Food Facts for barcode scan only.
+- FatSecret abandoned — IP blocked on Supabase, CORS blocked from browser.
+- dataType param: Branded,Foundation,SR%20Legacy (URL-encoded in USDA_URL)
+
 ## WORKING WITH THIS FOUNDER
 - Non-technical, visionary. Plain English always.
 - Forward momentum. Ship then refine.
