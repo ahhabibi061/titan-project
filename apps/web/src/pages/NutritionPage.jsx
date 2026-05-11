@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useSession } from '../hooks/useSession';
 import { useSentinel } from '../hooks/useSentinel';
 import { FoodSearch } from '../components/FoodSearch';
+import { MacroBreakdownModal } from '../components/MacroBreakdownModal';
 import AppNav from '../components/AppNav';
 import { useProfileStore } from '../store/useProfileStore';
 import { useMealTemplates } from '../hooks/useMealTemplates';
@@ -374,6 +375,73 @@ function MealEntry({ meal, onDelete }) {
 
 // -------------------- ADD MEAL FORM --------------------
 // AddMealForm replaced by FoodSearch component (Open Food Facts + barcode)
+
+// -------------------- MEAL SECTION --------------------
+const MEAL_COLORS = { breakfast: '#fbbf24', lunch: '#ed7a2a', dinner: '#f87171', snacks: '#78716c' };
+
+function MealSection({ type, section, activeAddSection, setActiveAddSection, addMeal, deleteMeal, userId }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const label = type.charAt(0).toUpperCase() + type.slice(1);
+  const color = MEAL_COLORS[type];
+  const { meals: sectionMeals, totals } = section;
+
+  function handleAdd(item) {
+    addMeal({ ...item, meal_type: type });
+    setActiveAddSection(null);
+  }
+
+  return (
+    <div className="border-b border-stone-800/60 last:border-0">
+      <button
+        onClick={() => setCollapsed(c => !c)}
+        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-stone-900/30 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 shrink-0" style={{ backgroundColor: color }} />
+          <span className="font-anton text-base uppercase tracking-tight text-stone-100">{label}</span>
+          {sectionMeals.length > 0 && (
+            <span className="font-mono text-[10px] text-stone-500 tabular-nums">
+              {sectionMeals.length} item{sectionMeals.length !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-4">
+          {totals.kcal > 0 && (
+            <span className="font-mono text-xs tabular-nums text-stone-400">{Math.round(totals.kcal)} kcal</span>
+          )}
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"
+            className={`text-stone-600 transition-transform ${collapsed ? '' : 'rotate-180'}`}>
+            <path d="M2 4L6 8L10 4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      </button>
+      {!collapsed && (
+        <div className="px-5 pb-4">
+          {sectionMeals.length > 0 && (
+            <div className="mb-3">
+              {sectionMeals.map(m => <MealEntry key={m.id} meal={m} onDelete={deleteMeal} />)}
+            </div>
+          )}
+          {activeAddSection === type ? (
+            <FoodSearch
+              onAdd={handleAdd}
+              onCancel={() => setActiveAddSection(null)}
+              confirmLabel="Add →"
+              userId={userId}
+            />
+          ) : (
+            <button
+              onClick={() => setActiveAddSection(type)}
+              className="w-full py-2.5 border border-dashed border-stone-700 text-stone-600 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
+            >
+              + Add Food
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // -------------------- TEMPLATE PANEL (MEAL BUNDLES) --------------------
 function TemplatePanel({ templates, loading, onClose, onLogAll, onSave, onDelete, isPro, userId }) {
@@ -944,7 +1012,7 @@ export default function VisionNutrition() {
   const { user } = useSession();
   const {
     meals, totals, targets, loading,
-    addMeal, deleteMeal,
+    addMeal, deleteMeal, sections,
     selectedDate, setSelectedDate,
     calsBurned, eatBackCalories,
   } = useSentinel(user?.id);
@@ -957,8 +1025,9 @@ export default function VisionNutrition() {
 
   const [scanState, setScanState]       = useState('results');
   const [selectedId, setSelectedId]     = useState('a');
-  const [showAddForm, setShowAddForm]   = useState(false);
-  const [showTemplates, setShowTemplates] = useState(false);
+  const [activeAddSection, setActiveAddSection] = useState(null);
+  const [showBreakdown, setShowBreakdown]       = useState(false);
+  const [showTemplates, setShowTemplates]       = useState(false);
 
   // Date helpers
   const todayMidnight = new Date();
@@ -1143,7 +1212,10 @@ export default function VisionNutrition() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
 
           {/* Calorie ring */}
-          <div className="border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col items-center justify-center">
+          <div
+            className="border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col items-center justify-center cursor-pointer hover:border-stone-700 transition-colors"
+            onClick={() => setShowBreakdown(true)}
+          >
             {loading ? (
               <div className="w-48 h-48 flex items-center justify-center">
                 <Sk w="w-40" h="h-40" />
@@ -1151,6 +1223,7 @@ export default function VisionNutrition() {
             ) : (
               <CalorieRing consumed={totals.kcal} target={tgt.kcal} />
             )}
+            <div className="text-[9px] font-mono uppercase tracking-wider text-stone-600 mt-2">tap for breakdown</div>
             <div className="mt-4 grid grid-cols-3 gap-2 w-full">
               <div className="text-center border border-stone-800/60 py-2">
                 <div className="text-[9px] font-mono uppercase text-stone-600 tracking-wider">Goal</div>
@@ -1168,7 +1241,10 @@ export default function VisionNutrition() {
           </div>
 
           {/* Macro bars */}
-          <div className="border border-stone-800/60 bg-stone-950/40 p-6">
+          <div
+            className="border border-stone-800/60 bg-stone-950/40 p-6 cursor-pointer hover:border-stone-700 transition-colors"
+            onClick={() => setShowBreakdown(true)}
+          >
             <div className="flex items-baseline justify-between mb-5">
               <h2 className="font-anton text-xl uppercase tracking-tight text-stone-100">Macros</h2>
               <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">target split</span>
@@ -1204,7 +1280,7 @@ export default function VisionNutrition() {
           </div>
         </div>
 
-        {/* MEAL LOG + ADD MEAL — full width */}
+        {/* MEAL LOG — full width */}
         <div className="border border-stone-800/60 bg-stone-950/40 mb-8">
           <div className="flex items-center justify-between p-6 pb-4 border-b border-stone-800/60">
             <div>
@@ -1232,49 +1308,34 @@ export default function VisionNutrition() {
               </div>
               <div className="text-[10px] font-mono uppercase tracking-wider text-stone-600">daily meal log</div>
             </div>
-            {!showAddForm && (
-              <button
-                onClick={() => setShowAddForm(true)}
-                className="px-4 py-2 border border-orange-500/40 text-orange-400 font-anton text-sm uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
-              >
-                + Add Meal
-              </button>
-            )}
           </div>
 
-          <div className="p-6">
-            {loading ? (
-              <div className="space-y-3">
-                <Sk w="w-full" h="h-10" />
-                <Sk w="w-full" h="h-10" />
-                <Sk w="w-4/5"  h="h-10" />
-              </div>
-            ) : meals.length === 0 ? (
-              <div className="py-8 flex flex-col items-center text-center">
-                <div className="text-stone-700 mb-1">
-                  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1">
-                    <rect x="6" y="10" width="20" height="16" rx="2" />
-                    <path d="M11 10V8a5 5 0 0110 0v2" />
-                    <circle cx="16" cy="18" r="2" />
-                  </svg>
+          {loading ? (
+            <div className="p-6 space-y-3">
+              <Sk w="w-full" h="h-10" />
+              <Sk w="w-full" h="h-10" />
+              <Sk w="w-4/5"  h="h-10" />
+            </div>
+          ) : (
+            <div>
+              {['breakfast', 'lunch', 'dinner', 'snacks'].map(type => (
+                <MealSection
+                  key={type}
+                  type={type}
+                  section={sections[type] ?? { meals: [], totals: { kcal: 0, protein: 0, carbs: 0, fat: 0 } }}
+                  activeAddSection={activeAddSection}
+                  setActiveAddSection={setActiveAddSection}
+                  addMeal={addMeal}
+                  deleteMeal={deleteMeal}
+                  userId={user?.id}
+                />
+              ))}
+              {sections.uncategorized?.meals?.length > 0 && (
+                <div className="border-t border-stone-800/60 px-5 py-3">
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-stone-600 mb-2">Other</div>
+                  {sections.uncategorized.meals.map(m => <MealEntry key={m.id} meal={m} onDelete={deleteMeal} />)}
                 </div>
-                <div className="text-[10px] uppercase tracking-[0.2em] text-stone-700 font-mono mb-1">Nothing logged yet</div>
-                <div className="text-stone-600 text-xs leading-relaxed">
-                  {isToday ? 'Scan a meal or add one manually.' : 'Nothing was logged on this day.'}
-                </div>
-              </div>
-            ) : (
-              <div>
-                {meals.map(m => (
-                  <MealEntry key={m.id} meal={m} onDelete={deleteMeal} />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {showAddForm && (
-            <div className="border-t border-stone-800/60">
-              <FoodSearch onAdd={addMeal} onCancel={() => setShowAddForm(false)} userId={user?.id} />
+              )}
             </div>
           )}
         </div>
@@ -1314,7 +1375,7 @@ export default function VisionNutrition() {
               </div>
               <div className="mt-5 flex items-center justify-between gap-3">
                 <button
-                  onClick={() => setShowAddForm(true)}
+                  onClick={() => setActiveAddSection('snacks')}
                   className="text-[10px] uppercase tracking-wider font-mono text-stone-500 hover:text-stone-300 px-3 py-2 border border-stone-800 hover:border-stone-700 transition-colors"
                 >
                   None of these — search database
@@ -1357,6 +1418,14 @@ export default function VisionNutrition() {
           <span>Provider: LogMeal · Fallback: Bite AI · Manual: anytime</span>
         </footer>
       </div>
+
+      {/* MACRO BREAKDOWN MODAL */}
+      {showBreakdown && (
+        <MacroBreakdownModal
+          userId={user?.id}
+          onClose={() => setShowBreakdown(false)}
+        />
+      )}
 
       {/* TEMPLATE PANEL */}
       {showTemplates && (

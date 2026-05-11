@@ -5,6 +5,7 @@ import { useDashboard } from '../hooks/useDashboard';
 import { useProfileStore } from '../store/useProfileStore';
 import { useCheckin } from '../hooks/useCheckin';
 import { CheckinModal } from '../components/CheckinModal';
+import { MacroBreakdownModal } from '../components/MacroBreakdownModal';
 import { supabase } from '../lib/supabase';
 
 const NAV_MODULES = [
@@ -204,6 +205,7 @@ export default function Dashboard() {
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(searchParams.get('upgraded') === 'true');
   const [showCheckinBanner, setShowCheckinBanner] = useState(getCheckinBannerVisible);
   const [showCheckinModal, setShowCheckinModal]   = useState(false);
+  const [showBreakdown, setShowBreakdown]         = useState(false);
   const checkin = useCheckin(user?.id);
   const [plateauAlerts, setPlateauAlerts] = useState([]);
 
@@ -685,7 +687,13 @@ export default function Dashboard() {
               ) : consumed.mealsLogged === 0 ? (
                 <div className="flex-1 flex flex-col">
                   <div className="flex items-center gap-4 mb-5">
-                    <MiniCalorieRing consumed={0} target={targets.kcal} />
+                    <button
+                      onClick={() => setShowBreakdown(true)}
+                      className="shrink-0 flex flex-col items-center gap-1"
+                    >
+                      <MiniCalorieRing consumed={0} target={targets.kcal} />
+                      <span className="text-[9px] font-mono uppercase tracking-wider text-stone-600">tap for breakdown</span>
+                    </button>
                     <div className="flex-1 min-w-0">
                       <div className="font-anton text-2xl tabular-nums text-stone-600 leading-none">{fmt0(targets.kcal)}</div>
                       {eatBackCalories && calsBurned ? (
@@ -721,7 +729,13 @@ export default function Dashboard() {
               ) : (
                 <>
                   <div className="flex items-center gap-4 mb-5">
-                    <MiniCalorieRing consumed={consumed.kcal} target={targets.kcal} />
+                    <button
+                      onClick={() => setShowBreakdown(true)}
+                      className="shrink-0 flex flex-col items-center gap-1"
+                    >
+                      <MiniCalorieRing consumed={consumed.kcal} target={targets.kcal} />
+                      <span className="text-[9px] font-mono uppercase tracking-wider text-stone-600">tap for breakdown</span>
+                    </button>
                     <div className="flex-1 min-w-0">
                       <div className="font-anton text-2xl tabular-nums text-orange-300 leading-none">{fmt0(remaining)}</div>
                       <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mt-1">kcal remaining</div>
@@ -968,6 +982,13 @@ export default function Dashboard() {
           </footer>
         </div>
       </div>
+
+      {showBreakdown && (
+        <MacroBreakdownModal
+          userId={user?.id}
+          onClose={() => setShowBreakdown(false)}
+        />
+      )}
 
       {showCheckinModal && (
         <CheckinModal
