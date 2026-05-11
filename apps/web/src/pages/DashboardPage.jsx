@@ -568,11 +568,7 @@ export default function Dashboard() {
           {!loading && plateauAlerts.length > 0 && (
             <div className="mb-8 space-y-2">
               {plateauAlerts.map((p, i) => (
-                <div key={i} className="relative border border-orange-500/40 bg-orange-500/5 p-4 flex items-start justify-between gap-4">
-                  <button
-                    onClick={() => dismissPlateauAlert(p)}
-                    className="absolute top-2 right-2 text-stone-500 font-mono text-[10px] uppercase tracking-wider hover:text-orange-400 transition-colors"
-                  >dismiss</button>
+                <div key={i} className="border border-orange-500/40 bg-orange-500/5 p-4 flex items-start justify-between gap-4">
                   <div className="flex items-start gap-3">
                     <span className="text-xl shrink-0">⚠</span>
                     <div>
@@ -585,9 +581,15 @@ export default function Dashboard() {
                       <div className="text-xs text-stone-500 font-mono mt-0.5">Consider a deload, form check, or variation</div>
                     </div>
                   </div>
-                  <Link to="/exercises" className="shrink-0 px-4 py-2 border border-stone-700 text-stone-400 font-mono text-[10px] uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors no-underline">
-                    Find Variations →
-                  </Link>
+                  <div className="shrink-0 flex flex-col items-end gap-2">
+                    <Link to="/exercises" className="px-4 py-2 border border-stone-700 text-stone-400 font-mono text-[10px] uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors no-underline">
+                      Find Variations →
+                    </Link>
+                    <button
+                      onClick={() => dismissPlateauAlert(p)}
+                      className="text-stone-500 font-mono text-[10px] uppercase tracking-wider hover:text-orange-400 transition-colors"
+                    >dismiss</button>
+                  </div>
                 </div>
               ))}
             </div>
