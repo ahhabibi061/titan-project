@@ -259,13 +259,15 @@ function ServingSelector({ product, source, onConfirm, onBack }) {
   const inputClass = 'bg-stone-900/60 border border-stone-700 px-3 py-2 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors';
 
   const handleConfirm = () => {
+    const mealName = (product.name || 'Unknown Food') +
+      (product.brand ? ' - ' + product.brand : '');
     onConfirm({
-      name:      product.name || 'Unknown Food',
+      name:      mealName,
       kcal:      isNaN(macros.kcal)    ? 0 : macros.kcal,
       protein_g: isNaN(macros.protein) ? 0 : macros.protein,
       carbs_g:   isNaN(macros.carbs)   ? 0 : macros.carbs,
       fat_g:     isNaN(macros.fat)     ? 0 : macros.fat,
-      source,
+      source:    'manual',
     });
   };
 
