@@ -15,13 +15,16 @@ const FS_FUNCTION_URL =
 async function searchFatSecret(query, signal) {
   const res  = await fetch(FS_FUNCTION_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+    },
     body: JSON.stringify({ query }),
     signal,
   });
   if (!res.ok) return [];
   const data = await res.json();
-  return data.results ?? [];
+  return data.foods ?? [];
 }
 
 // ---- USDA FoodData Central ----
