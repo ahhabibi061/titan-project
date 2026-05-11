@@ -30,7 +30,7 @@ async function searchFatSecret(query, signal) {
 // ---- USDA FoodData Central ----
 const USDA_URL = (q) => {
   const key = import.meta.env.VITE_USDA_API_KEY ?? '';
-  return `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(q)}&api_key=${key}&pageSize=10&dataType=Branded,Survey(FNDDS)`;
+  return `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(q)}&api_key=${key}&pageSize=10&dataType=Branded,Foundation,SR%20Legacy`;
 };
 
 const getNutrient = (nutrients, id) =>
@@ -515,6 +515,7 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
     clearTimeout(timerRef.current);
 
     timerRef.current = setTimeout(() => {
+      console.log('[SEARCH] firing FatSecret + USDA in parallel');
       if (abortRef.current) abortRef.current.abort();
       const controller = new AbortController();
       abortRef.current = controller;
