@@ -103,19 +103,19 @@ Deno.serve(async (req: Request) => {
     const { query } = await req.json();
 
     if (!query || typeof query !== 'string' || query.trim().length < 2) {
-      return new Response(JSON.stringify({ results: [] }), {
+      return new Response(JSON.stringify({ foods: [] }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const results = await searchFatSecret(query.trim());
+    const foods = await searchFatSecret(query.trim());
 
-    return new Response(JSON.stringify({ results }), {
+    return new Response(JSON.stringify({ foods }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (err) {
     console.error('[food-search]', err);
-    return new Response(JSON.stringify({ error: 'Search failed', results: [] }), {
+    return new Response(JSON.stringify({ error: 'Search failed', foods: [] }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
