@@ -1,21 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 /* =========================================================================
- * FoodSearch — Open Food Facts + USDA FoodData Central parallel search
- * Both fire simultaneously; results stream in as each source responds.
- * Barcode scan also uses Open Food Facts (same API, different endpoint).
+ * FoodSearch — USDA FoodData Central text search + OFF barcode scan
+ * Text search: USDA only (browser-safe, no auth, no CORS issues).
+ * Barcode scan: Open Food Facts product lookup (unchanged).
  * Serving size selector with live macro preview.
  * ========================================================================= */
-
-// ---- Open Food Facts text search ----
-async function searchOff(query, signal) {
-  const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=10&search_simple=1&action=process`;
-  const res  = await fetch(url, { signal });
-  const json = await res.json();
-  return (json.products ?? [])
-    .filter(p => p.product_name)
-    .map(p => normalizeOff(p, 'OFF'));
-}
 
 // ---- USDA FoodData Central ----
 const USDA_URL = (q) => {
@@ -227,7 +217,7 @@ function BarcodeOverlay({ onResult, onClose }) {
 function ResultRow({ food, onSelect }) {
   const badge = food.source === 'USDA'
     ? <span className="shrink-0 px-1 py-0.5 bg-blue-400/20 text-blue-300 border border-blue-400/30 font-mono text-[8px] uppercase tracking-wider">USDA</span>
-    : <span className="shrink-0 px-1 py-0.5 bg-green-400/20 text-green-300 border border-green-400/30 font-mono text-[8px] uppercase tracking-wider">OFF</span>;
+    : <span className="shrink-0 px-1 py-0.5 bg-green-400/20 text-green-300 border border-green-400/30 font-mono text-[8px] uppercase tracking-wider">SCAN</span>;
 
   return (
     <button
@@ -483,7 +473,6 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
   const abortRef = useRef(null);
   const cacheRef = useRef(new Map());
 
-  // Parallel search: FatSecret fires first, USDA appends when ready
   useEffect(() => {
     const q = query.trim();
 
@@ -494,7 +483,6 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
       return;
     }
 
-    // Instant cache hit
     if (cacheRef.current.has(q)) {
       const cached = cacheRef.current.get(q);
       setResults(cached); setNoResults(cached.length === 0); setSearching(false);
@@ -505,47 +493,24 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
     clearTimeout(timerRef.current);
 
     timerRef.current = setTimeout(() => {
-      console.log('[SEARCH] firing FatSecret + USDA in parallel');
       if (abortRef.current) abortRef.current.abort();
       const controller = new AbortController();
       abortRef.current = controller;
       const { signal } = controller;
 
-      let fsItems   = [];
-      let usdaItems = [];
-      let doneCount = 0;
-
-      function finish() {
-        doneCount++;
-        if (signal.aborted) return;
-        const merged = dedup([...fsItems, ...usdaItems]);
-        setResults(merged);
-        setNoResults(merged.length === 0);
-        if (doneCount === 2) {
-          cacheRef.current.set(q, merged);
-          setSearching(false);
-        }
-      }
-
-      // Open Food Facts — renders first
-      searchOff(q, signal)
-        .then(items => {
-          if (signal.aborted) return;
-          fsItems = items;
-          setResults(prev => dedup([...items, ...prev.filter(r => r.source === 'USDA')]));
-          setNoResults(items.length === 0);
-          finish();
-        })
-        .catch(() => { if (!signal.aborted) finish(); });
-
-      // USDA — fallback/supplement, appends when ready
       searchUsda(q, signal)
         .then(items => {
           if (signal.aborted) return;
-          usdaItems = items;
-          finish();
+          cacheRef.current.set(q, items);
+          setResults(items);
+          setNoResults(items.length === 0);
+          setSearching(false);
         })
-        .catch(() => { if (!signal.aborted) finish(); });
+        .catch(() => {
+          if (!signal.aborted) {
+            setResults([]); setNoResults(true); setSearching(false);
+          }
+        });
     }, 250);
 
     return () => clearTimeout(timerRef.current);
@@ -618,7 +583,7 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
               type="text"
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search FatSecret + USDA…"
+              placeholder="Search USDA food database…"
               autoFocus
               className="w-full pl-9 pr-4 py-2.5 bg-stone-900/60 border border-stone-700 text-stone-100 font-mono text-sm placeholder-stone-600 focus:outline-none focus:border-orange-500/60 transition-colors"
             />
@@ -694,7 +659,7 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel }) {
           <div className="border border-stone-800/60 bg-stone-950/40 p-5 mb-3 text-center">
             <div className="text-[10px] uppercase tracking-[0.2em] text-stone-700 font-mono mb-1">Not found</div>
             <div className="text-stone-600 text-xs mb-4">
-              "{query}" returned no matches in FatSecret or USDA.
+              No USDA results for "{query}".
             </div>
             <button
               onClick={() => setView('manual')}
