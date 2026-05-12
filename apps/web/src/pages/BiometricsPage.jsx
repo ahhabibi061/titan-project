@@ -644,10 +644,10 @@ function MonthCalendar({ rawEntries, calMonth, onPrev, onNext, onDayClick }) {
   const lastDay  = new Date(year, month + 1, 0);
 
   // Monday-anchored grid
-  const startDow = firstDay.getDay();
+  const startDow    = firstDay.getDay();
   const offsetStart = startDow === 0 ? 6 : startDow - 1;
-  const endDow    = lastDay.getDay();
-  const offsetEnd = endDow === 0 ? 0 : 7 - endDow;
+  const endDow      = lastDay.getDay();
+  const offsetEnd   = endDow === 0 ? 0 : 7 - endDow;
 
   const gridStart = new Date(firstDay);
   gridStart.setDate(firstDay.getDate() - offsetStart);
@@ -661,27 +661,43 @@ function MonthCalendar({ rawEntries, calMonth, onPrev, onNext, onDayClick }) {
     cursor.setDate(cursor.getDate() + 1);
   }
 
-  const monthLabel = calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
+  const monthLabel = calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   const DAY_HEADERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   return (
-    <div style={{ maxWidth: 220 }}>
+    <div style={{ width: 280 }}>
       {/* Navigation */}
-      <div className="flex items-center justify-between mb-2">
-        <button onClick={onPrev} className="text-stone-400 hover:text-orange-400 font-mono text-sm leading-none transition-colors px-1">←</button>
-        <span className="font-mono text-[10px] uppercase tracking-wider text-stone-400">{monthLabel}</span>
-        <button onClick={onNext} className="text-stone-400 hover:text-orange-400 font-mono text-sm leading-none transition-colors px-1">→</button>
+      <div className="flex items-center justify-between mb-3">
+        <button
+          onClick={onPrev}
+          className="text-stone-400 hover:text-orange-400 transition-colors p-1"
+          aria-label="Previous month"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M10 3L5 8L10 13" />
+          </svg>
+        </button>
+        <span className="font-anton text-sm uppercase tracking-wide text-stone-200">{monthLabel}</span>
+        <button
+          onClick={onNext}
+          className="text-stone-400 hover:text-orange-400 transition-colors p-1"
+          aria-label="Next month"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M6 3L11 8L6 13" />
+          </svg>
+        </button>
       </div>
 
       {/* Day headers */}
-      <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+      <div className="grid grid-cols-7 mb-1" style={{ gap: 3 }}>
         {DAY_HEADERS.map((d, i) => (
-          <div key={i} className="w-3.5 text-center text-[8px] text-stone-600 font-mono">{d}</div>
+          <div key={i} className="flex items-center justify-center text-[9px] text-stone-500 font-mono" style={{ width: 32, height: 16 }}>{d}</div>
         ))}
       </div>
 
-      {/* Cells — 14×14px compact squares */}
-      <div className="grid grid-cols-7 gap-0.5">
+      {/* Cells — 32×32px with date numbers */}
+      <div className="grid grid-cols-7" style={{ gap: 3 }}>
         {cells.map((d, i) => {
           const dateStr     = localDateStr(d);
           const isThisMonth = d.getMonth() === month;
@@ -690,14 +706,24 @@ function MonthCalendar({ rawEntries, calMonth, onPrev, onNext, onDayClick }) {
           const hasEntry    = entryDates.has(dateStr);
           const clickable   = isThisMonth && !isFuture;
 
-          let bg = '';
-          if (!isThisMonth)  { bg = 'bg-stone-900/20'; }
-          else if (isFuture) { bg = 'bg-stone-800/30'; }
-          else if (hasEntry) { bg = 'bg-orange-500/70'; }
-          else               { bg = 'bg-stone-800'; }
+          let bgStyle = {};
+          let textColor = '';
 
-          const border    = isToday ? 'outline outline-1 outline-white outline-offset-[-1px]' : '';
-          const hover     = clickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default';
+          if (!isThisMonth) {
+            bgStyle = { backgroundColor: 'transparent' };
+            textColor = 'text-stone-800';
+          } else if (isFuture) {
+            bgStyle = { backgroundColor: 'rgba(41,37,36,0.5)' };
+            textColor = 'text-stone-700';
+          } else if (hasEntry) {
+            bgStyle = { backgroundColor: 'rgba(249,115,22,0.75)' };
+            textColor = 'text-stone-900';
+          } else {
+            bgStyle = { backgroundColor: '#292524' };
+            textColor = 'text-stone-500';
+          }
+
+          const todayStyle = isToday ? { outline: '1px solid white', outlineOffset: '-1px' } : {};
 
           return (
             <button
@@ -705,16 +731,25 @@ function MonthCalendar({ rawEntries, calMonth, onPrev, onNext, onDayClick }) {
               disabled={!clickable}
               onClick={() => clickable && onDayClick(dateStr, hasEntry, isToday)}
               title={dateStr}
-              className={`w-3.5 h-3.5 transition-opacity ${bg} ${border} ${hover}`}
-            />
+              style={{ width: 32, height: 32, ...bgStyle, ...todayStyle }}
+              className={`flex items-center justify-center font-mono text-[10px] tabular-nums transition-opacity ${textColor} ${clickable ? 'cursor-pointer hover:opacity-75' : 'cursor-default'}`}
+            >
+              {isThisMonth ? d.getDate() : ''}
+            </button>
           );
         })}
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-3 mt-2 text-[8px] font-mono text-stone-600 uppercase tracking-wider">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-orange-500/70 inline-block" />Logged</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-stone-800 inline-block" />No entry</span>
+      <div className="flex items-center gap-4 mt-3 text-[9px] font-mono text-stone-600 uppercase tracking-wider">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 inline-block" style={{ backgroundColor: 'rgba(249,115,22,0.75)' }} />
+          Logged
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 bg-stone-800 inline-block" />
+          No entry
+        </span>
       </div>
     </div>
   );

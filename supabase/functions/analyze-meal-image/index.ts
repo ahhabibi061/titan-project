@@ -105,8 +105,10 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    console.log('Image received, size:', imageBase64.length, 'mimeType:', mimeType);
 
     // ── Call Claude vision ──────────────────────────────────────────────────
+    console.log('Calling Anthropic API...');
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -158,16 +160,20 @@ Estimate nutritional values as accurately as possible based on visible portion s
       }),
     });
 
+    // Read response as text first for logging, then parse
+    const responseText = await anthropicRes.text();
+    console.log('Anthropic status:', anthropicRes.status);
+    console.log('Anthropic response:', responseText.slice(0, 500));
+
     if (!anthropicRes.ok) {
-      const errText = await anthropicRes.text();
-      console.error('Anthropic error:', errText);
+      console.error('Anthropic error body:', responseText);
       return new Response(
         JSON.stringify({ error: 'ai_error', message: 'Vision analysis failed. Please try again.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const anthropicData = await anthropicRes.json();
+    const anthropicData = JSON.parse(responseText);
     const rawText = anthropicData.content?.[0]?.text ?? '';
 
     // Parse the JSON from Claude's response

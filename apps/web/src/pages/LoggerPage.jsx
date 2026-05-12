@@ -6,6 +6,7 @@ import { useProfileStore } from '../store/useProfileStore';
 import { useBodyMap } from '../hooks/useBodyMap';
 import { useWorkoutTemplates } from '../hooks/useWorkoutTemplates';
 import { supabase } from '../lib/supabase';
+import AppNav from '../components/AppNav';
 
 /* =========================================================================
  * IRONLAB LOGGER — Module 3 Proof-of-Concept
@@ -140,34 +141,162 @@ function volumeToFill(volume, max) {
 
 // -------------------- SVG MUSCLE PATHS --------------------
 // ViewBox 220x460. Stylized but anatomically positioned.
+// ─── ANATOMICAL SVG PATHS ────────────────────────────────────────────────────
+// Anterior muscles — viewBox 0 0 220 460, body centered at x=110
 const FRONT_PATHS = {
-  chest: 'M 76,96 Q 90,88 108,90 L 108,138 Q 96,144 84,140 Q 76,134 74,124 Z M 144,96 Q 130,88 112,90 L 112,138 Q 124,144 136,140 Q 144,134 146,124 Z',
-  front_delts: 'M 64,86 Q 56,88 52,102 Q 50,116 56,124 Q 66,124 74,118 Q 76,104 74,94 Q 70,86 64,86 Z M 156,86 Q 164,88 168,102 Q 170,116 164,124 Q 154,124 146,118 Q 144,104 146,94 Q 150,86 156,86 Z',
-  side_delts: 'M 50,100 Q 42,104 40,118 Q 40,128 46,134 Q 52,132 56,124 Q 50,116 52,102 Z M 170,100 Q 178,104 180,118 Q 180,128 174,134 Q 168,132 164,124 Q 170,116 168,102 Z',
-  traps: 'M 102,68 Q 98,76 100,84 Q 106,86 110,84 L 110,68 Z M 118,68 Q 122,76 120,84 Q 114,86 110,84 L 110,68 Z',
-  biceps: 'M 46,128 Q 38,134 38,158 Q 42,176 50,178 Q 56,176 56,156 Q 56,138 52,130 Z M 174,128 Q 182,134 182,158 Q 178,176 170,178 Q 164,176 164,156 Q 164,138 168,130 Z',
-  forearms: 'M 38,182 Q 32,196 32,222 Q 36,238 44,236 Q 50,234 52,218 Q 52,200 50,184 Z M 182,182 Q 188,196 188,222 Q 184,238 176,236 Q 170,234 168,218 Q 168,200 170,184 Z',
-  abs: 'M 96,144 L 124,144 L 124,160 L 96,160 Z M 96,164 L 124,164 L 124,180 L 96,180 Z M 96,184 L 124,184 L 124,200 L 96,200 Z M 96,204 L 124,204 L 124,220 L 96,220 Z M 96,224 L 124,224 L 124,238 L 96,238 Z',
-  obliques: 'M 78,150 Q 76,180 86,224 L 96,222 L 96,148 Q 86,146 78,150 Z M 142,150 Q 144,180 134,224 L 124,222 L 124,148 Q 134,146 142,150 Z',
-  quads: 'M 78,250 Q 70,290 76,348 L 104,348 L 104,250 Q 90,246 78,250 Z M 142,250 Q 150,290 144,348 L 116,348 L 116,250 Q 130,246 142,250 Z',
-  calves: 'M 84,388 Q 80,408 84,438 L 102,438 L 102,388 Z M 136,388 Q 140,408 136,438 L 118,438 L 118,388 Z',
+  // Two pectoral masses with curved lower border
+  chest: [
+    'M 108,96 C 102,90 90,88 76,92 C 62,96 60,108 62,120 C 64,132 72,140 86,144 C 96,146 106,142 108,134 Z',
+    'M 112,96 C 118,90 130,88 144,92 C 158,96 160,108 158,120 C 156,132 148,140 134,144 C 124,146 114,142 112,134 Z',
+  ].join(' '),
+
+  // Anterior deltoid caps — rounded mass at front shoulder
+  front_delts: [
+    'M 66,86 C 54,84 46,92 44,106 C 42,118 46,130 56,136 C 62,140 70,138 74,128 C 78,118 76,104 72,94 C 70,88 68,86 66,86 Z',
+    'M 154,86 C 166,84 174,92 176,106 C 178,118 174,130 164,136 C 158,140 150,138 146,128 C 142,118 144,104 148,94 C 150,88 152,86 154,86 Z',
+  ].join(' '),
+
+  // Lateral deltoid — narrow band at outermost shoulder
+  side_delts: [
+    'M 42,100 C 34,106 32,120 34,132 C 36,142 44,144 52,138 C 46,130 44,116 46,104 Z',
+    'M 178,100 C 186,106 188,120 186,132 C 184,142 176,144 168,138 C 174,130 176,116 174,104 Z',
+  ].join(' '),
+
+  // Biceps — peaked two-head contour
+  biceps: [
+    'M 42,132 C 32,142 28,160 30,178 C 32,194 40,202 52,202 C 62,202 68,192 68,176 C 68,158 62,138 54,130 C 48,124 44,126 42,132 Z',
+    'M 178,132 C 188,142 192,160 190,178 C 188,194 180,202 168,202 C 158,202 152,192 152,176 C 152,158 158,138 166,130 C 172,124 176,126 178,132 Z',
+  ].join(' '),
+
+  // Forearms anterior — pronator/flexor mass, wider at elbow
+  forearms: [
+    'M 28,204 C 20,220 18,246 20,264 C 22,276 32,282 44,280 C 54,278 58,264 58,246 C 58,226 54,206 46,200 C 38,196 30,198 28,204 Z',
+    'M 192,204 C 200,220 202,246 200,264 C 198,276 188,282 176,280 C 166,278 162,264 162,246 C 162,226 166,206 174,200 C 182,196 190,198 192,204 Z',
+  ].join(' '),
+
+  // Abs — 3×2 grid, slightly organic curves
+  abs: [
+    'M 96,146 C 100,144 106,144 108,146 L 108,164 C 106,166 100,166 96,164 Z',
+    'M 112,146 C 116,144 120,144 124,146 L 124,164 C 120,166 116,166 112,164 Z',
+    'M 94,169 C 99,167 105,167 108,169 L 108,187 C 105,189 99,189 94,187 Z',
+    'M 112,169 C 116,167 121,167 126,169 L 126,187 C 121,189 116,189 112,187 Z',
+    'M 93,192 C 98,190 107,190 109,192 L 109,210 C 107,212 98,212 93,210 Z',
+    'M 111,192 C 116,190 122,190 127,192 L 127,210 C 122,212 116,212 111,210 Z',
+  ].join(' '),
+
+  // Obliques — diagonal sweep lower ribs to hip
+  obliques: [
+    'M 80,144 C 74,168 70,194 70,216 C 70,232 76,242 86,246 C 92,248 96,244 96,230 L 94,206 C 88,204 84,188 84,168 C 84,154 86,146 82,142 Z',
+    'M 140,144 C 146,168 150,194 150,216 C 150,232 144,242 134,246 C 128,248 124,244 124,230 L 126,206 C 132,204 136,188 136,168 C 136,154 134,146 138,142 Z',
+  ].join(' '),
+
+  // Quads — vastus lateralis (outer) + rectus femoris (center) per leg
+  quads: [
+    // Left vastus lateralis
+    'M 76,258 C 66,296 64,334 68,362 C 72,374 80,378 90,374 C 94,370 94,352 92,332 C 90,306 86,276 84,260 C 82,252 78,252 76,258 Z',
+    // Left rectus femoris + VMO teardrop
+    'M 96,256 C 92,292 92,330 94,360 C 96,372 104,376 110,372 L 110,256 C 106,248 98,250 96,256 Z',
+    // Right rectus femoris + VMO
+    'M 124,256 C 128,292 128,330 126,360 C 124,372 116,376 110,372 L 110,256 C 114,248 122,250 124,256 Z',
+    // Right vastus lateralis
+    'M 144,258 C 154,296 156,334 152,362 C 148,374 140,378 130,374 C 126,370 126,352 128,332 C 130,306 134,276 136,260 C 138,252 142,252 144,258 Z',
+  ].join(' '),
+
+  // Tibialis anterior — outer shin line
+  tibialis: [
+    'M 80,378 C 76,402 74,428 76,448 L 90,448 C 90,428 92,404 92,380 C 90,374 82,374 80,378 Z',
+    'M 140,378 C 144,402 146,428 144,448 L 130,448 C 130,428 128,404 128,380 C 130,374 138,374 140,378 Z',
+  ].join(' '),
 };
 
+// Posterior muscles
 const BACK_PATHS = {
-  traps: 'M 110,72 L 90,86 Q 84,108 92,124 L 110,118 L 128,124 Q 136,108 130,86 Z',
-  rear_delts: 'M 64,90 Q 56,96 52,110 Q 52,124 60,128 Q 70,126 76,118 Q 78,104 74,94 Z M 156,90 Q 164,96 168,110 Q 168,124 160,128 Q 150,126 144,118 Q 142,104 146,94 Z',
-  triceps: 'M 46,132 Q 40,144 40,166 Q 44,180 52,180 Q 58,178 58,158 Q 58,140 52,132 Z M 174,132 Q 180,144 180,166 Q 176,180 168,180 Q 162,178 162,158 Q 162,140 168,132 Z',
-  forearms: 'M 38,184 Q 32,200 32,224 Q 36,238 44,236 Q 50,234 52,218 Q 52,200 50,186 Z M 182,184 Q 188,200 188,224 Q 184,238 176,236 Q 170,234 168,218 Q 168,200 170,186 Z',
-  lats: 'M 76,118 Q 60,150 64,200 L 102,206 L 102,134 Q 88,124 76,118 Z M 144,118 Q 160,150 156,200 L 118,206 L 118,134 Q 132,124 144,118 Z',
-  lower_back: 'M 100,206 L 120,206 L 122,244 Q 110,248 98,244 Z',
-  glutes: 'M 86,250 Q 76,272 88,300 Q 102,304 108,294 L 108,254 Q 96,248 86,250 Z M 134,250 Q 144,272 132,300 Q 118,304 112,294 L 112,254 Q 124,248 134,250 Z',
-  hamstrings: 'M 80,300 Q 72,340 78,386 L 104,386 L 104,300 Q 92,296 80,300 Z M 140,300 Q 148,340 142,386 L 116,386 L 116,300 Q 128,296 140,300 Z',
-  calves: 'M 76,388 Q 72,416 80,442 L 104,442 L 104,388 Z M 144,388 Q 148,416 140,442 L 116,442 L 116,388 Z',
+  // Trapezius — diamond drape from neck base to mid-back
+  traps: [
+    'M 110,68 C 96,76 78,90 68,108 C 60,120 60,134 68,142 C 74,148 84,146 96,136 C 104,128 108,118 108,108 L 108,68 Z',
+    'M 110,68 C 124,76 142,90 152,108 C 160,120 160,134 152,142 C 146,148 136,146 124,136 C 116,128 112,118 112,108 L 112,68 Z',
+    // Lower trapezius meeting at spine
+    'M 108,108 C 108,126 106,148 104,162 C 108,164 112,164 116,162 C 114,148 112,126 112,108 Z',
+  ].join(' '),
+
+  // Posterior deltoid
+  rear_delts: [
+    'M 66,86 C 54,84 46,92 44,106 C 42,118 46,130 56,136 C 62,140 70,138 74,128 C 78,116 76,102 72,92 C 70,88 68,86 66,86 Z',
+    'M 154,86 C 166,84 174,92 176,106 C 178,118 174,130 164,136 C 158,140 150,138 146,128 C 142,116 144,102 148,92 C 150,88 152,86 154,86 Z',
+  ].join(' '),
+
+  // Latissimus dorsi — sweeping wing from armpit to waist
+  lats: [
+    'M 70,122 C 56,148 52,178 56,208 C 58,224 66,234 78,236 L 96,226 C 92,210 90,190 92,170 C 94,152 100,138 96,126 C 86,118 76,116 70,122 Z',
+    'M 150,122 C 164,148 168,178 164,208 C 162,224 154,234 142,236 L 124,226 C 128,210 130,190 128,170 C 126,152 120,138 124,126 C 134,118 144,116 150,122 Z',
+  ].join(' '),
+
+  // Rhomboids — inner scapular between traps
+  rhomboids: [
+    'M 108,108 C 104,120 102,138 104,156 C 108,160 110,158 110,154 L 110,108 Z',
+    'M 112,108 C 116,120 118,138 116,156 C 112,160 110,158 110,154 L 110,108 Z',
+  ].join(' '),
+
+  // Lower back / erectors — lumbar region
+  lower_back: 'M 92,228 C 88,244 88,260 92,272 C 96,280 104,284 110,284 C 116,284 124,280 128,272 C 132,260 132,244 128,228 C 122,220 98,220 92,228 Z',
+
+  // Triceps — horseshoe shape, three heads
+  triceps: [
+    'M 40,130 C 30,142 26,162 28,182 C 30,198 40,208 52,206 C 62,204 68,192 68,176 C 68,158 62,138 54,130 C 48,124 42,124 40,130 Z',
+    'M 180,130 C 190,142 194,162 192,182 C 190,198 180,208 168,206 C 158,204 152,192 152,176 C 152,158 158,138 166,130 C 172,124 178,124 180,130 Z',
+  ].join(' '),
+
+  // Posterior forearms — extensor group
+  forearms: [
+    'M 26,208 C 18,226 16,252 18,270 C 20,282 30,288 44,286 C 56,284 62,268 62,250 C 62,230 56,208 46,202 C 38,196 28,200 26,208 Z',
+    'M 194,208 C 202,226 204,252 202,270 C 200,282 190,288 176,286 C 164,284 158,268 158,250 C 158,230 164,208 174,202 C 182,196 192,200 194,208 Z',
+  ].join(' '),
+
+  // Glutes — two large rounded masses, gluteal fold defined
+  glutes: [
+    'M 84,260 C 72,272 66,294 68,316 C 70,330 80,338 92,336 C 102,334 108,324 108,310 C 108,290 106,268 100,260 C 94,252 86,254 84,260 Z',
+    'M 136,260 C 148,272 154,294 152,316 C 150,330 140,338 128,336 C 118,334 112,324 112,310 C 112,290 114,268 120,260 C 126,252 134,254 136,260 Z',
+  ].join(' '),
+
+  // Hamstrings — biceps femoris + semimembranosus, separation line visible
+  hamstrings: [
+    // Left biceps femoris (outer)
+    'M 78,308 C 68,338 66,368 70,392 C 72,404 80,410 90,408 C 100,406 106,392 108,374 C 110,352 108,318 102,306 C 96,296 80,298 78,308 Z',
+    // Right biceps femoris (outer)
+    'M 142,308 C 152,338 154,368 150,392 C 148,404 140,410 130,408 C 120,406 114,392 112,374 C 110,352 112,318 118,306 C 124,296 140,298 142,308 Z',
+  ].join(' '),
+
+  // Calves — medial + lateral gastrocnemius heads per leg
+  calves: [
+    // Left lateral head
+    'M 72,386 C 66,410 64,434 68,452 L 82,452 C 84,436 86,412 86,390 C 84,382 76,380 72,386 Z',
+    // Left medial head
+    'M 88,390 C 88,372 94,366 102,372 C 108,382 108,410 106,436 L 92,452 C 92,432 90,410 88,392 Z',
+    // Right medial head
+    'M 132,390 C 132,372 126,366 118,372 C 112,382 112,410 114,436 L 128,452 C 128,432 130,410 132,392 Z',
+    // Right lateral head
+    'M 148,386 C 154,410 156,434 152,452 L 138,452 C 136,436 134,412 134,390 C 136,382 144,380 148,386 Z',
+  ].join(' '),
 };
 
-const HEAD_FRONT  = <circle cx="110" cy="44" r="22" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />;
-const HEAD_BACK   = <circle cx="110" cy="44" r="22" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />;
-const NECK        = <rect x="100" y="62" width="20" height="14" fill="rgba(255,255,255,0.04)" />;
+// Head and neck — shared between front and back views
+const HEAD_FRONT = (
+  <>
+    <ellipse cx="110" cy="42" rx="21" ry="26" fill="#1a1714" stroke="#57534e" strokeWidth="1.2" />
+    <ellipse cx="89" cy="44" rx="4" ry="6" fill="#161412" stroke="#57534e" strokeWidth="0.8" />
+    <ellipse cx="131" cy="44" rx="4" ry="6" fill="#161412" stroke="#57534e" strokeWidth="0.8" />
+    <path d="M 102,68 C 100,72 100,78 102,84 L 118,84 C 120,78 120,72 118,68 Z" fill="#1a1714" stroke="#57534e" strokeWidth="0.8" />
+  </>
+);
+const HEAD_BACK = (
+  <>
+    <ellipse cx="110" cy="42" rx="21" ry="26" fill="#1a1714" stroke="#57534e" strokeWidth="1.2" />
+    <ellipse cx="89" cy="44" rx="4" ry="6" fill="#161412" stroke="#57534e" strokeWidth="0.8" />
+    <ellipse cx="131" cy="44" rx="4" ry="6" fill="#161412" stroke="#57534e" strokeWidth="0.8" />
+    <path d="M 102,68 C 100,72 100,78 102,84 L 118,84 C 120,78 120,72 118,68 Z" fill="#1a1714" stroke="#57534e" strokeWidth="0.8" />
+  </>
+);
+const NECK = null; // neck included in HEAD_FRONT / HEAD_BACK above
 
 // -------------------- UI PRIMITIVES --------------------
 const fmt = (n) => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -517,12 +646,12 @@ function BodyMap({ recoveryMap, growthMap, mode, setMode }) {
   function getColor(key) {
     if (mode === 'recovery') {
       const e = recoveryMap[key];
-      if (!e) return 'rgba(255,255,255,0.03)';
-      return RECOVERY_COLORS[e.status] ?? 'rgba(255,255,255,0.03)';
+      if (!e) return '#292524';
+      return RECOVERY_COLORS[e.status] ?? '#292524';
     }
     const e = growthMap[key];
-    if (!e) return 'rgba(255,255,255,0.03)';
-    return GROWTH_COLORS[e.status] ?? 'rgba(255,255,255,0.03)';
+    if (!e) return '#292524';
+    return GROWTH_COLORS[e.status] ?? '#292524';
   }
 
   function getTooltip(key) {
@@ -545,8 +674,8 @@ function BodyMap({ recoveryMap, growthMap, mode, setMode }) {
       key={key}
       d={d}
       fill={getColor(key)}
-      stroke="rgba(255,255,255,0.05)"
-      strokeWidth="0.5"
+      stroke="#3c3633"
+      strokeWidth="0.8"
       style={{ transition: 'fill 320ms ease', cursor: 'pointer' }}
       onMouseEnter={() => setHover(key)}
       onMouseLeave={() => setHover(null)}
@@ -590,17 +719,21 @@ function BodyMap({ recoveryMap, growthMap, mode, setMode }) {
       <div className="relative">
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1 text-center">Anterior</div>
-            <svg viewBox="0 0 220 460" className="w-full">
+            <svg viewBox="0 0 220 476" className="w-full">
               {HEAD_FRONT}{NECK}
               {Object.entries(FRONT_PATHS).map(([k, d]) => renderMuscle(k, d))}
+              {/* Base line */}
+              <line x1="60" y1="455" x2="160" y2="455" stroke="#3c3633" strokeWidth="0.8" />
+              <text x="110" y="470" textAnchor="middle" fontFamily="'JetBrains Mono', monospace" fontSize="9" fill="#57534e" letterSpacing="2">ANTERIOR</text>
             </svg>
           </div>
           <div>
-            <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1 text-center">Posterior</div>
-            <svg viewBox="0 0 220 460" className="w-full">
+            <svg viewBox="0 0 220 476" className="w-full">
               {HEAD_BACK}{NECK}
               {Object.entries(BACK_PATHS).map(([k, d]) => renderMuscle(k, d))}
+              {/* Base line */}
+              <line x1="60" y1="455" x2="160" y2="455" stroke="#3c3633" strokeWidth="0.8" />
+              <text x="110" y="470" textAnchor="middle" fontFamily="'JetBrains Mono', monospace" fontSize="9" fill="#57534e" letterSpacing="2">POSTERIOR</text>
             </svg>
           </div>
         </div>
@@ -1107,6 +1240,7 @@ export default function IronLabLogger() {
       <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 flex items-center justify-center">
         <style>{FONT_STYLE}</style>
         <Backdrop />
+        <AppNav />
         <div className="space-y-3 w-full max-w-md px-6">
           {[80, 60, 70, 50].map((w, i) => (
             <div key={i} className="h-4 bg-stone-800/60 animate-pulse" style={{ width: `${w}%` }} />
@@ -1152,6 +1286,7 @@ export default function IronLabLogger() {
     <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
       <style>{FONT_STYLE}</style>
       <Backdrop />
+      <AppNav />
 
       {/* ERROR TOAST */}
       {logger.error && (

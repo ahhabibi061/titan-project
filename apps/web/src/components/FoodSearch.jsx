@@ -606,32 +606,60 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId, isPro = fals
     setScanLoading(true);
     setScanResult(null);
     try {
+      // Step 1 — convert to pure base64 (strip data URL prefix)
       const base64 = await new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload  = () => resolve(reader.result.split(',')[1]);
+        reader.onload = () => {
+          const result = reader.result;
+          // Remove "data:image/jpeg;base64," prefix
+          const b64 = result.split(',')[1];
+          resolve(b64);
+        };
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
+      console.log('[SCANNER] image captured, base64 length:', base64?.length, 'type:', file.type);
+
+      // Step 2 — get live session token
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Not authenticated');
+      if (!session?.access_token) throw new Error('Not authenticated — please sign in again');
+      console.log('[SCANNER] session token present, calling Edge Function...');
+
+      // Step 3 — call Edge Function
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const res = await fetch(`${supabaseUrl}/functions/v1/analyze-meal-image`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ imageBase64: base64, mimeType: file.type || 'image/jpeg' }),
+        body: JSON.stringify({
+          imageBase64: base64,
+          mimeType: file.type || 'image/jpeg',
+        }),
       });
-      const data = await res.json();
+
+      // Step 4 — handle response
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error('Server returned an invalid response');
+      }
+      console.log('[SCANNER] response status:', res.status, 'data:', data);
+
       if (!res.ok) {
+        console.error('[SCANNER] error from Edge Function:', data);
         setScanError(data);
         return;
       }
+
+      // Step 5 — show result
       setScanResult(data);
       setView('scan_result');
     } catch (err) {
-      setScanError({ error: 'general', message: err.message || 'Scan failed' });
+      console.error('[SCANNER] caught error:', err);
+      setScanError({ error: 'general', message: err.message || 'Scan failed — try again or log manually' });
     } finally {
       setScanLoading(false);
       if (cameraInputRef.current) cameraInputRef.current.value = '';
@@ -984,8 +1012,21 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId, isPro = fals
           </div>
         )}
         {scanError && scanError.error !== 'upgrade_required' && scanError.error !== 'rate_limit_exceeded' && (
-          <div className="mb-3 px-3 py-2 border border-red-500/30 bg-red-500/5 text-[11px] font-mono text-red-400 uppercase tracking-wider">
-            {scanError.message || 'Scan failed — try again'}
+          <div className="mb-3 px-3 py-2.5 border border-stone-700 bg-stone-900/40 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-mono text-stone-300 uppercase tracking-wider">
+                Could not analyze image
+              </div>
+              <div className="text-[9px] font-mono text-stone-600 mt-0.5">
+                Search manually instead — or try a clearer photo
+              </div>
+            </div>
+            <button
+              onClick={() => { setScanError(null); setView('search'); }}
+              className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border border-stone-600 text-stone-400 hover:text-stone-200 hover:border-stone-500 transition-colors shrink-0"
+            >
+              Search →
+            </button>
           </div>
         )}
 
