@@ -662,26 +662,26 @@ function MonthCalendar({ rawEntries, calMonth, onPrev, onNext, onDayClick }) {
   }
 
   const monthLabel = calMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
-  const DAY_HEADERS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const DAY_HEADERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   return (
-    <div>
+    <div style={{ maxWidth: 220 }}>
       {/* Navigation */}
-      <div className="flex items-center justify-between mb-4">
-        <button onClick={onPrev} className="text-stone-400 hover:text-orange-400 font-mono text-lg leading-none transition-colors px-1">←</button>
-        <span className="font-anton text-lg uppercase tracking-tight text-stone-100">{monthLabel}</span>
-        <button onClick={onNext} className="text-stone-400 hover:text-orange-400 font-mono text-lg leading-none transition-colors px-1">→</button>
+      <div className="flex items-center justify-between mb-2">
+        <button onClick={onPrev} className="text-stone-400 hover:text-orange-400 font-mono text-sm leading-none transition-colors px-1">←</button>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-stone-400">{monthLabel}</span>
+        <button onClick={onNext} className="text-stone-400 hover:text-orange-400 font-mono text-sm leading-none transition-colors px-1">→</button>
       </div>
 
       {/* Day headers */}
-      <div className="grid grid-cols-7 mb-1">
-        {DAY_HEADERS.map(d => (
-          <div key={d} className="text-center text-[9px] uppercase tracking-wider text-stone-600 font-mono py-1">{d}</div>
+      <div className="grid grid-cols-7 gap-0.5 mb-0.5">
+        {DAY_HEADERS.map((d, i) => (
+          <div key={i} className="w-3.5 text-center text-[8px] text-stone-600 font-mono">{d}</div>
         ))}
       </div>
 
-      {/* Cells */}
-      <div className="grid grid-cols-7 gap-px bg-stone-800/30">
+      {/* Cells — 14×14px compact squares */}
+      <div className="grid grid-cols-7 gap-0.5">
         {cells.map((d, i) => {
           const dateStr     = localDateStr(d);
           const isThisMonth = d.getMonth() === month;
@@ -691,37 +691,30 @@ function MonthCalendar({ rawEntries, calMonth, onPrev, onNext, onDayClick }) {
           const clickable   = isThisMonth && !isFuture;
 
           let bg = '';
-          let textColor = '';
-          if (!isThisMonth)      { bg = 'bg-stone-900/30'; textColor = 'text-stone-700'; }
-          else if (isFuture)     { bg = 'bg-stone-800/40'; textColor = 'text-stone-600'; }
-          else if (hasEntry)     { bg = 'bg-orange-500/10'; textColor = 'text-stone-200'; }
-          else                   { bg = 'bg-stone-900';    textColor = 'text-stone-500'; }
+          if (!isThisMonth)  { bg = 'bg-stone-900/20'; }
+          else if (isFuture) { bg = 'bg-stone-800/30'; }
+          else if (hasEntry) { bg = 'bg-orange-500/70'; }
+          else               { bg = 'bg-stone-800'; }
 
-          const border    = hasEntry && isThisMonth ? 'border border-orange-500/30' : 'border border-transparent';
-          const todayRing = isToday ? 'outline outline-1 outline-white outline-offset-[-1px]' : '';
-          const hover     = clickable ? (hasEntry ? 'hover:bg-orange-500/20 cursor-pointer' : 'hover:bg-stone-800 hover:text-stone-300 cursor-pointer') : 'cursor-default';
+          const border    = isToday ? 'outline outline-1 outline-white outline-offset-[-1px]' : '';
+          const hover     = clickable ? 'cursor-pointer hover:opacity-80' : 'cursor-default';
 
           return (
             <button
               key={i}
               disabled={!clickable}
               onClick={() => clickable && onDayClick(dateStr, hasEntry, isToday)}
-              className={`relative flex flex-col items-center justify-center aspect-square text-[11px] font-mono tabular-nums transition-colors ${bg} ${textColor} ${border} ${todayRing} ${hover}`}
-            >
-              <span className="leading-none">{d.getDate()}</span>
-              {hasEntry && isThisMonth && (
-                <span className="absolute bottom-1 w-1 h-1 rounded-full bg-orange-400" />
-              )}
-            </button>
+              title={dateStr}
+              className={`w-3.5 h-3.5 transition-opacity ${bg} ${border} ${hover}`}
+            />
           );
         })}
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-5 mt-3 text-[9px] font-mono text-stone-600 uppercase tracking-wider">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-orange-500/10 border border-orange-500/30 inline-block" />Logged</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-stone-900 inline-block" />No entry</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-stone-900 outline outline-1 outline-white outline-offset-[-1px] inline-block" />Today</span>
+      <div className="flex items-center gap-3 mt-2 text-[8px] font-mono text-stone-600 uppercase tracking-wider">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-orange-500/70 inline-block" />Logged</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 bg-stone-800 inline-block" />No entry</span>
       </div>
     </div>
   );
@@ -923,6 +916,20 @@ export default function BiometricVault() {
           <StatBlock label="Goal ETA" value={projection?.daysToGoal ? `${projection.daysToGoal}d` : projection?.reached ? 'Reached' : '—'} sub={projection?.date ? fmtDate(projection.date) : needsMoreData ? 'needs 7+ entries' : 'projection'} accent="text-orange-300" />
         </div>
 
+        {/* CHECK-IN HISTORY — top */}
+        <div className="border border-stone-800/60 bg-stone-950/40 p-6 mb-8">
+          <div className="flex items-baseline justify-between mb-5">
+            <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Weekly Check-Ins</h2>
+            <button
+              onClick={() => setShowCheckin(true)}
+              className="text-[9px] uppercase tracking-[0.18em] text-orange-400 font-mono hover:text-orange-300 transition-colors"
+            >
+              + New Check-In
+            </button>
+          </div>
+          <CheckinHistory checkins={checkin.checkins} />
+        </div>
+
         {/* STREAK + HEATMAP */}
         <div className="border border-stone-800/60 bg-stone-950/40 p-6 mb-8">
           <div className="flex items-baseline justify-between mb-6">
@@ -961,10 +968,26 @@ export default function BiometricVault() {
           </div>
         </div>
 
-        {/* BEFORE / AFTER COMPARISON */}
-        <PhotoComparison progressPhotos={progressPhotos} photoEntries={photoEntries} isPro={isPro} />
+        {/* LOG TODAY CTA */}
+        {needsMoreData && (
+          <div className="mb-8 border border-stone-800/60 bg-stone-900/20 px-5 py-4 flex items-center justify-between">
+            <span className="font-mono text-xs text-stone-500">
+              Log <span className="text-stone-300">{7 - chartData.length} more {7 - chartData.length === 1 ? 'day' : 'days'}</span> to unlock projections and trend analysis
+            </span>
+            <button onClick={openToday} className="px-4 py-2 border border-orange-500/40 text-orange-300 font-mono text-[10px] uppercase tracking-wider hover:bg-orange-500/10 transition-colors">+ Log Today</button>
+          </div>
+        )}
 
-        {/* HEADLINE PROJECTION */}
+        {/* WEIGHT CHART */}
+        <div className="border border-stone-800/60 bg-stone-950/40 p-6 mb-8">
+          <div className="flex items-baseline justify-between mb-5">
+            <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Weight Timeline</h2>
+            <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">interactive · click to edit</span>
+          </div>
+          <WeightChart data={chartData} goal={goalWeightKg} ma={ma} reg={reg} unit={unit} onPointClick={openEdit} />
+        </div>
+
+        {/* GOAL PROJECTION */}
         {projection?.date && !needsMoreData && (
           <div className="mb-10">
             <div className="text-[10px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-2">Trajectory projection</div>
@@ -984,24 +1007,6 @@ export default function BiometricVault() {
             </span>
           </div>
         )}
-
-        {needsMoreData && (
-          <div className="mb-8 border border-stone-800/60 bg-stone-900/20 px-5 py-4 flex items-center justify-between">
-            <span className="font-mono text-xs text-stone-500">
-              Log <span className="text-stone-300">{7 - chartData.length} more {7 - chartData.length === 1 ? 'day' : 'days'}</span> to unlock projections and trend analysis
-            </span>
-            <button onClick={openToday} className="px-4 py-2 border border-orange-500/40 text-orange-300 font-mono text-[10px] uppercase tracking-wider hover:bg-orange-500/10 transition-colors">+ Log Today</button>
-          </div>
-        )}
-
-        {/* WEIGHT CHART */}
-        <div className="border border-stone-800/60 bg-stone-950/40 p-6 mb-8">
-          <div className="flex items-baseline justify-between mb-5">
-            <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Weight Timeline</h2>
-            <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">interactive · click to edit</span>
-          </div>
-          <WeightChart data={chartData} goal={goalWeightKg} ma={ma} reg={reg} unit={unit} onPointClick={openEdit} />
-        </div>
 
         {/* BODY COMP + DERIVED METRICS */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
@@ -1065,19 +1070,8 @@ export default function BiometricVault() {
           <ProgressPhotoSection progressPhotos={progressPhotos} date={todayLocalStr} isPro={isPro} />
         </div>
 
-        {/* CHECK-IN HISTORY */}
-        <div className="border border-stone-800/60 bg-stone-950/40 p-6 mb-8">
-          <div className="flex items-baseline justify-between mb-5">
-            <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Weekly Check-Ins</h2>
-            <button
-              onClick={() => setShowCheckin(true)}
-              className="text-[9px] uppercase tracking-[0.18em] text-orange-400 font-mono hover:text-orange-300 transition-colors"
-            >
-              + New Check-In
-            </button>
-          </div>
-          <CheckinHistory checkins={checkin.checkins} />
-        </div>
+        {/* BEFORE / AFTER COMPARISON — last */}
+        <PhotoComparison progressPhotos={progressPhotos} photoEntries={photoEntries} isPro={isPro} />
 
         <footer className="mt-12 pt-6 border-t border-stone-800/60 flex items-center justify-between text-[10px] uppercase tracking-wider text-stone-600 font-mono">
           <span>Biometric Vault v0.5 · Module 4 · Longitudinal tracking</span>

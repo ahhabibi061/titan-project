@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useSession } from '../hooks/useSession';
 import { useDashboard } from '../hooks/useDashboard';
 import { useProfileStore } from '../store/useProfileStore';
@@ -201,6 +201,7 @@ export default function Dashboard() {
   const { user } = useSession();
   const { data, loading } = useDashboard(user?.id);
   const zustandProfile = useProfileStore(s => s.profile);
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(searchParams.get('upgraded') === 'true');
   const [showCheckinBanner, setShowCheckinBanner] = useState(getCheckinBannerVisible);
@@ -433,7 +434,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-0 mb-8 border border-stone-800/60 bg-stone-950/40">
 
             {/* Weight */}
-            <div className="px-5 py-4 border-r border-stone-800/60">
+            <div onClick={() => navigate('/biometrics')} className="px-5 py-4 border-r border-stone-800/60 cursor-pointer hover:bg-stone-900/40 transition-colors">
               <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-1">Weight</div>
               {loading || bio.current == null ? (
                 <>
@@ -455,7 +456,7 @@ export default function Dashboard() {
             </div>
 
             {/* Calories Left */}
-            <div className="px-5 py-4 border-r border-stone-800/60">
+            <div onClick={() => navigate('/nutrition')} className="px-5 py-4 border-r border-stone-800/60 cursor-pointer hover:bg-stone-900/40 transition-colors">
               <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-1">Calories Left</div>
               {loading ? (
                 <>
@@ -487,7 +488,7 @@ export default function Dashboard() {
             </div>
 
             {/* Workout */}
-            <div className="px-5 py-4 border-r border-stone-800/60">
+            <div onClick={() => navigate('/logger')} className="px-5 py-4 border-r border-stone-800/60 cursor-pointer hover:bg-stone-900/40 transition-colors">
               <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-1">Workout</div>
               {loading ? (
                 <>
@@ -512,7 +513,7 @@ export default function Dashboard() {
             </div>
 
             {/* Streak */}
-            <div className="px-5 py-4">
+            <div onClick={() => navigate('/biometrics')} className="px-5 py-4 cursor-pointer hover:bg-stone-900/40 transition-colors">
               <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-1">Streak</div>
               {loading ? (
                 <>
@@ -600,10 +601,10 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
 
             {/* TODAY'S WORKOUT */}
-            <div className="lg:col-span-5 border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col">
+            <div onClick={() => navigate('/logger')} className="lg:col-span-5 border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col cursor-pointer hover:border-stone-700 transition-colors group">
               <div className="flex items-baseline justify-between mb-4">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-stone-500 font-mono">Today's Workout</span>
-                <span className="text-[9px] text-stone-700 font-mono">→ IRONLAB</span>
+                <span className="text-[9px] text-stone-600 group-hover:text-orange-400 font-mono transition-colors">→ FORGE</span>
               </div>
 
               {loading ? (
@@ -666,10 +667,10 @@ export default function Dashboard() {
             </div>
 
             {/* TODAY'S MACROS */}
-            <div className="lg:col-span-4 border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col">
+            <div onClick={() => navigate('/nutrition')} className="lg:col-span-4 border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col cursor-pointer hover:border-stone-700 transition-colors group">
               <div className="flex items-baseline justify-between mb-4">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-stone-500 font-mono">Today's Macros</span>
-                <span className="text-[9px] text-stone-700 font-mono">→ sentinel</span>
+                <span className="text-[9px] text-stone-600 group-hover:text-orange-400 font-mono transition-colors">→ sentinel</span>
               </div>
 
               {loading ? (
@@ -788,10 +789,10 @@ export default function Dashboard() {
             </div>
 
             {/* WEIGHT TREND */}
-            <div className="lg:col-span-3 border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col">
+            <div onClick={() => navigate('/biometrics')} className="lg:col-span-3 border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col cursor-pointer hover:border-stone-700 transition-colors group">
               <div className="flex items-baseline justify-between mb-4">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-stone-500 font-mono">Body Comp</span>
-                <span className="text-[9px] text-stone-700 font-mono">→ vault</span>
+                <span className="text-[9px] text-stone-600 group-hover:text-orange-400 font-mono transition-colors">→ vault</span>
               </div>
 
               {loading ? (
@@ -852,11 +853,11 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
 
             {/* THIS WEEK */}
-            <div className="lg:col-span-7 border border-stone-800/60 bg-stone-950/40 p-6">
+            <div onClick={() => navigate('/logger')} className="lg:col-span-7 border border-stone-800/60 bg-stone-950/40 p-6 cursor-pointer hover:border-stone-700 transition-colors group">
               <div className="flex items-baseline justify-between mb-5">
                 <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">This Week</h2>
-                <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">
-                  {loading ? '…' : `${completedDays}/${totalWorkoutDays} workouts`}
+                <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 group-hover:text-orange-400 font-mono transition-colors">
+                  {loading ? '…' : `${completedDays}/${totalWorkoutDays} workouts →`}
                 </span>
               </div>
 
