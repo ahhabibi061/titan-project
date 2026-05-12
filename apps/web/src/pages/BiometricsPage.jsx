@@ -992,7 +992,7 @@ export default function BiometricVault() {
               </div>
             </div>
           </div>
-          <div className="pt-5 border-t border-stone-800/60">
+          <div className="pt-5 border-t border-stone-800/60 flex flex-col items-center">
             <MonthCalendar
               rawEntries={vault.rawEntries}
               calMonth={calMonth}

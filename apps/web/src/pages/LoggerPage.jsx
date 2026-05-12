@@ -629,7 +629,7 @@ const RECOVERY_COLORS = {
   almost:  '#a3e635',
   partial: '#fbbf24',
   resting: '#f87171',
-  no_data: 'rgba(255,255,255,0.03)',
+  no_data: null,
 };
 
 const GROWTH_COLORS = {
@@ -640,18 +640,21 @@ const GROWTH_COLORS = {
   first:     '#60a5fa',
 };
 
-function BodyMap({ recoveryMap, growthMap, mode, setMode }) {
+// Female chest: smooth bust silhouette instead of two pec masses
+const CHEST_FEMALE = 'M 78,96 C 72,106 72,120 78,132 C 84,140 96,146 110,146 C 124,146 136,140 142,132 C 148,120 148,106 142,96 C 132,88 88,88 78,96 Z';
+
+function BodyMapDual({ recoveryMap, growthMap, mode, setMode, gender = 'male' }) {
   const [hover, setHover] = useState(null);
 
-  function getColor(key) {
+  function getActiveFill(key) {
     if (mode === 'recovery') {
       const e = recoveryMap[key];
-      if (!e) return '#292524';
-      return RECOVERY_COLORS[e.status] ?? '#292524';
+      if (!e || e.status === 'no_data') return null;
+      return RECOVERY_COLORS[e.status] ?? null;
     }
     const e = growthMap[key];
-    if (!e) return '#292524';
-    return GROWTH_COLORS[e.status] ?? '#292524';
+    if (!e) return null;
+    return GROWTH_COLORS[e.status] ?? null;
   }
 
   function getTooltip(key) {
@@ -669,18 +672,35 @@ function BodyMap({ recoveryMap, growthMap, mode, setMode }) {
     return { name: MUSCLES[key], line1, line2 };
   }
 
-  const renderMuscle = (key, d) => (
-    <path
-      key={key}
-      d={d}
-      fill={getColor(key)}
-      stroke="#3c3633"
-      strokeWidth="0.8"
-      style={{ transition: 'fill 320ms ease', cursor: 'pointer' }}
-      onMouseEnter={() => setHover(key)}
-      onMouseLeave={() => setHover(null)}
-    />
-  );
+  // Render a single muscle group as <g id> with outline-only style
+  const renderMuscle = (key, pathData, suffix = '') => {
+    const activeFill = getActiveFill(key);
+    const isHovered  = hover === key;
+    const stroke     = (activeFill || isHovered) ? '#ed7a2a' : '#6b5a52';
+    const fill       = isHovered
+      ? 'rgba(237,122,42,0.25)'
+      : activeFill
+        ? `${activeFill}59`   // 35% opacity via hex alpha
+        : 'transparent';
+
+    return (
+      <g
+        key={`${key}${suffix}`}
+        id={`${key}${suffix}`}
+        onMouseEnter={() => setHover(key)}
+        onMouseLeave={() => setHover(null)}
+        style={{ cursor: 'pointer' }}
+      >
+        <path
+          d={pathData}
+          fill={fill}
+          stroke={stroke}
+          strokeWidth="0.8"
+          style={{ transition: 'fill 200ms ease, stroke 200ms ease' }}
+        />
+      </g>
+    );
+  };
 
   const tooltip = hover ? getTooltip(hover) : null;
 
@@ -695,6 +715,22 @@ function BodyMap({ recoveryMap, growthMap, mode, setMode }) {
         .sort(([, a], [, b]) => (b.growthPct ?? 0) - (a.growthPct ?? 0))
         .slice(0, 3)
         .map(([k, v]) => ({ key: k, label: MUSCLES[k], value: `${v.growthPct > 0 ? '+' : ''}${v.growthPct}%`, sub: `${fmt(v.currentVol)} kg·reps`, color: GROWTH_COLORS[v.status] }));
+
+  // Head elements (shared, positioned in the group's local coordinates)
+  const HeadAnterior = () => (
+    <>
+      <ellipse cx="110" cy="42" rx="21" ry="26" fill="#161412" stroke="#6b5a52" strokeWidth="1.2" />
+      <ellipse cx="92"  cy="44" rx="3.5" ry="5" fill="#0a0908" stroke="#57534e" strokeWidth="0.7" />
+      <ellipse cx="128" cy="44" rx="3.5" ry="5" fill="#0a0908" stroke="#57534e" strokeWidth="0.7" />
+      <path d="M 103,68 C 101,73 101,79 103,84 L 117,84 C 119,79 119,73 117,68 Z" fill="#161412" stroke="#6b5a52" strokeWidth="0.8" />
+    </>
+  );
+  const HeadPosterior = () => (
+    <>
+      <ellipse cx="110" cy="42" rx="21" ry="26" fill="#161412" stroke="#6b5a52" strokeWidth="1.2" />
+      <path d="M 103,68 C 101,73 101,79 103,84 L 117,84 C 119,79 119,73 117,68 Z" fill="#161412" stroke="#6b5a52" strokeWidth="0.8" />
+    </>
+  );
 
   return (
     <div>
@@ -713,31 +749,54 @@ function BodyMap({ recoveryMap, growthMap, mode, setMode }) {
             {m}
           </button>
         ))}
+        <span className="ml-auto text-[9px] font-mono text-stone-700 uppercase tracking-wider self-center">
+          {gender}
+        </span>
       </div>
 
-      {/* SVG body */}
+      {/* Single 480×560 SVG — anterior left, posterior right */}
       <div className="relative">
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <svg viewBox="0 0 220 476" className="w-full">
-              {HEAD_FRONT}{NECK}
-              {Object.entries(FRONT_PATHS).map(([k, d]) => renderMuscle(k, d))}
-              {/* Base line */}
-              <line x1="60" y1="455" x2="160" y2="455" stroke="#3c3633" strokeWidth="0.8" />
-              <text x="110" y="470" textAnchor="middle" fontFamily="'JetBrains Mono', monospace" fontSize="9" fill="#57534e" letterSpacing="2">ANTERIOR</text>
-            </svg>
-          </div>
-          <div>
-            <svg viewBox="0 0 220 476" className="w-full">
-              {HEAD_BACK}{NECK}
-              {Object.entries(BACK_PATHS).map(([k, d]) => renderMuscle(k, d))}
-              {/* Base line */}
-              <line x1="60" y1="455" x2="160" y2="455" stroke="#3c3633" strokeWidth="0.8" />
-              <text x="110" y="470" textAnchor="middle" fontFamily="'JetBrains Mono', monospace" fontSize="9" fill="#57534e" letterSpacing="2">POSTERIOR</text>
-            </svg>
-          </div>
-        </div>
-        <div className="absolute top-0 right-0 min-h-[42px] text-right pointer-events-none">
+        <svg viewBox="0 0 480 560" className="w-full" style={{ maxHeight: 400 }}>
+          {/* ── ANTERIOR figure — local coords same as FRONT_PATHS ─────────── */}
+          <g transform="translate(0, 46)">
+            <HeadAnterior />
+            {/* Female: substitute chest path */}
+            {gender === 'female'
+              ? renderMuscle('chest', CHEST_FEMALE, '_f')
+              : renderMuscle('chest', FRONT_PATHS.chest, '_f')
+            }
+            {renderMuscle('front_delts', FRONT_PATHS.front_delts, '_f')}
+            {renderMuscle('side_delts',  FRONT_PATHS.side_delts,  '_f')}
+            {renderMuscle('biceps',      FRONT_PATHS.biceps,      '_f')}
+            {renderMuscle('forearms',    FRONT_PATHS.forearms,    '_f')}
+            {renderMuscle('abs',         FRONT_PATHS.abs,         '_f')}
+            {renderMuscle('obliques',    FRONT_PATHS.obliques,    '_f')}
+            {renderMuscle('quads',       FRONT_PATHS.quads,       '_f')}
+            {renderMuscle('tibialis',    FRONT_PATHS.tibialis,    '_f')}
+            <line x1="60" y1="455" x2="160" y2="455" stroke="#3c3633" strokeWidth="0.6" />
+            <text x="110" y="470" textAnchor="middle" fontFamily="'JetBrains Mono', monospace" fontSize="8" fill="#4a4540" letterSpacing="3">ANTERIOR</text>
+          </g>
+
+          {/* ── POSTERIOR figure — same paths, shifted +240 in x ────────────── */}
+          <g transform="translate(240, 46)">
+            <HeadPosterior />
+            {renderMuscle('traps',      BACK_PATHS.traps,      '_b')}
+            {renderMuscle('rear_delts', BACK_PATHS.rear_delts, '_b')}
+            {renderMuscle('lats',       BACK_PATHS.lats,       '_b')}
+            {renderMuscle('rhomboids',  BACK_PATHS.rhomboids,  '_b')}
+            {renderMuscle('lower_back', BACK_PATHS.lower_back, '_b')}
+            {renderMuscle('triceps',    BACK_PATHS.triceps,    '_b')}
+            {renderMuscle('forearms',   BACK_PATHS.forearms,   '_b2')}
+            {renderMuscle('glutes',     BACK_PATHS.glutes,     '_b')}
+            {renderMuscle('hamstrings', BACK_PATHS.hamstrings, '_b')}
+            {renderMuscle('calves',     BACK_PATHS.calves,     '_b')}
+            <line x1="60" y1="455" x2="160" y2="455" stroke="#3c3633" strokeWidth="0.6" />
+            <text x="110" y="470" textAnchor="middle" fontFamily="'JetBrains Mono', monospace" fontSize="8" fill="#4a4540" letterSpacing="3">POSTERIOR</text>
+          </g>
+        </svg>
+
+        {/* Tooltip */}
+        <div className="absolute top-0 right-0 pointer-events-none">
           {tooltip && (
             <div className="bg-stone-950/95 border border-stone-700/50 px-3 py-2 backdrop-blur-sm">
               <div className="text-[9px] uppercase tracking-wider text-stone-500 font-mono">{tooltip.name}</div>
@@ -752,18 +811,18 @@ function BodyMap({ recoveryMap, growthMap, mode, setMode }) {
       <div className="mt-3 pt-3 border-t border-stone-800/60">
         {mode === 'recovery' ? (
           <div className="flex flex-wrap gap-x-3 gap-y-1">
-            {[['ready','Ready'],['almost','Almost'],['partial','Partial'],['resting','Resting']].map(([s, label]) => (
+            {[['ready','#4ade80','Ready'],['almost','#a3e635','Almost'],['partial','#fbbf24','Partial'],['resting','#f87171','Resting']].map(([s, c, label]) => (
               <div key={s} className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: RECOVERY_COLORS[s] }} />
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />
                 <span className="text-[9px] font-mono text-stone-500 uppercase tracking-wider">{label}</span>
               </div>
             ))}
           </div>
         ) : (
           <div className="flex flex-wrap gap-x-3 gap-y-1">
-            {[['pr','PR'],['improved','Improved'],['regressed','Regressed'],['dropped','Dropped'],['first','First']].map(([s, label]) => (
+            {[['pr','#fb923c','PR'],['improved','#4ade80','Improved'],['regressed','#fbbf24','Regressed'],['first','#60a5fa','First']].map(([s, c, label]) => (
               <div key={s} className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: GROWTH_COLORS[s] }} />
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />
                 <span className="text-[9px] font-mono text-stone-500 uppercase tracking-wider">{label}</span>
               </div>
             ))}
@@ -1074,6 +1133,7 @@ export default function IronLabLogger() {
   // Pass null once confirmed no session, real ID once confirmed logged in.
   const userId       = sessionLoading ? undefined : (session?.user?.id ?? null);
   const userWeightKg = useProfileStore((s) => Number(s.profile?.weight_kg || 0) || 80);
+  const profileData  = useProfileStore((s) => s.profile);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const workoutId = searchParams.get('workoutId');
@@ -1098,6 +1158,13 @@ export default function IronLabLogger() {
 
   // Plateau alerts
   const [plateauAlerts, setPlateauAlerts] = useState([]);
+
+  // Reset workout confirm
+  const [resetConfirm, setResetConfirm] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  // Body map gender
+  const [bodyMapGender, setBodyMapGender] = useState('male');
 
   // Sync workout name from Supabase into local input
   useEffect(() => {
@@ -1136,12 +1203,18 @@ export default function IronLabLogger() {
     return () => clearTimeout(t);
   }, [logger.completed, navigate]);
 
-  // Auto-start: if loading finishes with no active workout, create one immediately
+  // Body map gender: settings.body_map_gender > profile.sex > 'male'
   useEffect(() => {
-    if (logger.loading || logger.workout || workoutId || !userId) return;
-    const day = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()];
-    logger.startWorkout(`Workout — ${day}`);
-  }, [logger.loading, logger.workout?.id, workoutId, userId]); // eslint-disable-line
+    if (!userId) return;
+    supabase.from('settings')
+      .select('body_map_gender')
+      .eq('user_id', userId)
+      .maybeSingle()
+      .then(({ data }) => {
+        const override = data?.body_map_gender;
+        setBodyMapGender(override ?? profileData?.sex ?? 'male');
+      });
+  }, [userId, profileData?.sex]); // eslint-disable-line
 
   // Handle template load after workout starts
   useEffect(() => {
@@ -1216,8 +1289,25 @@ export default function IronLabLogger() {
     if (loaded) {
       setName(loaded.name);
       setPendingTemplate(loaded);
+      // If coming from the start banner (no active workout), begin one now
+      if (!logger.workout) {
+        logger.startWorkout(loaded.name);
+      }
     }
   }
+
+  // Reset: wipe all exercises/sets for this workout, then reload
+  const handleReset = async () => {
+    if (!logger.workout?.id) return;
+    setResetting(true);
+    await supabase
+      .from('workout_exercises')
+      .delete()
+      .eq('workout_id', logger.workout.id);
+    setResetting(false);
+    setResetConfirm(false);
+    navigate(0); // refresh current route
+  };
 
   const handleComplete = async () => {
     const topEntry    = Object.entries(volumes).sort(([, a], [, b]) => b - a)[0];
@@ -1269,14 +1359,52 @@ export default function IronLabLogger() {
         </div>
       );
     }
+    // Non-blocking start screen with bottom banner
+    const startNewWorkout = () => {
+      const day = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()];
+      logger.startWorkout(`Workout — ${day}`);
+    };
     return (
-      <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased flex items-center justify-center">
+      <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
         <style>{FONT_STYLE}</style>
         <Backdrop />
-        <div className="relative z-10 flex flex-col items-center gap-3">
-          <div className="font-mono text-xs uppercase tracking-wider text-stone-600">Starting workout…</div>
-          <div className="w-5 h-5 border border-stone-700 border-t-orange-400 rounded-full animate-spin" />
+        <AppNav />
+        <div className="relative z-10 max-w-[1400px] mx-auto px-6 py-8 pb-24">
+          <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
+            <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">FORGE</span>
+          </header>
+          <div className="flex flex-col items-center justify-center py-24 gap-4">
+            <div className="font-anton text-2xl uppercase text-stone-600 tracking-wide">Ready to train?</div>
+            <div className="text-xs font-mono text-stone-700 uppercase tracking-wider">Use the buttons below to begin</div>
+          </div>
         </div>
+        {/* NON-BLOCKING BOTTOM BANNER */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-stone-950 border-t border-stone-800 px-6 py-4 flex items-center justify-between gap-4">
+          <span className="font-mono text-xs text-stone-500 uppercase tracking-wider hidden sm:block">Start your session</span>
+          <div className="flex gap-3 ml-auto">
+            <button
+              onClick={() => setShowLoadTemplate(true)}
+              className="px-5 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
+            >
+              Load Template
+            </button>
+            <button
+              onClick={startNewWorkout}
+              className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors"
+            >
+              + New Workout
+            </button>
+          </div>
+        </div>
+        {showLoadTemplate && (
+          <LoadTemplatePicker
+            templates={workoutTemplates.templates}
+            loading={workoutTemplates.loading}
+            onLoad={handleLoadTemplate}
+            onClose={() => setShowLoadTemplate(false)}
+            onDelete={workoutTemplates.deleteTemplate}
+          />
+        )}
       </div>
     );
   }
@@ -1405,55 +1533,89 @@ export default function IronLabLogger() {
           )}
         </div>
 
-        {/* HEADER */}
-        <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
-          <div className="flex items-baseline gap-4 flex-wrap">
-            <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">FORGE</span>
-            <span className="hidden md:inline-block w-px h-8 bg-stone-800" />
+        {/* HEADER — 3-column: Left title | Center timer | Right actions */}
+        <header className="grid grid-cols-3 items-center gap-4 mb-8 pb-6 border-b border-stone-800/60">
+          {/* LEFT */}
+          <div className="flex items-baseline gap-3 flex-wrap min-w-0">
+            <span className="font-anton text-4xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">FORGE</span>
+            <span className="hidden md:inline-block w-px h-7 bg-stone-800" />
             <input
               value={name}
               onChange={e => { setName(e.target.value); logger.updateWorkoutName(e.target.value); }}
-              className="hidden md:block bg-transparent text-lg text-stone-300 focus:outline-none focus:text-stone-100 font-mono px-2 py-1 border-b border-transparent focus:border-orange-500/40"
+              className="hidden md:block bg-transparent text-sm text-stone-400 focus:outline-none focus:text-stone-200 font-mono px-1 py-0.5 border-b border-transparent focus:border-orange-500/40 min-w-0 max-w-[160px] truncate"
             />
           </div>
-          <div className="flex items-center gap-3">
-            {/* Load Template button — always visible in active workout */}
+
+          {/* CENTER — timer */}
+          {!workoutId && (
+            <div className="flex flex-col items-center">
+              <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono">Session</div>
+              <div className="font-anton text-4xl tabular-nums text-orange-400 leading-tight">{mins}:{secs}</div>
+            </div>
+          )}
+          {workoutId && <div />}
+
+          {/* RIGHT — template buttons + reset + finish */}
+          <div className="flex items-center gap-2 justify-end flex-wrap">
             {!workoutId && (
               <button
                 onClick={() => setShowLoadTemplate(true)}
-                className="px-4 py-2 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
+                className="hidden sm:block px-3 py-1.5 border border-stone-700 text-stone-500 font-mono text-[10px] uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
               >
-                Load Template
+                Templates
               </button>
             )}
-            {/* Save as Template button — only when exercises exist */}
             {!workoutId && logger.exercises.length > 0 && (
               <button
                 onClick={() => setShowSaveTemplate(true)}
-                className="px-4 py-2 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
+                className="hidden md:block px-3 py-1.5 border border-stone-700 text-stone-500 font-mono text-[10px] uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
               >
-                Save Template
+                Save
               </button>
             )}
-            {!workoutId && (
-              <div className="text-right">
-                <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono">Session</div>
-                <div className="font-anton text-2xl tabular-nums text-stone-200">{mins}:{secs}</div>
+            {/* Reset with inline confirm */}
+            {!workoutId && !resetConfirm && (
+              <button
+                onClick={() => setResetConfirm(true)}
+                className="px-3 py-1.5 border border-stone-700 text-stone-500 font-mono text-[10px] uppercase tracking-wider hover:border-red-500/40 hover:text-red-400 transition-colors"
+                title="Reset workout — clears all sets"
+              >
+                ↺ Reset
+              </button>
+            )}
+            {!workoutId && resetConfirm && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-[10px] text-stone-400 uppercase tracking-wider whitespace-nowrap">
+                  Clears all sets —
+                </span>
+                <button
+                  onClick={() => setResetConfirm(false)}
+                  className="px-2 py-1 border border-stone-700 text-stone-400 font-mono text-[10px] uppercase tracking-wider hover:border-stone-500 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReset}
+                  disabled={resetting}
+                  className="px-2 py-1 border border-red-500/40 text-red-400 font-mono text-[10px] uppercase tracking-wider hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                >
+                  {resetting ? '…' : 'Reset'}
+                </button>
               </div>
             )}
             {workoutId ? (
               <button
                 onClick={() => navigate('/dashboard')}
-                className="px-5 py-2.5 border border-stone-700 text-stone-300 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-100 transition-colors"
+                className="px-4 py-2 border border-stone-700 text-stone-300 font-mono text-xs uppercase tracking-wider hover:border-stone-500 hover:text-stone-100 transition-colors"
               >
                 ← Dashboard
               </button>
             ) : (
               <button
                 onClick={handleComplete}
-                className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-lg uppercase tracking-wider hover:bg-orange-400 transition-colors"
+                className="px-4 py-2 bg-orange-500 text-stone-950 font-anton text-base uppercase tracking-wider hover:bg-orange-400 transition-colors"
               >
-                Complete Workout
+                ✓ Finish
               </button>
             )}
           </div>
@@ -1496,11 +1658,12 @@ export default function IronLabLogger() {
                 <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Muscle Map</h2>
                 <span className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">recovery · growth</span>
               </div>
-              <BodyMap
+              <BodyMapDual
                 recoveryMap={bodyMap.recoveryMap}
                 growthMap={bodyMap.growthMap}
                 mode={bodyMap.mode}
                 setMode={bodyMap.setMode}
+                gender={bodyMapGender}
               />
             </div>
 

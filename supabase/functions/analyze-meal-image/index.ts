@@ -19,10 +19,14 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  console.log('[SCAN] request received —', req.method);
+
   try {
     // ── Auth ────────────────────────────────────────────────────────────────
     const authHeader = req.headers.get('Authorization');
+    console.log('[SCAN] auth header present:', !!authHeader);
     if (!authHeader) {
+      console.error('[SCAN] missing Authorization header');
       return new Response(
         JSON.stringify({ error: 'unauthorized', message: 'Missing Authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -32,6 +36,7 @@ serve(async (req) => {
     const supabaseUrl  = Deno.env.get('SUPABASE_URL')!;
     const serviceKey   = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!;
+    console.log('[SCAN] env vars present — SUPABASE_URL:', !!supabaseUrl, 'SERVICE_KEY:', !!serviceKey, 'ANTHROPIC_KEY:', !!anthropicKey);
 
     // User-scoped client (for auth)
     const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
@@ -39,6 +44,7 @@ serve(async (req) => {
     });
 
     const { data: { user }, error: authError } = await userClient.auth.getUser();
+    console.log('[SCAN] auth result — user:', user?.id ?? 'none', 'error:', authError?.message ?? 'none');
     if (authError || !user) {
       return new Response(
         JSON.stringify({ error: 'unauthorized', message: 'Invalid token' }),
@@ -57,8 +63,10 @@ serve(async (req) => {
 
     const tier  = profile?.subscription_tier ?? 'basic';
     const limit = SCAN_LIMITS[tier] ?? 0;
+    console.log('[SCAN] user tier:', tier, '| daily limit:', limit);
 
     if (limit === 0) {
+      console.log('[SCAN] upgrade_required — tier is basic');
       return new Response(
         JSON.stringify({
           error: 'upgrade_required',
@@ -81,10 +89,12 @@ serve(async (req) => {
       .gte('logged_at', todayStart.toISOString());
 
     const used = scansToday ?? 0;
+    console.log('[SCAN] scans used today:', used, '/', limit);
 
     if (limit !== 999 && used >= limit) {
       const tomorrow = new Date(todayStart);
       tomorrow.setDate(tomorrow.getDate() + 1);
+      console.log('[SCAN] rate_limit_exceeded');
       return new Response(
         JSON.stringify({
           error: 'rate_limit_exceeded',
@@ -98,17 +108,21 @@ serve(async (req) => {
     }
 
     // ── Parse request body ──────────────────────────────────────────────────
-    const { imageBase64, mimeType = 'image/jpeg' } = await req.json();
+    const body = await req.json();
+    const { imageBase64, mimeType = 'image/jpeg' } = body;
     if (!imageBase64) {
+      console.error('[SCAN] bad_request — imageBase64 missing');
       return new Response(
         JSON.stringify({ error: 'bad_request', message: 'imageBase64 is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    console.log('Image received, size:', imageBase64.length, 'mimeType:', mimeType);
+    // Strip data URL prefix if client sent it (e.g. "data:image/jpeg;base64,...")
+    const cleanBase64 = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
+    console.log('[SCAN] image received — size (chars):', cleanBase64.length, '| mimeType:', mimeType);
 
     // ── Call Claude vision ──────────────────────────────────────────────────
-    console.log('Calling Anthropic API...');
+    console.log('[SCAN] calling Anthropic claude-opus-4-5...');
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -125,7 +139,7 @@ serve(async (req) => {
             content: [
               {
                 type: 'image',
-                source: { type: 'base64', media_type: mimeType, data: imageBase64 },
+                source: { type: 'base64', media_type: mimeType, data: cleanBase64 },
               },
               {
                 type: 'text',
@@ -162,11 +176,11 @@ Estimate nutritional values as accurately as possible based on visible portion s
 
     // Read response as text first for logging, then parse
     const responseText = await anthropicRes.text();
-    console.log('Anthropic status:', anthropicRes.status);
-    console.log('Anthropic response:', responseText.slice(0, 500));
+    console.log('[SCAN] anthropic status:', anthropicRes.status);
+    console.log('[SCAN] anthropic raw (first 600):', responseText.slice(0, 600));
 
     if (!anthropicRes.ok) {
-      console.error('Anthropic error body:', responseText);
+      console.error('[SCAN] anthropic error body:', responseText);
       return new Response(
         JSON.stringify({ error: 'ai_error', message: 'Vision analysis failed. Please try again.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -190,7 +204,7 @@ Estimate nutritional values as accurately as possible based on visible portion s
       const cleaned = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
       mealData = JSON.parse(cleaned);
     } catch {
-      console.error('Failed to parse Claude response:', rawText);
+      console.error('[SCAN] failed to parse Claude JSON response — raw:', rawText);
       return new Response(
         JSON.stringify({ error: 'parse_error', message: 'Could not parse meal analysis. Please try again.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -198,6 +212,7 @@ Estimate nutritional values as accurately as possible based on visible portion s
     }
 
     // ── Return result ───────────────────────────────────────────────────────
+    console.log('[SCAN] success — meal:', mealData.meal_name, '| confidence:', mealData.confidence);
     const remaining = limit === 999 ? 999 : limit - used - 1;
 
     return new Response(
@@ -211,7 +226,7 @@ Estimate nutritional values as accurately as possible based on visible portion s
     );
 
   } catch (err) {
-    console.error('Unexpected error:', err);
+    console.error('[SCAN] unexpected error:', err);
     return new Response(
       JSON.stringify({ error: 'general', message: 'An unexpected error occurred.' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
