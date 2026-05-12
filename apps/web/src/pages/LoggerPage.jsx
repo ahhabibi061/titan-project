@@ -466,7 +466,7 @@ function AddExercisePicker({ library, onAdd, used }) {
   );
 }
 
-// -------------------- BODY MAP (react-body-highlighter) --------------------
+// ================== BODY MAP (react-body-highlighter) ==================
 
 // Internal muscle key → react-body-highlighter slug
 const MUSCLE_MAP = {
@@ -487,23 +487,35 @@ const MUSCLE_MAP = {
   calves:      'calves',
 };
 
-// Slug → display name for tooltip
-const SLUG_TO_LABEL = {
-  'chest':          'Chest',
-  'front-deltoids': 'Front Delts',
-  'back-deltoids':  'Rear Delts',
-  'biceps':         'Biceps',
-  'triceps':        'Triceps',
-  'forearm':        'Forearms',
-  'abs':            'Abs',
+// Package slug → anatomical display name
+const MUSCLE_DISPLAY_NAMES = {
+  'chest':          'Pectoralis Major',
+  'front-deltoids': 'Anterior Deltoids',
+  'back-deltoids':  'Posterior Deltoids',
+  'biceps':         'Biceps Brachii',
+  'triceps':        'Triceps Brachii',
+  'forearm':        'Forearm Flexors',
+  'abs':            'Rectus Abdominis',
   'obliques':       'Obliques',
-  'trapezius':      'Traps',
-  'upper-back':     'Lats / Upper Back',
-  'lower-back':     'Lower Back',
-  'gluteal':        'Glutes',
-  'quadriceps':     'Quads',
+  'trapezius':      'Trapezius',
+  'upper-back':     'Latissimus Dorsi',
+  'lower-back':     'Erector Spinae',
+  'gluteal':        'Gluteus Maximus',
+  'quadriceps':     'Quadriceps',
   'hamstring':      'Hamstrings',
-  'calves':         'Calves',
+  'calves':         'Gastrocnemius',
+  'adductor':       'Adductors',
+  'abductors':      'Abductors',
+};
+
+// Recovery hours window per slug (for tooltip estimate)
+const MUSCLE_WINDOWS = {
+  'chest': 72, 'front-deltoids': 48, 'back-deltoids': 48,
+  'biceps': 48, 'triceps': 48, 'forearm': 36,
+  'abs': 24, 'obliques': 24,
+  'trapezius': 36, 'upper-back': 72, 'lower-back': 72,
+  'gluteal': 72, 'quadriceps': 72, 'hamstring': 72,
+  'calves': 36,
 };
 
 // Recovery: ready=1, almost=2, partial=3, resting=4
@@ -514,18 +526,15 @@ const GROWTH_HIGHLIGHTED   = ['#fb923c', '#4ade80', '#60a5fa', '#fbbf24', '#f871
 function getRecoveryFreq(status) {
   return { ready: 1, almost: 2, partial: 3, resting: 4 }[status] ?? null;
 }
-
 function getGrowthFreq(status) {
   return { pr: 1, improved: 2, first: 3, regressed: 4, dropped: 5 }[status] ?? null;
 }
 
-// Build the data array for react-body-highlighter.
-// Deduplicates slugs (e.g. lats + rhomboids both → upper-back) by keeping the
-// lowest frequency value (= most "highlighted" / most important state).
+// Build IExerciseData[] for react-body-highlighter.
+// Deduplicates slugs by keeping the lowest freq (most highlighted state).
 function buildModelData(recoveryMap, growthMap, mode) {
   const slugFreq = {};
   const map = mode === 'recovery' ? recoveryMap : growthMap;
-
   for (const [key, val] of Object.entries(map)) {
     const slug = MUSCLE_MAP[key];
     if (!slug) continue;
@@ -535,51 +544,325 @@ function buildModelData(recoveryMap, growthMap, mode) {
     if (freq === null) continue;
     if (!slugFreq[slug] || freq < slugFreq[slug]) slugFreq[slug] = freq;
   }
-
   return Object.entries(slugFreq).map(([slug, frequency]) => ({
-    name: slug,
-    muscles: [slug],
-    frequency,
+    name: slug, muscles: [slug], frequency,
   }));
 }
 
-function BodyMapDual({ recoveryMap, growthMap, mode, setMode, gender = 'male' }) {
-  const [tooltip, setTooltip] = useState(null);
+// ---- Part 2: Muscle Tooltip ----
+function MuscleTooltip({ muscle, recoveryData, growthData, mode, position }) {
+  if (!muscle) return null;
+  const displayName = MUSCLE_DISPLAY_NAMES[muscle]
+    || muscle.replace(/-/g, ' ').toUpperCase();
 
-  const highlightedColors = mode === 'recovery' ? RECOVERY_HIGHLIGHTED : GROWTH_HIGHLIGHTED;
-  const data = buildModelData(recoveryMap, growthMap, mode);
+  const internalKey = Object.entries(MUSCLE_MAP).find(([, s]) => s === muscle)?.[0];
 
-  function handleClick({ muscle, data: mData }) {
-    const label = SLUG_TO_LABEL[muscle] ?? muscle;
-    // Find internal key — take first match (sufficient for tooltip)
-    const internalKey = Object.entries(MUSCLE_MAP).find(([, slug]) => slug === muscle)?.[0];
+  let value = null;
+  let line2 = null;
 
-    if (mode === 'recovery' && internalKey) {
-      const e = recoveryMap[internalKey];
-      if (e && e.status !== 'no_data') {
-        const line1 = e.status === 'ready' ? 'Fully recovered' : `${e.pct}% recovered`;
-        const line2 = e.hoursRemaining > 0 ? `${e.hoursRemaining}h remaining` : 'Ready to train';
-        setTooltip({ name: label, line1, line2 });
-      } else {
-        setTooltip({ name: label, line1: 'No data', line2: null });
-      }
-    } else if (mode === 'growth' && internalKey) {
-      const e = growthMap[internalKey];
-      if (e) {
-        const line1 = e.growthPct !== null
-          ? `${e.growthPct > 0 ? '+' : ''}${e.growthPct}% vs last session`
-          : 'First session';
-        const line2 = e.prevVol !== null
-          ? `${fmt(e.currentVol)} vs ${fmt(e.prevVol)} kg·reps`
-          : `${fmt(e.currentVol)} kg·reps`;
-        setTooltip({ name: label, line1, line2 });
-      } else {
-        setTooltip({ name: label, line1: 'Not trained today', line2: null });
-      }
-    } else {
-      setTooltip({ name: label, line1: mData.frequency > 0 ? `freq ${mData.frequency}` : 'No data', line2: null });
+  if (mode === 'recovery' && internalKey) {
+    const e = recoveryData?.[internalKey];
+    if (e && e.status !== 'no_data') {
+      value = e.pct ?? (e.status === 'ready' ? 100 : null);
+      line2 = e.hoursRemaining > 0 ? `${e.hoursRemaining}h remaining` : null;
+    }
+  } else if (mode === 'growth' && internalKey) {
+    const e = growthData?.[internalKey];
+    if (e) {
+      value = e.growthPct;
+      line2 = e.prevVol !== null
+        ? `${fmt(e.currentVol)} vs ${fmt(e.prevVol)} kg·reps`
+        : e.currentVol != null ? `${fmt(e.currentVol)} kg·reps` : null;
     }
   }
+
+  const getStatus = () => {
+    if (mode === 'recovery') {
+      if (value === null) return { label: 'NO DATA',      color: '#78716c' };
+      if (value >= 100)   return { label: 'READY',        color: '#22c55e' };
+      if (value >= 67)    return { label: 'ALMOST READY', color: '#eab308' };
+      if (value >= 34)    return { label: 'PARTIAL',      color: '#f97316' };
+      return                     { label: 'RESTING',      color: '#ef4444' };
+    } else {
+      if (value === null) return { label: 'NO DATA',      color: '#78716c' };
+      if (value > 10)     return { label: 'PR TERRITORY', color: '#22c55e' };
+      if (value > 0)      return { label: 'IMPROVED',     color: '#86efac' };
+      if (value > -10)    return { label: 'SLIGHT DROP',  color: '#f97316' };
+      return                     { label: 'REGRESSED',    color: '#ef4444' };
+    }
+  };
+  const status = getStatus();
+
+  // Estimate hours remaining for recovery
+  let hoursEst = null;
+  if (mode === 'recovery' && value !== null && value < 100) {
+    const win = MUSCLE_WINDOWS[muscle] || 48;
+    hoursEst = Math.round(win * (1 - value / 100));
+  }
+
+  // Clamp so tooltip doesn't overflow container edge
+  const clampedX = Math.min(Math.max(position.x, 80), 260);
+
+  return (
+    <div style={{
+      position: 'absolute',
+      left: clampedX,
+      top: Math.max(position.y, 0),
+      zIndex: 50,
+      background: '#0c0a09',
+      border: '1px solid #292524',
+      padding: '10px 14px',
+      minWidth: '164px',
+      pointerEvents: 'none',
+      transform: 'translateX(-50%)',
+      boxShadow: '0 4px 24px rgba(0,0,0,0.7)',
+    }}>
+      <div style={{
+        fontFamily: 'Anton, sans-serif',
+        fontSize: '13px',
+        color: '#f5f5f4',
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        marginBottom: '6px',
+      }}>{displayName}</div>
+
+      {value !== null && (
+        <div style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '11px',
+          color: status.color,
+          marginBottom: '4px',
+        }}>
+          {mode === 'recovery'
+            ? `${Math.round(value)}% recovered`
+            : value > 0
+              ? `↑ ${Math.round(value)}% vs last`
+              : `↓ ${Math.abs(Math.round(value))}% vs last`
+          }
+        </div>
+      )}
+
+      {line2 && (
+        <div style={{
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          color: '#78716c',
+          marginBottom: '6px',
+          letterSpacing: '0.04em',
+        }}>{line2}</div>
+      )}
+
+      <div style={{
+        display: 'inline-flex',
+        padding: '2px 8px',
+        background: `${status.color}22`,
+        border: `1px solid ${status.color}44`,
+        fontFamily: 'JetBrains Mono, monospace',
+        fontSize: '9px',
+        letterSpacing: '0.15em',
+        textTransform: 'uppercase',
+        color: status.color,
+      }}>{status.label}</div>
+
+      {hoursEst !== null && (
+        <div style={{
+          marginTop: '6px',
+          fontFamily: 'JetBrains Mono, monospace',
+          fontSize: '9px',
+          color: '#57534e',
+          letterSpacing: '0.06em',
+        }}>~{hoursEst}h until fully recovered</div>
+      )}
+    </div>
+  );
+}
+
+// ---- Part 3: Male overlays ----
+const MaleOverlay = () => (
+  <svg viewBox="0 0 180 520"
+    style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none' }}>
+    {/* Cropped hair */}
+    <path d="M72,28 Q74,15 90,10 Q100,8 110,10 Q126,15 108,22 Q100,20 90,20 Q82,22 72,28Z"
+      fill="#2a1f1a" stroke="none" />
+    <path d="M78,20 Q88,14 102,14" fill="none" stroke="#1a1008" strokeWidth="0.8" />
+    <path d="M82,18 Q92,13 104,15"  fill="none" stroke="#1a1008" strokeWidth="0.6" />
+    {/* Ears */}
+    <ellipse cx="67" cy="52" rx="4" ry="6" fill="none" stroke="#6b5a52" strokeWidth="0.8" />
+    <ellipse cx="113" cy="52" rx="4" ry="6" fill="none" stroke="#6b5a52" strokeWidth="0.8" />
+    {/* Jaw */}
+    <path d="M76,68 Q90,75 104,68" fill="none" stroke="#6b5a52" strokeWidth="0.6" opacity="0.5" />
+  </svg>
+);
+
+const MaleOverlayPosterior = () => (
+  <svg viewBox="0 0 180 520"
+    style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none' }}>
+    {/* Short hair posterior */}
+    <path d="M74,28 Q80,18 90,15 Q100,13 106,18 Q114,25 110,28 Q100,22 90,22 Q80,24 74,28Z"
+      fill="#2a1f1a" stroke="none" />
+    <path d="M78,22 Q90,16 102,22" fill="none" stroke="#1a1008" strokeWidth="0.7" />
+    {/* Ears */}
+    <ellipse cx="67" cy="52" rx="4" ry="6" fill="none" stroke="#6b5a52" strokeWidth="0.8" />
+    <ellipse cx="113" cy="52" rx="4" ry="6" fill="none" stroke="#6b5a52" strokeWidth="0.8" />
+  </svg>
+);
+
+// ---- Part 4: Female overlays ----
+const FemaleAnteriorOverlay = () => (
+  <svg viewBox="0 0 180 520"
+    style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none' }}>
+    {/* Long hair left */}
+    <path d="M72,28 Q58,35 52,55 Q48,75 50,100 Q52,118 56,130 Q60,120 62,105 Q64,85 68,68 Q72,52 76,40 Z"
+      fill="#2a1a10" stroke="none" opacity="0.92" />
+    {/* Long hair right */}
+    <path d="M108,28 Q122,35 128,55 Q132,75 130,100 Q128,118 124,130 Q120,120 118,105 Q116,85 112,68 Q108,52 104,40 Z"
+      fill="#2a1a10" stroke="none" opacity="0.92" />
+    {/* Crown */}
+    <path d="M72,28 Q80,18 90,15 Q100,13 108,18 Q116,24 112,28 Q100,22 90,22 Q80,24 72,28Z"
+      fill="#2a1a10" stroke="none" />
+    {/* Hair highlight strands */}
+    <path d="M66,38 Q58,58 54,85 Q52,105 55,122"
+      fill="none" stroke="#4a2e1a" strokeWidth="1.2" opacity="0.6" />
+    <path d="M114,38 Q122,58 126,85 Q128,105 125,122"
+      fill="none" stroke="#4a2e1a" strokeWidth="1.2" opacity="0.6" />
+    <path d="M88,15 Q90,22 90,30"
+      fill="none" stroke="#1a0e08" strokeWidth="0.8" opacity="0.7" />
+    {/* Ear (partially visible) */}
+    <ellipse cx="113" cy="52" rx="4" ry="6" fill="none" stroke="#6b5a52" strokeWidth="0.8" opacity="0.4" />
+    {/* Subtle bust curves */}
+    <path d="M78,118 Q74,128 76,138 Q82,145 90,144"
+      fill="none" stroke="#8a6a5a" strokeWidth="1.0" opacity="0.7" />
+    <path d="M102,118 Q106,128 104,138 Q98,145 90,144"
+      fill="none" stroke="#8a6a5a" strokeWidth="1.0" opacity="0.7" />
+    <path d="M78,140 Q90,148 102,140"
+      fill="none" stroke="#8a6a5a" strokeWidth="0.8" opacity="0.5" />
+    {/* Jaw – softer */}
+    <path d="M77,68 Q90,76 103,68" fill="none" stroke="#6b5a52" strokeWidth="0.6" opacity="0.5" />
+  </svg>
+);
+
+const FemalePosteriorOverlay = () => (
+  <svg viewBox="0 0 180 520"
+    style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none' }}>
+    {/* Long hair posterior left */}
+    <path d="M74,28 Q60,35 54,55 Q50,78 52,108 Q54,135 58,158 Q62,148 64,125 Q66,100 70,75 Q74,52 78,38 Z"
+      fill="#2a1a10" stroke="none" opacity="0.90" />
+    {/* Long hair posterior right */}
+    <path d="M106,28 Q120,35 126,55 Q130,78 128,108 Q126,135 122,158 Q118,148 116,125 Q114,100 110,75 Q106,52 102,38 Z"
+      fill="#2a1a10" stroke="none" opacity="0.90" />
+    {/* Crown */}
+    <path d="M74,28 Q82,18 90,15 Q98,13 106,18 Q114,24 110,28 Q100,22 90,22 Q80,24 74,28Z"
+      fill="#2a1a10" stroke="none" />
+    {/* Centre hair mass */}
+    <path d="M78,38 Q82,55 84,80 Q86,110 86,145 Q88,155 90,158 Q92,155 94,145 Q94,110 96,80 Q98,55 102,38 Q96,32 90,30 Q84,32 78,38Z"
+      fill="#2a1a10" stroke="none" opacity="0.85" />
+    {/* Strands */}
+    <path d="M80,42 Q76,70 74,105 Q72,130 74,152"
+      fill="none" stroke="#4a2e1a" strokeWidth="1.0" opacity="0.5" />
+    <path d="M90,32 L90,155"
+      fill="none" stroke="#4a2e1a" strokeWidth="0.8" opacity="0.4" />
+    <path d="M100,42 Q104,70 106,105 Q108,130 106,152"
+      fill="none" stroke="#4a2e1a" strokeWidth="1.0" opacity="0.5" />
+    {/* Hair tie */}
+    <ellipse cx="90" cy="158" rx="7" ry="3.5"
+      fill="#1a0e08" stroke="#4a2e1a" strokeWidth="0.8" />
+    {/* Ponytail */}
+    <path d="M85,160 Q80,178 82,200 Q85,215 90,218 Q95,215 98,200 Q100,178 95,160 Z"
+      fill="#2a1a10" stroke="none" opacity="0.82" />
+    <path d="M88,162 Q85,182 86,205"
+      fill="none" stroke="#4a2e1a" strokeWidth="0.8" opacity="0.5" />
+  </svg>
+);
+
+// ---- Part 5: BodyFigure wrapper ----
+function BodyFigure({ type, data, gender, highlightedColors, recoveryMap, growthMap, mode }) {
+  const figRef = useRef(null);
+  const [tooltip, setTooltip]       = useState(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  // Track last mouse position inside the figure so tooltip appears near the click
+  const lastMouse = useRef({ x: 90, y: 80 });
+
+  function handleMouseMove(e) {
+    const rect = figRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    lastMouse.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+  }
+
+  function handleClick(muscleStats) {
+    if (!muscleStats?.muscle) return;
+    const { x, y } = lastMouse.current;
+    setTooltip(muscleStats.muscle);
+    setTooltipPos({ x, y: Math.max(y - 20, 0) });
+  }
+
+  function handleContainerClick(e) {
+    // Dismiss if clicking the wrapper itself (not the SVG)
+    if (e.target === figRef.current || e.target.tagName === 'DIV') {
+      setTooltip(null);
+    }
+  }
+
+  return (
+    <div
+      ref={figRef}
+      onMouseMove={handleMouseMove}
+      onClick={handleContainerClick}
+      style={{
+        position: 'relative',
+        display: 'inline-block',
+        transform: gender === 'female' ? 'scaleX(0.93)' : 'none',
+        transformOrigin: 'center top',
+      }}
+    >
+      {/* CSS: larger figures + polish */}
+      <style>{`
+        .body-map-container svg {
+          filter: drop-shadow(0px 0px 8px rgba(237,122,42,0.06));
+        }
+        .body-map-container svg path, .body-map-container svg polygon {
+          stroke-linejoin: round;
+          stroke-linecap: round;
+        }
+        .rbh polygon { transition: fill 150ms ease; }
+        .rbh polygon:hover { fill: rgba(237,122,42,0.28) !important; cursor: pointer; }
+      `}</style>
+
+      <Model
+        type={type}
+        data={data}
+        bodyColor="#1c1917"
+        highlightedColors={highlightedColors}
+        onClick={handleClick}
+        style={{ width: '180px', padding: '4px' }}
+      />
+
+      {/* Gender-specific hair + detail overlays */}
+      {gender === 'female' && type === 'anterior'  && <FemaleAnteriorOverlay />}
+      {gender === 'female' && type === 'posterior' && <FemalePosteriorOverlay />}
+      {gender !== 'female' && type === 'anterior'  && <MaleOverlay />}
+      {gender !== 'female' && type === 'posterior' && <MaleOverlayPosterior />}
+
+      {/* Per-figure muscle tooltip */}
+      {tooltip && (
+        <MuscleTooltip
+          muscle={tooltip}
+          recoveryData={recoveryMap}
+          growthData={growthMap}
+          mode={mode}
+          position={tooltipPos}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---- BodyMapDual: mode toggle + two figures + legend + summary ----
+function BodyMapDual({ recoveryMap, growthMap, mode, setMode, gender = 'male' }) {
+  const highlightedColors = mode === 'recovery' ? RECOVERY_HIGHLIGHTED : GROWTH_HIGHLIGHTED;
+  const data = buildModelData(recoveryMap, growthMap, mode);
 
   const summaryItems = mode === 'recovery'
     ? Object.entries(recoveryMap)
@@ -606,61 +889,55 @@ function BodyMapDual({ recoveryMap, growthMap, mode, setMode, gender = 'male' })
       {/* Mode toggle */}
       <div className="flex gap-1 mb-4">
         {['recovery', 'growth'].map(m => (
-          <button
-            key={m}
-            onClick={() => setMode(m)}
+          <button key={m} onClick={() => setMode(m)}
             className={`px-3 py-1 font-mono text-[10px] uppercase tracking-wider border transition-colors ${
               mode === m
                 ? 'border-orange-500/60 text-orange-300 bg-orange-500/10'
                 : 'border-stone-700 text-stone-500 hover:text-stone-300 hover:border-stone-600'
             }`}
-          >
-            {m}
-          </button>
+          >{m}</button>
         ))}
         <span className="ml-auto text-[9px] font-mono text-stone-700 uppercase tracking-wider self-center">
           {gender}
         </span>
       </div>
 
-      {/* Hover colour override */}
-      <style>{`.rbh polygon { transition: fill 150ms ease; } .rbh polygon:hover { fill: rgba(237,122,42,0.3) !important; cursor: pointer; }`}</style>
-
-      {/* Both views side by side — click anywhere to dismiss tooltip */}
-      <div className="relative flex gap-2 justify-center" onClick={() => setTooltip(null)}>
-        <div style={{ maxWidth: 170 }}>
-          <Model
-            data={data}
+      {/* Both figures side by side */}
+      <div className="body-map-container flex gap-3 justify-center">
+        <div>
+          <BodyFigure
             type="anterior"
-            bodyColor="#1c1917"
-            highlightedColors={highlightedColors}
-            onClick={handleClick}
-            style={{ padding: '0.5rem' }}
-          />
-          <div className="text-center text-[8px] font-mono text-stone-700 uppercase tracking-[0.2em] -mt-1">Anterior</div>
-        </div>
-        <div style={{ maxWidth: 170 }}>
-          <Model
             data={data}
-            type="posterior"
-            bodyColor="#1c1917"
+            gender={gender}
             highlightedColors={highlightedColors}
-            onClick={handleClick}
-            style={{ padding: '0.5rem' }}
+            recoveryMap={recoveryMap}
+            growthMap={growthMap}
+            mode={mode}
           />
-          <div className="text-center text-[8px] font-mono text-stone-700 uppercase tracking-[0.2em] -mt-1">Posterior</div>
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '9px', letterSpacing: '0.15em',
+            color: '#57534e', textTransform: 'uppercase',
+            textAlign: 'center', marginTop: '6px',
+          }}>ANTERIOR</div>
         </div>
-
-        {/* Tooltip */}
-        {tooltip && (
-          <div className="absolute top-0 right-0 pointer-events-none z-10">
-            <div className="bg-stone-950/95 border border-stone-700/50 px-3 py-2 backdrop-blur-sm">
-              <div className="text-[9px] uppercase tracking-wider text-stone-500 font-mono">{tooltip.name}</div>
-              <div className="font-mono text-xs text-stone-100 mt-0.5">{tooltip.line1}</div>
-              {tooltip.line2 && <div className="text-[9px] text-stone-500 font-mono">{tooltip.line2}</div>}
-            </div>
-          </div>
-        )}
+        <div>
+          <BodyFigure
+            type="posterior"
+            data={data}
+            gender={gender}
+            highlightedColors={highlightedColors}
+            recoveryMap={recoveryMap}
+            growthMap={growthMap}
+            mode={mode}
+          />
+          <div style={{
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '9px', letterSpacing: '0.15em',
+            color: '#57534e', textTransform: 'uppercase',
+            textAlign: 'center', marginTop: '6px',
+          }}>POSTERIOR</div>
+        </div>
       </div>
 
       {/* Legend */}
