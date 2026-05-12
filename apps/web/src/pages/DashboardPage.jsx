@@ -4,6 +4,7 @@ import { useSession } from '../hooks/useSession';
 import { useDashboard } from '../hooks/useDashboard';
 import { useProfileStore } from '../store/useProfileStore';
 import { useCheckin } from '../hooks/useCheckin';
+import { useUnits } from '../hooks/useUnits';
 import { CheckinModal } from '../components/CheckinModal';
 import { MacroBreakdownModal } from '../components/MacroBreakdownModal';
 import { supabase } from '../lib/supabase';
@@ -209,6 +210,7 @@ export default function Dashboard() {
   const [showBreakdown, setShowBreakdown]         = useState(false);
   const checkin = useCheckin(user?.id);
   const [plateauAlerts, setPlateauAlerts] = useState([]);
+  const { displayWeight, displayEnergy, weightLabel, energyLabel } = useUnits();
 
   const isSunday = new Date().getDay() === 0;
 
@@ -444,11 +446,11 @@ export default function Dashboard() {
               ) : (
                 <>
                   <div className="font-anton text-3xl tabular-nums text-stone-100">
-                    {fmt1(bio.current)}<span className="text-stone-500 text-lg ml-1">kg</span>
+                    {displayWeight(bio.current, { noUnit: true })}<span className="text-stone-500 text-lg ml-1">{weightLabel}</span>
                   </div>
                   <div className="text-[10px] font-mono tabular-nums text-orange-300 mt-0.5">
                     {weightDelta != null
-                      ? `${weightDelta < 0 ? '↓' : '↑'} ${fmt1(Math.abs(weightDelta))} kg / 7d`
+                      ? `${weightDelta < 0 ? '↓' : '↑'} ${displayWeight(Math.abs(weightDelta), { noUnit: true })} ${weightLabel} / 7d`
                       : 'No prior data'}
                   </div>
                 </>
@@ -466,21 +468,19 @@ export default function Dashboard() {
               ) : (
                 <>
                   <div className={`font-anton text-3xl tabular-nums ${consumed.mealsLogged === 0 ? 'text-stone-500' : 'text-orange-300'}`}>
-                    {fmt0(remaining)}
+                    {displayEnergy(remaining, { noUnit: true })}
                   </div>
                   {eatBackCalories && calsBurned ? (
                     <div className="text-[10px] font-mono text-orange-400 mt-0.5 tabular-nums">
-                      {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} available
+                      {displayEnergy(rawTargets.kcal, { noUnit: true })} + {displayEnergy(calsBurned, { noUnit: true })} burned = {displayEnergy(targets.kcal, { noUnit: true })} {energyLabel}
                     </div>
                   ) : consumed.mealsLogged > 0 ? (
                     <div className="text-[10px] font-mono text-stone-500 mt-0.5 tabular-nums">
-                      {fmt0(consumed.kcal)} / {fmt0(targets.kcal)} kcal
-                      {calsBurned ? ` · ${fmt0(calsBurned)} burned` : ''}
+                      {displayEnergy(consumed.kcal, { noUnit: true })} / {displayEnergy(targets.kcal)} {calsBurned ? ` · ${displayEnergy(calsBurned, { noUnit: true })} burned` : ''}
                     </div>
                   ) : (
                     <div className="text-[10px] font-mono text-stone-600 mt-0.5 tabular-nums">
-                      {fmt0(targets.kcal)} kcal target
-                      {calsBurned ? ` · ${fmt0(calsBurned)} burned` : ''}
+                      {displayEnergy(targets.kcal)} target {calsBurned ? ` · ${displayEnergy(calsBurned, { noUnit: true })} burned` : ''}
                     </div>
                   )}
                 </>

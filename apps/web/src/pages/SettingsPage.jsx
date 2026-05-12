@@ -35,7 +35,16 @@ function calcMacros({ weightKg, heightCm, age, sex, activity, goal }) {
   return { kcal, protein, carbs, fat };
 }
 
-const DEFAULT_SETTINGS = { ghost_mode: false, weight_unit: 'kg', coach_alerts: true, eat_back_calories: false };
+const DEFAULT_SETTINGS = {
+  ghost_mode:     false,
+  weight_unit:    'kg',
+  height_unit:    'cm',
+  energy_unit:    'kcal',
+  volume_unit:    'ml',
+  distance_unit:  'km',
+  coach_alerts:   true,
+  eat_back_calories: false,
+};
 
 // -------------------- UI PRIMITIVES --------------------
 function SectionHeader({ label }) {
@@ -600,21 +609,6 @@ export default function SettingsPage() {
                 <Toggle enabled={prefs.ghost_mode} onChange={v => savePref('ghost_mode', v)} />
               </div>
 
-              {/* Weight Unit */}
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Weight Unit</div>
-                  <div className="text-xs text-stone-500 font-mono mt-0.5">Display weight in kilograms or pounds</div>
-                </div>
-                <div className="w-32">
-                  <SegmentedControl
-                    options={[{ id: 'kg', label: 'kg' }, { id: 'lbs', label: 'lbs' }]}
-                    value={prefs.weight_unit}
-                    onChange={v => savePref('weight_unit', v)}
-                  />
-                </div>
-              </div>
-
               {/* Coach Alerts */}
               <div className="flex items-center justify-between py-4">
                 <div>
@@ -631,6 +625,94 @@ export default function SettingsPage() {
                   <div className="text-xs text-stone-500 font-mono mt-0.5">Eat back calories burned during training</div>
                 </div>
                 <Toggle enabled={!!prefs.eat_back_calories} onChange={v => savePref('eat_back_calories', v)} />
+              </div>
+
+            </div>
+
+            {prefsSaving && (
+              <p className="mt-3 text-[10px] font-mono text-stone-600 uppercase tracking-wider">Saving…</p>
+            )}
+          </section>
+
+          {/* ========== SECTION 3b: UNITS & MEASUREMENTS ========== */}
+          <section className="border border-stone-800/60 bg-stone-950/40 p-6 md:p-8">
+            <SectionHeader label="Units & Measurements" />
+
+            <div className="space-y-0 divide-y divide-stone-800/60">
+
+              {/* Weight Unit */}
+              <div className="flex items-center justify-between py-4">
+                <div>
+                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Weight</div>
+                  <div className="text-xs text-stone-500 font-mono mt-0.5">Logged weight, plates, and load displays</div>
+                </div>
+                <div className="w-32">
+                  <SegmentedControl
+                    options={[{ id: 'kg', label: 'kg' }, { id: 'lbs', label: 'lbs' }]}
+                    value={prefs.weight_unit ?? 'kg'}
+                    onChange={v => savePref('weight_unit', v)}
+                  />
+                </div>
+              </div>
+
+              {/* Height Unit */}
+              <div className="flex items-center justify-between py-4">
+                <div>
+                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Height</div>
+                  <div className="text-xs text-stone-500 font-mono mt-0.5">Displayed in biometrics and onboarding</div>
+                </div>
+                <div className="w-32">
+                  <SegmentedControl
+                    options={[{ id: 'cm', label: 'cm' }, { id: 'in', label: 'ft/in' }]}
+                    value={prefs.height_unit ?? 'cm'}
+                    onChange={v => savePref('height_unit', v)}
+                  />
+                </div>
+              </div>
+
+              {/* Energy Unit */}
+              <div className="flex items-center justify-between py-4">
+                <div>
+                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Energy</div>
+                  <div className="text-xs text-stone-500 font-mono mt-0.5">Calorie targets and burned calorie displays</div>
+                </div>
+                <div className="w-32">
+                  <SegmentedControl
+                    options={[{ id: 'kcal', label: 'kcal' }, { id: 'kj', label: 'kJ' }]}
+                    value={prefs.energy_unit ?? 'kcal'}
+                    onChange={v => savePref('energy_unit', v)}
+                  />
+                </div>
+              </div>
+
+              {/* Volume Unit */}
+              <div className="flex items-center justify-between py-4">
+                <div>
+                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Volume</div>
+                  <div className="text-xs text-stone-500 font-mono mt-0.5">Water intake and liquid measurements</div>
+                </div>
+                <div className="w-36">
+                  <SegmentedControl
+                    options={[{ id: 'ml', label: 'ml' }, { id: 'floz', label: 'fl oz' }]}
+                    value={prefs.volume_unit ?? 'ml'}
+                    onChange={v => savePref('volume_unit', v)}
+                  />
+                </div>
+              </div>
+
+              {/* Distance Unit */}
+              <div className="flex items-center justify-between py-4">
+                <div>
+                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Distance</div>
+                  <div className="text-xs text-stone-500 font-mono mt-0.5">Cardio and movement tracking</div>
+                </div>
+                <div className="w-32">
+                  <SegmentedControl
+                    options={[{ id: 'km', label: 'km' }, { id: 'mi', label: 'mi' }]}
+                    value={prefs.distance_unit ?? 'km'}
+                    onChange={v => savePref('distance_unit', v)}
+                  />
+                </div>
               </div>
 
             </div>

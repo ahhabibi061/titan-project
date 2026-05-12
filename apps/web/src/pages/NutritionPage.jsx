@@ -7,6 +7,7 @@ import AppNav from '../components/AppNav';
 import { useProfileStore } from '../store/useProfileStore';
 import { useMealTemplates } from '../hooks/useMealTemplates';
 import { useWaterTracker } from '../hooks/useWaterTracker';
+import { useUnits } from '../hooks/useUnits';
 
 /* =========================================================================
  * SENTINEL — Module 1
@@ -80,6 +81,7 @@ function MealIllustration() {
 
 // -------------------- CALORIE RING --------------------
 function CalorieRing({ consumed, target }) {
+  const { displayEnergy, energyLabel } = useUnits();
   const pct = Math.min(consumed / Math.max(target, 1), 1);
   const radius = 76;
   const c = 2 * Math.PI * radius;
@@ -100,10 +102,10 @@ function CalorieRing({ consumed, target }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <div className="text-[9px] uppercase tracking-[0.2em] text-stone-500 font-mono">Consumed</div>
-        <div className="font-anton text-4xl tabular-nums text-stone-100 leading-none mt-1">{fmt0(consumed)}</div>
-        <div className="text-[10px] text-stone-500 font-mono mt-1">/ {fmt0(target)} kcal</div>
+        <div className="font-anton text-4xl tabular-nums text-stone-100 leading-none mt-1">{displayEnergy(consumed, { noUnit: true })}</div>
+        <div className="text-[10px] text-stone-500 font-mono mt-1">/ {displayEnergy(target, { noUnit: true })} {energyLabel}</div>
         <div className="mt-2 px-2 py-0.5 border border-stone-800 text-[9px] font-mono tabular-nums uppercase tracking-wider">
-          <span className="text-stone-600">left</span> <span className="text-orange-300">{fmt0(remaining)}</span>
+          <span className="text-stone-600">left</span> <span className="text-orange-300">{displayEnergy(remaining, { noUnit: true })}</span>
         </div>
       </div>
     </div>
@@ -519,8 +521,9 @@ function WaterLogEntry({ entry, unit, onUpdate, onDelete }) {
   const [editVal, setEditVal]       = useState('');
   const [delConfirm, setDelConfirm] = useState(false);
 
-  const displayAmt = unit === 'lbs' ? +(entry.amount_ml * ML_TO_OZ).toFixed(0) : entry.amount_ml;
-  const lbl = unit === 'lbs' ? 'oz' : 'ml';
+  const isFlOz = unit === 'floz' || unit === 'lbs'; // 'lbs' kept for legacy compat
+  const displayAmt = isFlOz ? +(entry.amount_ml * ML_TO_OZ).toFixed(0) : entry.amount_ml;
+  const lbl = isFlOz ? 'oz' : 'ml';
   const time = new Date(entry.logged_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
   function startEdit() {
@@ -532,7 +535,7 @@ function WaterLogEntry({ entry, unit, onUpdate, onDelete }) {
   function confirmEdit() {
     const val = parseFloat(editVal);
     if (isNaN(val) || val <= 0) { setEditing(false); return; }
-    const ml = unit === 'lbs' ? Math.round(val / ML_TO_OZ) : Math.round(val);
+    const ml = isFlOz ? Math.round(val / ML_TO_OZ) : Math.round(val);
     onUpdate(entry.id, ml);
     setEditing(false);
   }
@@ -607,7 +610,9 @@ function WaterLogEntry({ entry, unit, onUpdate, onDelete }) {
   );
 }
 
-function WaterTracker({ water, weightUnit }) {
+function WaterTracker({ water }) {
+  const { displayVolume, parseVolume, volumeUnit, volumeLabel } = useUnits();
+
   const [editingTarget, setEditingTarget] = useState(false);
   const [targetInput, setTargetInput]     = useState('');
   const [customInput, setCustomInput]     = useState('');
@@ -626,23 +631,23 @@ function WaterTracker({ water, weightUnit }) {
     ? '#60a5fa'
     : '#a8a29e';
 
-  const unit       = weightUnit ?? 'kg';
-  const dispTotal  = mlToDisplay(totalMl, unit);
-  const dispTarget = mlToDisplay(targetMl, unit);
-  const lbl        = displayLabel(unit);
+  const isFlOz    = volumeUnit === 'floz';
+  const dispTotal  = isFlOz ? Math.round(totalMl  * ML_TO_OZ) : totalMl;
+  const dispTarget = isFlOz ? Math.round(targetMl * ML_TO_OZ) : targetMl;
+  const lbl        = isFlOz ? 'fl oz' : 'ml';
 
   const quickAdds = [250, 500, 750, 1000];
 
   function handleTargetSave() {
     const val = parseFloat(targetInput);
-    const ml  = unit === 'lbs' ? Math.round(val / ML_TO_OZ) : Math.round(val);
+    const ml  = Math.round(parseVolume(val));
     if (ml >= 500 && ml <= 10000) setTarget(ml);
     setEditingTarget(false);
   }
 
   function handleCustomAdd() {
     const val = parseFloat(customInput);
-    const ml  = unit === 'lbs' ? Math.round(val / ML_TO_OZ) : Math.round(val);
+    const ml  = Math.round(parseVolume(val));
     if (ml > 0 && ml <= 5000) addWater(ml);
     setCustomInput('');
     setEditingCustom(false);
@@ -650,7 +655,7 @@ function WaterTracker({ water, weightUnit }) {
 
   function handleSetTotal() {
     const val = parseFloat(setTotalInput);
-    const ml  = unit === 'lbs' ? Math.round(val / ML_TO_OZ) : Math.round(val);
+    const ml  = Math.round(parseVolume(val));
     if (!isNaN(ml) && ml >= 0) setTotal(ml);
     setShowSetTotal(false);
     setSetTotalInput('');
@@ -713,7 +718,7 @@ function WaterTracker({ water, weightUnit }) {
       {/* Quick add buttons */}
       <div className="flex gap-2 flex-wrap">
         {quickAdds.map(ml => {
-          const display = unit === 'lbs' ? `+${(ml * ML_TO_OZ).toFixed(0)}oz` : `+${ml}ml`;
+          const display = isFlOz ? `+${Math.round(ml * ML_TO_OZ)}oz` : `+${ml}ml`;
           return (
             <button
               key={ml}
@@ -741,7 +746,7 @@ function WaterTracker({ water, weightUnit }) {
             value={customInput}
             onChange={e => setCustomInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleCustomAdd()}
-            placeholder={unit === 'lbs' ? 'fl oz' : 'ml'}
+            placeholder={lbl}
             className="w-32 bg-stone-950/60 border border-stone-800 px-3 py-2 text-stone-100 font-mono text-sm focus:outline-none focus:border-blue-500/60 transition-colors"
           />
           <span className="text-stone-600 font-mono text-xs">{lbl}</span>
@@ -758,7 +763,7 @@ function WaterTracker({ water, weightUnit }) {
             <WaterLogEntry
               key={entry.id}
               entry={entry}
-              unit={unit}
+              unit={volumeUnit}
               onUpdate={updateWater}
               onDelete={deleteWater}
             />
@@ -845,9 +850,9 @@ export default function VisionNutrition() {
 
   const profile      = useProfileStore(s => s.profile);
   const isPro        = ['pro', 'elite'].includes(profile?.subscription_tier ?? '');
-  const weightUnit   = profile?.settings?.weight_unit ?? 'kg';
   const mealTemplates = useMealTemplates(user?.id);
   const water         = useWaterTracker(user?.id);
+  const { displayEnergy, energyLabel, displayVolume, parseVolume, volumeUnit, volumeLabel } = useUnits();
 
   const [activeAddSection, setActiveAddSection] = useState(null);
   const [showBreakdown, setShowBreakdown]       = useState(false);
@@ -997,10 +1002,10 @@ export default function VisionNutrition() {
             <Sk w="w-2/3" h="h-14" />
           ) : (
             <h1 className="font-anton text-5xl md:text-6xl uppercase tracking-tight leading-[0.95] text-stone-100 max-w-4xl">
-              <span className="text-orange-400 tabular-nums">{fmt0(totals.kcal)}</span>{' '}
+              <span className="text-orange-400 tabular-nums">{displayEnergy(totals.kcal, { noUnit: true })}</span>{' '}
               <span className="text-stone-500">/</span>{' '}
-              {fmt0(tgt.kcal)} <span className="text-stone-500">kcal</span>
-              <span className="text-stone-600"> — {fmt0(remaining)} remaining for the day.</span>
+              {displayEnergy(tgt.kcal, { noUnit: true })} <span className="text-stone-500">{energyLabel}</span>
+              <span className="text-stone-600"> — {displayEnergy(remaining, { noUnit: true })} remaining for the day.</span>
             </h1>
           )}
         </div>
@@ -1139,7 +1144,7 @@ export default function VisionNutrition() {
         </div>
 
         {/* WATER TRACKER */}
-        <WaterTracker water={water} weightUnit={weightUnit} />
+        <WaterTracker water={water} />
 
         {/* SAFETY NOTE */}
         <div className="border border-stone-800/60 bg-stone-950/40 p-5 mb-8">

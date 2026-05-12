@@ -26,16 +26,20 @@ function adaptSet(s, prevSets = [], idx = 0) {
   };
 }
 
-function adaptExercise(we, prevSets = []) {
+const EMPTY_PREV = { sets: [], count: 0, bestWeight: 0, bestReps: 0 };
+
+function adaptExercise(we, prevData = EMPTY_PREV) {
+  // prevData is now { sets, count, bestWeight, bestReps } — keep backward compat with bare []
+  const prevSets = Array.isArray(prevData) ? prevData : (prevData.sets ?? []);
   const ex   = we.exercises;
   const sets = (we.sets ?? [])
     .sort((a, b) => a.set_number - b.set_number)
     .map((s, i) => adaptSet(s, prevSets, i));
 
   return {
-    id:         we.id,
-    exerciseId: we.exercise_id,
-    _order:     we.order_index ?? 0,       // column is order_index, not order
+    id:             we.id,
+    exerciseId:     we.exercise_id,
+    _order:         we.order_index ?? 0,
     _ex: ex ? {
       id:        ex.id,
       name:      ex.name,
@@ -43,6 +47,9 @@ function adaptExercise(we, prevSets = []) {
       secondary: Array.isArray(ex.secondary_muscles) ? ex.secondary_muscles : [],
     } : null,
     sets,
+    prevCount:      Array.isArray(prevData) ? prevSets.length        : (prevData.count       ?? 0),
+    prevBestWeight: Array.isArray(prevData) ? 0                      : (prevData.bestWeight  ?? 0),
+    prevBestReps:   Array.isArray(prevData) ? 0                      : (prevData.bestReps    ?? 0),
   };
 }
 
@@ -56,20 +63,24 @@ async function fetchPrevSets(exerciseId) {
       .eq('exercise_id', exerciseId)
       .not('workouts.completed_at', 'is', null);
 
-    if (!data?.length) return [];
+    if (!data?.length) return EMPTY_PREV;
 
     // Sort desc by completed_at in JS (Supabase JS v2 can't order by joined columns)
     const sorted = data
       .filter(we => we.workouts?.completed_at)
       .sort((a, b) => new Date(b.workouts.completed_at) - new Date(a.workouts.completed_at));
 
-    if (!sorted.length || !sorted[0].sets?.length) return [];
-    return sorted[0].sets
+    if (!sorted.length || !sorted[0].sets?.length) return EMPTY_PREV;
+
+    const sets = sorted[0].sets
       .sort((a, b) => a.set_number - b.set_number)
       .map(s => ({ reps: s.reps ?? 0, weight: s.weight_kg ?? 0 }));
+
+    const best = sets.reduce((b, s) => s.weight > b.weight ? s : b, { weight: 0, reps: 0 });
+    return { sets, count: sets.length, bestWeight: best.weight, bestReps: best.reps };
   } catch (e) {
     console.error('[useLogger] fetchPrevSets error:', e);
-    return [];
+    return EMPTY_PREV;
   }
 }
 
@@ -301,6 +312,7 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
         id: `opt-s-${ts}-${n}`, _setNumber: n, _loggedAt: null,
         reps: 8, weight: 0, done: false, prevReps: 0, prevWeight: 0,
       })),
+      prevCount: 0, prevBestWeight: 0, prevBestReps: 0,
     }]);
 
     const { data: weData, error: weErr } = await supabase
@@ -337,11 +349,18 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
     const prev     = await fetchPrevSets(ex.id);
     const realSets = (setsData ?? [])
       .sort((a, b) => a.set_number - b.set_number)
-      .map((s, i) => adaptSet(s, prev, i));
+      .map((s, i) => adaptSet(s, prev.sets, i));
 
-    // Replace temp IDs with real DB IDs
+    // Replace temp IDs with real DB IDs — also populate prev-session summary
     setExercises(prevEx => prevEx.map(e =>
-      e.id === tempWeId ? { ...e, id: weData.id, sets: realSets } : e
+      e.id === tempWeId ? {
+        ...e,
+        id:             weData.id,
+        sets:           realSets,
+        prevCount:      prev.count,
+        prevBestWeight: prev.bestWeight,
+        prevBestReps:   prev.bestReps,
+      } : e
     ));
   }, [exercises.length]);
 
@@ -512,6 +531,23 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
     return { success: true, calsBurned, plateaus };
   }, []);
 
+  // ── Reset timer (FIX: resets only created_at, never touches sets) ─────────
+  const resetTimer = useCallback(async () => {
+    const wId = workoutRef.current?.id;
+    if (!wId) return false;
+    const now = new Date().toISOString();
+    const { error: err } = await supabase
+      .from('workouts')
+      .update({ created_at: now })
+      .eq('id', wId);
+    if (err) { console.error('[useLogger] resetTimer error:', err); return false; }
+    // Update local state so the timer effect re-fires with the new start time
+    setWorkout(w => w ? { ...w, created_at: now } : w);
+    workoutRef.current = { ...workoutRef.current, created_at: now };
+    console.log('[useLogger] timer reset → new created_at:', now);
+    return true;
+  }, []);
+
   const clearError = useCallback(() => setError(null), []);
 
   return {
@@ -531,5 +567,6 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
     addSetToExercise,
     removeSetFromExercise,
     completeWorkout,
+    resetTimer,
   };
 }

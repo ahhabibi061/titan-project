@@ -5,6 +5,7 @@ import { useLogger } from '../hooks/useLogger';
 import { useProfileStore } from '../store/useProfileStore';
 import { useBodyMap } from '../hooks/useBodyMap';
 import { useWorkoutTemplates } from '../hooks/useWorkoutTemplates';
+import { useUnits } from '../hooks/useUnits';
 import { supabase } from '../lib/supabase';
 import AppNav from '../components/AppNav';
 import Model from 'react-body-highlighter';
@@ -171,10 +172,24 @@ function OverloadBadge({ status }) {
 }
 
 // -------------------- SET ROW --------------------
-function SetRow({ set, idx, onChange, onRemove, isLast }) {
+const KG_TO_LBS_FACTOR = 2.20462;
+
+function SetRow({ set, idx, onChange, onRemove, isLast, weightUnit = 'kg' }) {
   const status = overloadStatus(set);
   const vol = setVolume(set);
   const prevVol = setPrevVolume(set);
+  const isLbs = weightUnit === 'lbs';
+
+  // Convert stored kg values to display unit
+  const dispWeight     = isLbs ? +(set.weight * KG_TO_LBS_FACTOR).toFixed(1)     : set.weight;
+  const dispPrevWeight = isLbs ? +(set.prevWeight * KG_TO_LBS_FACTOR).toFixed(1) : set.prevWeight;
+  const wLabel         = isLbs ? 'lbs' : 'kg';
+
+  const handleWeightChange = (e) => {
+    if (e.target.value === '') { onChange({ ...set, weight: '' }); return; }
+    const raw = Number(e.target.value);
+    onChange({ ...set, weight: isLbs ? raw / KG_TO_LBS_FACTOR : raw });
+  };
 
   return (
     <tr className="group transition-colors hover:bg-stone-900/40">
@@ -183,7 +198,7 @@ function SetRow({ set, idx, onChange, onRemove, isLast }) {
       </td>
       <td className="px-3 py-2 w-28">
         <div className="font-mono text-[11px] text-stone-500 tabular-nums">
-          {set.prevReps} × {set.prevWeight}<span className="text-stone-600 ml-0.5">kg</span>
+          {set.prevReps} × {dispPrevWeight}<span className="text-stone-600 ml-0.5">{wLabel}</span>
         </div>
         <div className="font-mono text-[10px] text-stone-600 tabular-nums">vol {fmt(prevVol)}</div>
       </td>
@@ -201,12 +216,12 @@ function SetRow({ set, idx, onChange, onRemove, isLast }) {
           <input
             type="number"
             inputMode="decimal"
-            step="0.5"
-            value={set.weight}
-            onChange={(e) => onChange({ ...set, weight: e.target.value === '' ? '' : Number(e.target.value) })}
-            className="w-full bg-stone-950/60 border border-stone-800 px-2 py-1.5 pr-7 text-stone-100 font-mono text-sm tabular-nums text-right focus:outline-none focus:border-orange-500/60 focus:bg-stone-950"
+            step={isLbs ? '1' : '0.5'}
+            value={dispWeight}
+            onChange={handleWeightChange}
+            className="w-full bg-stone-950/60 border border-stone-800 px-2 py-1.5 pr-8 text-stone-100 font-mono text-sm tabular-nums text-right focus:outline-none focus:border-orange-500/60 focus:bg-stone-950"
           />
-          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-stone-600 font-mono pointer-events-none">kg</span>
+          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-stone-600 font-mono pointer-events-none">{wLabel}</span>
         </div>
       </td>
       <td className="px-3 py-2 w-24">
@@ -307,9 +322,13 @@ function InlineRestTimer({ onRemove }) {
 }
 
 // -------------------- EXERCISE CARD --------------------
-function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index }) {
+function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, weightUnit = 'kg' }) {
   const [showTimer, setShowTimer] = useState(false);
   const totalVol = exerciseVolume(we);
+  const isLbs = weightUnit === 'lbs';
+  const dispBestWeight = we.prevBestWeight > 0
+    ? (isLbs ? +(we.prevBestWeight * KG_TO_LBS_FACTOR).toFixed(1) : we.prevBestWeight)
+    : 0;
 
   return (
     <article className="border border-stone-800/80 bg-stone-950/40 backdrop-blur-sm">
@@ -329,6 +348,14 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index }) {
               </span>
             ))}
           </div>
+          {we.prevCount > 0 && (
+            <span className="text-[9px] font-mono text-stone-500 uppercase tracking-wider whitespace-nowrap">
+              Last: {we.prevCount} {we.prevCount === 1 ? 'set' : 'sets'}
+              {dispBestWeight > 0 && (
+                <> · {dispBestWeight}{isLbs ? 'lbs' : 'kg'} × {we.prevBestReps}</>
+              )}
+            </span>
+          )}
         </div>
         <div className="flex items-baseline gap-4 shrink-0">
           <div className="text-right">
@@ -369,6 +396,7 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index }) {
                 set={s}
                 idx={idx}
                 isLast={we.sets.length === 1}
+                weightUnit={weightUnit}
                 onChange={(updated) => onUpdate({
                   ...we,
                   sets: we.sets.map(x => x.id === s.id ? updated : x),
@@ -1119,6 +1147,7 @@ export default function IronLabLogger() {
   const logger   = useLogger(userId, workoutId, userWeightKg);
   const bodyMap  = useBodyMap(userId, logger.exercises);
   const workoutTemplates = useWorkoutTemplates(userId);
+  const { weightUnit } = useUnits();
 
   const [name, setName]             = useState('New Workout');
   const [seconds, setSeconds]       = useState(0);
@@ -1137,9 +1166,10 @@ export default function IronLabLogger() {
   // Plateau alerts
   const [plateauAlerts, setPlateauAlerts] = useState([]);
 
-  // Reset workout confirm
+  // Reset timer confirm
   const [resetConfirm, setResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [resetToast, setResetToast] = useState(false);
 
   // Sync workout name from Supabase into local input
   useEffect(() => {
@@ -1258,17 +1288,17 @@ export default function IronLabLogger() {
     }
   }
 
-  // Reset: wipe all exercises/sets for this workout, then reload
+  // Reset: restarts the session timer only — sets are never touched
   const handleReset = async () => {
     if (!logger.workout?.id) return;
     setResetting(true);
-    await supabase
-      .from('workout_exercises')
-      .delete()
-      .eq('workout_id', logger.workout.id);
+    const ok = await logger.resetTimer();
     setResetting(false);
     setResetConfirm(false);
-    navigate(0); // refresh current route
+    if (ok) {
+      setResetToast(true);
+      setTimeout(() => setResetToast(false), 2000);
+    }
   };
 
   const handleComplete = async () => {
@@ -1390,6 +1420,13 @@ export default function IronLabLogger() {
       {savedToast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 border border-orange-500/30 px-5 py-2.5 backdrop-blur-sm pointer-events-none">
           <span className="text-orange-300 font-mono text-xs uppercase tracking-wider">Saved ✓</span>
+        </div>
+      )}
+
+      {/* TIMER RESET TOAST */}
+      {resetToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 border border-stone-600/40 px-5 py-2.5 backdrop-blur-sm pointer-events-none">
+          <span className="text-stone-300 font-mono text-xs uppercase tracking-wider">↺ Timer reset</span>
         </div>
       )}
 
@@ -1539,16 +1576,16 @@ export default function IronLabLogger() {
             {!workoutId && !resetConfirm && (
               <button
                 onClick={() => setResetConfirm(true)}
-                className="px-3 py-1.5 border border-stone-700 text-stone-500 font-mono text-[10px] uppercase tracking-wider hover:border-red-500/40 hover:text-red-400 transition-colors"
-                title="Reset workout — clears all sets"
+                className="px-3 py-1.5 border border-stone-700 text-stone-500 font-mono text-[10px] uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-400 transition-colors"
+                title="Reset session timer — sets are untouched"
               >
-                ↺ Reset
+                ↺ Reset Timer
               </button>
             )}
             {!workoutId && resetConfirm && (
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-[10px] text-stone-400 uppercase tracking-wider whitespace-nowrap">
-                  Clears all sets —
+                  Restart timer? Sets stay —
                 </span>
                 <button
                   onClick={() => setResetConfirm(false)}
@@ -1559,7 +1596,7 @@ export default function IronLabLogger() {
                 <button
                   onClick={handleReset}
                   disabled={resetting}
-                  className="px-2 py-1 border border-red-500/40 text-red-400 font-mono text-[10px] uppercase tracking-wider hover:bg-red-500/10 transition-colors disabled:opacity-40"
+                  className="px-2 py-1 border border-orange-500/40 text-orange-400 font-mono text-[10px] uppercase tracking-wider hover:bg-orange-500/10 transition-colors disabled:opacity-40"
                 >
                   {resetting ? '…' : 'Reset'}
                 </button>
@@ -1604,6 +1641,7 @@ export default function IronLabLogger() {
                   index={idx}
                   we={we}
                   exercise={ex}
+                  weightUnit={weightUnit}
                   onUpdate={(updated) => updateExercise(we.id, () => updated)}
                   onRemove={() => hookRemove(we.id)}
                   onAddSet={() => addSetToExercise(we.id)}

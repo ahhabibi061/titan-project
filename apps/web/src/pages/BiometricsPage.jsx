@@ -630,7 +630,7 @@ function StatBlock({ label, value, sub, accent }) {
 }
 
 // -------------------- MONTH CALENDAR --------------------
-function MonthCalendar({ rawEntries, calMonth, onPrev, onNext, onDayClick }) {
+function MonthCalendar({ rawEntries, calMonth, onPrev, onNext, onDayClick, currentStreak = 0, longestStreak = 0 }) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayStr = localDateStr(today);
@@ -750,6 +750,42 @@ function MonthCalendar({ rawEntries, calMonth, onPrev, onNext, onDayClick }) {
           <span className="w-2.5 h-2.5 bg-stone-800 inline-block" />
           No entry
         </span>
+      </div>
+
+      {/* Streak footer */}
+      <div className="mt-4 pt-4 border-t border-stone-800/60 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <svg width="18" height="20" viewBox="0 0 18 20" fill="none" aria-hidden="true">
+            <path d="M9 0C9 0 4 6 4 11C4 13.8 6.2 16 9 16C11.8 16 14 13.8 14 11C14 6 9 0 9 0Z"
+              fill={currentStreak >= 7 ? '#f59e0b' : '#57534e'} />
+            <path d="M9 8C9 8 6 11.5 6 13.5C6 14.9 7.3 16 9 16C10.7 16 12 14.9 12 13.5C12 11.5 9 8 9 8Z"
+              fill={currentStreak >= 7 ? '#fde68a' : '#78716c'} />
+          </svg>
+          <div>
+            <div className="text-[9px] font-mono uppercase tracking-wider text-stone-500 mb-0.5">Streak</div>
+            <div
+              className={`font-anton text-2xl tabular-nums leading-none ${currentStreak >= 7 ? 'text-amber-400' : 'text-stone-100'}`}
+              style={currentStreak >= 7 ? { textShadow: '0 0 10px rgba(251,191,36,0.5)' } : {}}
+            >
+              {currentStreak}
+              <span className={`text-sm ml-1 ${currentStreak >= 7 ? 'text-amber-600' : 'text-stone-500'}`}>days</span>
+              {currentStreak >= 30 && (
+                <span className="ml-2 text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 font-mono uppercase tracking-wider align-middle">
+                  ELITE
+                </span>
+              )}
+            </div>
+            {currentStreak === 0 && (
+              <div className="text-[10px] font-mono text-stone-600 mt-0.5">Log today to start</div>
+            )}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-[9px] font-mono uppercase tracking-wider text-stone-500 mb-0.5">Best</div>
+          <div className="font-anton text-2xl tabular-nums leading-none text-stone-400">
+            {longestStreak}<span className="text-stone-600 text-sm ml-1">days</span>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -966,41 +1002,16 @@ export default function BiometricVault() {
         </div>
 
         {/* STREAK + HEATMAP */}
-        <div className="border border-stone-800/60 bg-stone-950/40 p-6 mb-8">
-          <div className="flex items-baseline justify-between mb-6">
-            <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">🔥 Streak</h2>
-            <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">consecutive daily logs</span>
-          </div>
-          <div className="grid grid-cols-2 gap-6 mb-6">
-            <div>
-              <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-1">Current</div>
-              <div className={`font-anton text-5xl tabular-nums leading-none ${currentStreak >= 7 ? 'text-amber-400' : 'text-stone-100'}`}>
-                {currentStreak}
-                <span className="text-stone-500 text-2xl ml-1.5">days</span>
-                {currentStreak >= 30 && (
-                  <span className="ml-2 text-xs bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 font-mono uppercase tracking-wider">ELITE</span>
-                )}
-              </div>
-              {currentStreak === 0 && (
-                <div className="text-[11px] font-mono text-stone-500 mt-2">Log today to start your streak</div>
-              )}
-            </div>
-            <div>
-              <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-1">Best</div>
-              <div className="font-anton text-5xl tabular-nums leading-none text-stone-400">
-                {longestStreak}<span className="text-stone-600 text-2xl ml-1.5">days</span>
-              </div>
-            </div>
-          </div>
-          <div className="pt-5 border-t border-stone-800/60 flex flex-col items-center">
-            <MonthCalendar
-              rawEntries={vault.rawEntries}
-              calMonth={calMonth}
-              onPrev={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
-              onNext={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
-              onDayClick={handleCalDayClick}
-            />
-          </div>
+        <div className="border border-stone-800/60 bg-stone-950/40 p-6 mb-8 flex flex-col items-center">
+          <MonthCalendar
+            rawEntries={vault.rawEntries}
+            calMonth={calMonth}
+            onPrev={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}
+            onNext={() => setCalMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}
+            onDayClick={handleCalDayClick}
+            currentStreak={currentStreak}
+            longestStreak={longestStreak}
+          />
         </div>
 
         {/* LOG TODAY CTA */}
