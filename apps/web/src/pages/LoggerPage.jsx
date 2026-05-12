@@ -109,10 +109,18 @@ function muscleVolumes(workout, library) {
   return v;
 }
 
-function overloadStatus(s) {
-  const cur = setVolume(s), prev = setPrevVolume(s);
-  if (prev === 0) return { kind: 'new',   label: 'NEW' };
-  if (cur >  prev) return { kind: 'pr',    label: 'PR' };
+// overloadStatus compares volumes in the user's display unit, rounded to
+// display precision.  This prevents lbs↔kg round-trip drift (e.g. 220.5 lbs
+// → 100.018... kg ≠ stored 100.000 kg) from silently breaking MATCH.
+function overloadStatus(s, weightUnit = 'kg') {
+  const toDispW = (kg) =>
+    weightUnit === 'lbs'
+      ? +(kg * KG_TO_LBS_FACTOR).toFixed(1)   // round to 0.1 lb resolution
+      : Math.round(kg * 100) / 100;             // round to 0.01 kg resolution
+  const cur  = (Number(s.reps)     || 0) * toDispW(Number(s.weight)     || 0);
+  const prev = (Number(s.prevReps) || 0) * toDispW(Number(s.prevWeight) || 0);
+  if (prev === 0) return { kind: 'new',   label: 'NEW'   };
+  if (cur >  prev) return { kind: 'pr',    label: 'PR'    };
   if (cur === prev) return { kind: 'match', label: 'MATCH' };
   return { kind: 'down', label: 'DOWN' };
 }
@@ -175,7 +183,7 @@ function OverloadBadge({ status }) {
 const KG_TO_LBS_FACTOR = 2.20462;
 
 function SetRow({ set, idx, onChange, onRemove, isLast, weightUnit = 'kg' }) {
-  const status = overloadStatus(set);
+  const status = overloadStatus(set, weightUnit);
   const vol = setVolume(set);
   const prevVol = setPrevVolume(set);
   const isLbs = weightUnit === 'lbs';
@@ -1304,7 +1312,7 @@ export default function IronLabLogger() {
   const handleComplete = async () => {
     const topEntry    = Object.entries(volumes).sort(([, a], [, b]) => b - a)[0];
     const prsHit      = workout.reduce(
-      (acc, we) => acc + we.sets.filter(s => overloadStatus(s).kind === 'pr').length, 0
+      (acc, we) => acc + we.sets.filter(s => overloadStatus(s, weightUnit).kind === 'pr').length, 0
     );
     const durationMins = Math.round(seconds / 60);
     setSummary({ totalVolume, totalSets, totalReps, prsHit, topMuscle: topEntry?.[0], durationMins });
