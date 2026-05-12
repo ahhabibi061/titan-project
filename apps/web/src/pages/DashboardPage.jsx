@@ -695,17 +695,17 @@ export default function Dashboard() {
                       <span className="text-[9px] font-mono uppercase tracking-wider text-stone-600">tap for breakdown</span>
                     </button>
                     <div className="flex-1 min-w-0">
-                      <div className="font-anton text-2xl tabular-nums text-stone-600 leading-none">{fmt0(targets.kcal)}</div>
+                      <div className="font-anton text-2xl tabular-nums text-stone-600 leading-none">{displayEnergy(targets.kcal, { noUnit: true })}</div>
                       {eatBackCalories && calsBurned ? (
                         <div className="text-[10px] font-mono text-orange-400 mt-1 tabular-nums">
-                          {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} available
+                          {displayEnergy(rawTargets.kcal, { noUnit: true })} + {displayEnergy(calsBurned, { noUnit: true })} burned = {displayEnergy(targets.kcal, { noUnit: true })} {energyLabel}
                         </div>
                       ) : calsBurned ? (
                         <div className="text-[10px] font-mono text-stone-500 mt-1 tabular-nums">
-                          {fmt0(calsBurned)} cal burned today
+                          {displayEnergy(calsBurned)} burned today
                         </div>
                       ) : (
-                        <div className="text-[10px] uppercase tracking-wider text-stone-600 font-mono mt-1">kcal target</div>
+                        <div className="text-[10px] uppercase tracking-wider text-stone-600 font-mono mt-1">{energyLabel} target</div>
                       )}
                     </div>
                   </div>
@@ -737,15 +737,15 @@ export default function Dashboard() {
                       <span className="text-[9px] font-mono uppercase tracking-wider text-stone-600">tap for breakdown</span>
                     </button>
                     <div className="flex-1 min-w-0">
-                      <div className="font-anton text-2xl tabular-nums text-orange-300 leading-none">{fmt0(remaining)}</div>
-                      <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mt-1">kcal remaining</div>
+                      <div className="font-anton text-2xl tabular-nums text-orange-300 leading-none">{displayEnergy(remaining, { noUnit: true })}</div>
+                      <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mt-1">{energyLabel} remaining</div>
                       {eatBackCalories && calsBurned ? (
                         <div className="text-[10px] font-mono text-orange-400 mt-1 tabular-nums">
-                          {fmt0(rawTargets.kcal)} + {fmt0(calsBurned)} burned = {fmt0(targets.kcal)} available
+                          {displayEnergy(rawTargets.kcal, { noUnit: true })} + {displayEnergy(calsBurned, { noUnit: true })} burned = {displayEnergy(targets.kcal, { noUnit: true })} {energyLabel}
                         </div>
                       ) : calsBurned ? (
                         <div className="text-[10px] font-mono text-stone-500 mt-1 tabular-nums">
-                          {fmt0(calsBurned)} cal burned today
+                          {displayEnergy(calsBurned)} burned today
                         </div>
                       ) : (
                         <div className="text-[10px] font-mono tabular-nums text-stone-600 mt-2">
@@ -815,14 +815,14 @@ export default function Dashboard() {
               ) : (
                 <>
                   <div className="font-anton text-5xl tabular-nums text-stone-100 leading-none mb-2">
-                    {fmt1(bio.current)}
-                    <span className="text-stone-500 text-2xl ml-1">kg</span>
+                    {displayWeight(bio.current, { noUnit: true })}
+                    <span className="text-stone-500 text-2xl ml-1">{weightLabel}</span>
                   </div>
                   <div className="flex items-baseline gap-2 mb-4">
                     {weightDelta != null ? (
                       <>
                         <span className="text-[11px] font-mono tabular-nums text-orange-300">
-                          {weightDelta < 0 ? '↓' : '↑'} {fmt1(Math.abs(weightDelta))} kg
+                          {weightDelta < 0 ? '↓' : '↑'} {displayWeight(Math.abs(weightDelta), { noUnit: true })} {weightLabel}
                         </span>
                         <span className="text-[10px] font-mono uppercase tracking-wider text-stone-600">last 7d</span>
                       </>
@@ -837,9 +837,9 @@ export default function Dashboard() {
                     <div className="mt-4 pt-4 border-t border-stone-800/60">
                       <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">Goal</div>
                       <div className="flex items-baseline justify-between mt-1">
-                        <span className="font-anton text-lg text-orange-300 tabular-nums">{bio.goal} kg</span>
+                        <span className="font-anton text-lg text-orange-300 tabular-nums">{displayWeight(bio.goal, { noUnit: true })} {weightLabel}</span>
                         <span className="text-[10px] font-mono tabular-nums text-stone-500">
-                          {fmt1(Math.abs(bio.current - bio.goal))} to go
+                          {displayWeight(Math.abs(bio.current - bio.goal), { noUnit: true })} to go
                         </span>
                       </div>
                     </div>
@@ -881,7 +881,7 @@ export default function Dashboard() {
                     ? <Sk className="h-7 w-20 mt-1" />
                     : weeklyStats.avgKcal === 0
                       ? <div className="font-anton text-2xl text-stone-700">—</div>
-                      : <div className="font-anton text-2xl text-stone-100 tabular-nums">{weeklyStats.avgKcal.toLocaleString()}<span className="text-stone-500 text-sm ml-1">kcal</span></div>
+                      : <div className="font-anton text-2xl text-stone-100 tabular-nums">{displayEnergy(weeklyStats.avgKcal, { noUnit: true })}<span className="text-stone-500 text-sm ml-1">{energyLabel}</span></div>
                   }
                 </div>
                 <div>
@@ -898,7 +898,7 @@ export default function Dashboard() {
                   {loading
                     ? <Sk className="h-7 w-16 mt-1" />
                     : calsBurned > 0
-                      ? <div className="font-anton text-2xl text-orange-300 tabular-nums">{fmt0(calsBurned)}<span className="text-stone-500 text-sm ml-1">kcal</span></div>
+                      ? <div className="font-anton text-2xl text-orange-300 tabular-nums">{displayEnergy(calsBurned, { noUnit: true })}<span className="text-stone-500 text-sm ml-1">{energyLabel}</span></div>
                       : <div className="font-anton text-2xl text-stone-700">—</div>
                   }
                 </div>
