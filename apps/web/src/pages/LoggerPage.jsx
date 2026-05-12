@@ -677,192 +677,28 @@ function MuscleTooltip({ muscle, recoveryData, growthData, mode, position }) {
   );
 }
 
-// ---- Part 3: Male overlays ----
-const MaleOverlay = () => (
-  <svg viewBox="0 0 180 520"
-    style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none' }}>
-    {/* Cropped hair */}
-    <path d="M72,28 Q74,15 90,10 Q100,8 110,10 Q126,15 108,22 Q100,20 90,20 Q82,22 72,28Z"
-      fill="#2a1f1a" stroke="none" />
-    <path d="M78,20 Q88,14 102,14" fill="none" stroke="#1a1008" strokeWidth="0.8" />
-    <path d="M82,18 Q92,13 104,15"  fill="none" stroke="#1a1008" strokeWidth="0.6" />
-    {/* Ears */}
-    <ellipse cx="67" cy="52" rx="4" ry="6" fill="none" stroke="#6b5a52" strokeWidth="0.8" />
-    <ellipse cx="113" cy="52" rx="4" ry="6" fill="none" stroke="#6b5a52" strokeWidth="0.8" />
-    {/* Jaw */}
-    <path d="M76,68 Q90,75 104,68" fill="none" stroke="#6b5a52" strokeWidth="0.6" opacity="0.5" />
-  </svg>
-);
-
-const MaleOverlayPosterior = () => (
-  <svg viewBox="0 0 180 520"
-    style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none' }}>
-    {/* Short hair posterior */}
-    <path d="M74,28 Q80,18 90,15 Q100,13 106,18 Q114,25 110,28 Q100,22 90,22 Q80,24 74,28Z"
-      fill="#2a1f1a" stroke="none" />
-    <path d="M78,22 Q90,16 102,22" fill="none" stroke="#1a1008" strokeWidth="0.7" />
-    {/* Ears */}
-    <ellipse cx="67" cy="52" rx="4" ry="6" fill="none" stroke="#6b5a52" strokeWidth="0.8" />
-    <ellipse cx="113" cy="52" rx="4" ry="6" fill="none" stroke="#6b5a52" strokeWidth="0.8" />
-  </svg>
-);
-
-// ---- Part 4: Female overlays ----
-const FemaleAnteriorOverlay = () => (
-  <svg viewBox="0 0 180 520"
-    style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none' }}>
-    {/* Long hair left */}
-    <path d="M72,28 Q58,35 52,55 Q48,75 50,100 Q52,118 56,130 Q60,120 62,105 Q64,85 68,68 Q72,52 76,40 Z"
-      fill="#2a1a10" stroke="none" opacity="0.92" />
-    {/* Long hair right */}
-    <path d="M108,28 Q122,35 128,55 Q132,75 130,100 Q128,118 124,130 Q120,120 118,105 Q116,85 112,68 Q108,52 104,40 Z"
-      fill="#2a1a10" stroke="none" opacity="0.92" />
-    {/* Crown */}
-    <path d="M72,28 Q80,18 90,15 Q100,13 108,18 Q116,24 112,28 Q100,22 90,22 Q80,24 72,28Z"
-      fill="#2a1a10" stroke="none" />
-    {/* Hair highlight strands */}
-    <path d="M66,38 Q58,58 54,85 Q52,105 55,122"
-      fill="none" stroke="#4a2e1a" strokeWidth="1.2" opacity="0.6" />
-    <path d="M114,38 Q122,58 126,85 Q128,105 125,122"
-      fill="none" stroke="#4a2e1a" strokeWidth="1.2" opacity="0.6" />
-    <path d="M88,15 Q90,22 90,30"
-      fill="none" stroke="#1a0e08" strokeWidth="0.8" opacity="0.7" />
-    {/* Ear (partially visible) */}
-    <ellipse cx="113" cy="52" rx="4" ry="6" fill="none" stroke="#6b5a52" strokeWidth="0.8" opacity="0.4" />
-    {/* Subtle bust curves */}
-    <path d="M78,118 Q74,128 76,138 Q82,145 90,144"
-      fill="none" stroke="#8a6a5a" strokeWidth="1.0" opacity="0.7" />
-    <path d="M102,118 Q106,128 104,138 Q98,145 90,144"
-      fill="none" stroke="#8a6a5a" strokeWidth="1.0" opacity="0.7" />
-    <path d="M78,140 Q90,148 102,140"
-      fill="none" stroke="#8a6a5a" strokeWidth="0.8" opacity="0.5" />
-    {/* Jaw – softer */}
-    <path d="M77,68 Q90,76 103,68" fill="none" stroke="#6b5a52" strokeWidth="0.6" opacity="0.5" />
-  </svg>
-);
-
-const FemalePosteriorOverlay = () => (
-  <svg viewBox="0 0 180 520"
-    style={{ position:'absolute', top:0, left:0, width:'100%', height:'100%', pointerEvents:'none' }}>
-    {/* Long hair posterior left */}
-    <path d="M74,28 Q60,35 54,55 Q50,78 52,108 Q54,135 58,158 Q62,148 64,125 Q66,100 70,75 Q74,52 78,38 Z"
-      fill="#2a1a10" stroke="none" opacity="0.90" />
-    {/* Long hair posterior right */}
-    <path d="M106,28 Q120,35 126,55 Q130,78 128,108 Q126,135 122,158 Q118,148 116,125 Q114,100 110,75 Q106,52 102,38 Z"
-      fill="#2a1a10" stroke="none" opacity="0.90" />
-    {/* Crown */}
-    <path d="M74,28 Q82,18 90,15 Q98,13 106,18 Q114,24 110,28 Q100,22 90,22 Q80,24 74,28Z"
-      fill="#2a1a10" stroke="none" />
-    {/* Centre hair mass */}
-    <path d="M78,38 Q82,55 84,80 Q86,110 86,145 Q88,155 90,158 Q92,155 94,145 Q94,110 96,80 Q98,55 102,38 Q96,32 90,30 Q84,32 78,38Z"
-      fill="#2a1a10" stroke="none" opacity="0.85" />
-    {/* Strands */}
-    <path d="M80,42 Q76,70 74,105 Q72,130 74,152"
-      fill="none" stroke="#4a2e1a" strokeWidth="1.0" opacity="0.5" />
-    <path d="M90,32 L90,155"
-      fill="none" stroke="#4a2e1a" strokeWidth="0.8" opacity="0.4" />
-    <path d="M100,42 Q104,70 106,105 Q108,130 106,152"
-      fill="none" stroke="#4a2e1a" strokeWidth="1.0" opacity="0.5" />
-    {/* Hair tie */}
-    <ellipse cx="90" cy="158" rx="7" ry="3.5"
-      fill="#1a0e08" stroke="#4a2e1a" strokeWidth="0.8" />
-    {/* Ponytail */}
-    <path d="M85,160 Q80,178 82,200 Q85,215 90,218 Q95,215 98,200 Q100,178 95,160 Z"
-      fill="#2a1a10" stroke="none" opacity="0.82" />
-    <path d="M88,162 Q85,182 86,205"
-      fill="none" stroke="#4a2e1a" strokeWidth="0.8" opacity="0.5" />
-  </svg>
-);
-
-// ---- Part 5: BodyFigure wrapper ----
-function BodyFigure({ type, data, gender, highlightedColors, recoveryMap, growthMap, mode }) {
-  const figRef = useRef(null);
+// ---- BodyMapDual: mode toggle + two figures + legend + summary ----
+function BodyMapDual({ recoveryMap, growthMap, mode, setMode }) {
+  const containerRef = useRef(null);
+  const lastMouse    = useRef({ x: 90, y: 80 });
   const [tooltip, setTooltip]       = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  // Track last mouse position inside the figure so tooltip appears near the click
-  const lastMouse = useRef({ x: 90, y: 80 });
+
+  const highlightedColors = mode === 'recovery' ? RECOVERY_HIGHLIGHTED : GROWTH_HIGHLIGHTED;
+  const data = buildModelData(recoveryMap, growthMap, mode);
 
   function handleMouseMove(e) {
-    const rect = figRef.current?.getBoundingClientRect();
+    const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    lastMouse.current = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
+    lastMouse.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
 
-  function handleClick(muscleStats) {
+  function handleMuscleClick(muscleStats) {
     if (!muscleStats?.muscle) return;
     const { x, y } = lastMouse.current;
     setTooltip(muscleStats.muscle);
     setTooltipPos({ x, y: Math.max(y - 20, 0) });
   }
-
-  function handleContainerClick(e) {
-    // Dismiss if clicking the wrapper itself (not the SVG)
-    if (e.target === figRef.current || e.target.tagName === 'DIV') {
-      setTooltip(null);
-    }
-  }
-
-  return (
-    <div
-      ref={figRef}
-      onMouseMove={handleMouseMove}
-      onClick={handleContainerClick}
-      style={{
-        position: 'relative',
-        display: 'inline-block',
-        transform: gender === 'female' ? 'scaleX(0.93)' : 'none',
-        transformOrigin: 'center top',
-      }}
-    >
-      {/* CSS: larger figures + polish */}
-      <style>{`
-        .body-map-container svg {
-          filter: drop-shadow(0px 0px 8px rgba(237,122,42,0.06));
-        }
-        .body-map-container svg path, .body-map-container svg polygon {
-          stroke-linejoin: round;
-          stroke-linecap: round;
-        }
-        .rbh polygon { transition: fill 150ms ease; }
-        .rbh polygon:hover { fill: rgba(237,122,42,0.28) !important; cursor: pointer; }
-      `}</style>
-
-      <Model
-        type={type}
-        data={data}
-        bodyColor="#1c1917"
-        highlightedColors={highlightedColors}
-        onClick={handleClick}
-        style={{ width: '180px', padding: '4px' }}
-      />
-
-      {/* Gender-specific hair + detail overlays */}
-      {gender === 'female' && type === 'anterior'  && <FemaleAnteriorOverlay />}
-      {gender === 'female' && type === 'posterior' && <FemalePosteriorOverlay />}
-      {gender !== 'female' && type === 'anterior'  && <MaleOverlay />}
-      {gender !== 'female' && type === 'posterior' && <MaleOverlayPosterior />}
-
-      {/* Per-figure muscle tooltip */}
-      {tooltip && (
-        <MuscleTooltip
-          muscle={tooltip}
-          recoveryData={recoveryMap}
-          growthData={growthMap}
-          mode={mode}
-          position={tooltipPos}
-        />
-      )}
-    </div>
-  );
-}
-
-// ---- BodyMapDual: mode toggle + two figures + legend + summary ----
-function BodyMapDual({ recoveryMap, growthMap, mode, setMode, gender = 'male' }) {
-  const highlightedColors = mode === 'recovery' ? RECOVERY_HIGHLIGHTED : GROWTH_HIGHLIGHTED;
-  const data = buildModelData(recoveryMap, growthMap, mode);
 
   const summaryItems = mode === 'recovery'
     ? Object.entries(recoveryMap)
@@ -897,47 +733,56 @@ function BodyMapDual({ recoveryMap, growthMap, mode, setMode, gender = 'male' })
             }`}
           >{m}</button>
         ))}
-        <span className="ml-auto text-[9px] font-mono text-stone-700 uppercase tracking-wider self-center">
-          {gender}
-        </span>
       </div>
 
+      {/* CSS polish */}
+      <style>{`
+        .body-map-container svg { filter: drop-shadow(0px 0px 8px rgba(237,122,42,0.06)); }
+        .body-map-container svg path, .body-map-container svg polygon { stroke-linejoin: round; stroke-linecap: round; }
+        .rbh polygon { transition: fill 150ms ease; }
+        .rbh polygon:hover { fill: rgba(237,122,42,0.28) !important; cursor: pointer; }
+      `}</style>
+
       {/* Both figures side by side */}
-      <div className="body-map-container flex gap-3 justify-center">
+      <div
+        ref={containerRef}
+        className="body-map-container flex gap-3 justify-center relative"
+        onMouseMove={handleMouseMove}
+        onClick={(e) => { if (e.target.tagName !== 'polygon') setTooltip(null); }}
+      >
         <div>
-          <BodyFigure
+          <Model
             type="anterior"
             data={data}
-            gender={gender}
+            bodyColor="#1c1917"
             highlightedColors={highlightedColors}
-            recoveryMap={recoveryMap}
-            growthMap={growthMap}
-            mode={mode}
+            onClick={handleMuscleClick}
+            style={{ width: '180px', padding: '4px' }}
           />
-          <div style={{
-            fontFamily: 'JetBrains Mono, monospace',
-            fontSize: '9px', letterSpacing: '0.15em',
-            color: '#57534e', textTransform: 'uppercase',
-            textAlign: 'center', marginTop: '6px',
-          }}>ANTERIOR</div>
+          <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', color:'#57534e', textTransform:'uppercase', textAlign:'center', marginTop:'6px' }}>ANTERIOR</div>
         </div>
         <div>
-          <BodyFigure
+          <Model
             type="posterior"
             data={data}
-            gender={gender}
+            bodyColor="#1c1917"
             highlightedColors={highlightedColors}
-            recoveryMap={recoveryMap}
-            growthMap={growthMap}
-            mode={mode}
+            onClick={handleMuscleClick}
+            style={{ width: '180px', padding: '4px' }}
           />
-          <div style={{
-            fontFamily: 'JetBrains Mono, monospace',
-            fontSize: '9px', letterSpacing: '0.15em',
-            color: '#57534e', textTransform: 'uppercase',
-            textAlign: 'center', marginTop: '6px',
-          }}>POSTERIOR</div>
+          <div style={{ fontFamily:'JetBrains Mono,monospace', fontSize:'9px', letterSpacing:'0.15em', color:'#57534e', textTransform:'uppercase', textAlign:'center', marginTop:'6px' }}>POSTERIOR</div>
         </div>
+
+        {/* Muscle tooltip */}
+        {tooltip && (
+          <MuscleTooltip
+            muscle={tooltip}
+            recoveryData={recoveryMap}
+            growthData={growthMap}
+            mode={mode}
+            position={tooltipPos}
+          />
+        )}
       </div>
 
       {/* Legend */}
@@ -1296,9 +1141,6 @@ export default function IronLabLogger() {
   const [resetConfirm, setResetConfirm] = useState(false);
   const [resetting, setResetting] = useState(false);
 
-  // Body map gender
-  const [bodyMapGender, setBodyMapGender] = useState('male');
-
   // Sync workout name from Supabase into local input
   useEffect(() => {
     if (logger.workout?.name) setName(logger.workout.name);
@@ -1335,19 +1177,6 @@ export default function IronLabLogger() {
     const t = setTimeout(() => navigate('/dashboard'), 3000);
     return () => clearTimeout(t);
   }, [logger.completed, navigate]);
-
-  // Body map gender: settings.body_map_gender > profile.sex > 'male'
-  useEffect(() => {
-    if (!userId) return;
-    supabase.from('settings')
-      .select('body_map_gender')
-      .eq('user_id', userId)
-      .maybeSingle()
-      .then(({ data }) => {
-        const override = data?.body_map_gender;
-        setBodyMapGender(override ?? profileData?.sex ?? 'male');
-      });
-  }, [userId, profileData?.sex]); // eslint-disable-line
 
   // Handle template load after workout starts
   useEffect(() => {
@@ -1796,7 +1625,6 @@ export default function IronLabLogger() {
                 growthMap={bodyMap.growthMap}
                 mode={bodyMap.mode}
                 setMode={bodyMap.setMode}
-                gender={bodyMapGender}
               />
             </div>
 

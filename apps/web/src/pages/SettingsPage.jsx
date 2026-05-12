@@ -289,21 +289,17 @@ export default function SettingsPage() {
     setPageLoading(false);
   }, [storeProfile, user?.email]);
 
-  // Body map gender override (settings table)
-  const [bodyMapGender, setBodyMapGender] = useState(null); // null = use profile.sex
-
-  // Load eat_back_calories + body_map_gender from the settings table
+  // Load eat_back_calories from the settings table
   useEffect(() => {
     if (!user?.id) return;
     supabase.from('settings')
-      .select('eat_back_calories, body_map_gender')
+      .select('eat_back_calories')
       .eq('user_id', user.id)
       .maybeSingle()
       .then(({ data, error }) => {
         if (error) { console.error('[settings] load error:', error); return; }
         if (data) {
           setPrefs(prev => ({ ...prev, eat_back_calories: data.eat_back_calories ?? false }));
-          setBodyMapGender(data.body_map_gender ?? null);
         }
       });
   }, [user?.id]);
@@ -359,18 +355,6 @@ export default function SettingsPage() {
       updateProfile(bioPayload);
       setBioStatus({ error: null, success: 'Biometrics saved. Macros updated.' });
     }
-  };
-
-  const saveBodyMapGender = async (val) => {
-    // val: 'male' | 'female' | null (null = use profile.sex)
-    setBodyMapGender(val);
-    setPrefsSaving(true);
-    const { error } = await supabase
-      .from('settings')
-      .upsert({ user_id: user.id, body_map_gender: val }, { onConflict: 'user_id' })
-      .select();
-    setPrefsSaving(false);
-    if (error) console.error('[settings] body_map_gender upsert failed:', error);
   };
 
   const savePref = async (key, value) => {
@@ -647,36 +631,6 @@ export default function SettingsPage() {
                   <div className="text-xs text-stone-500 font-mono mt-0.5">Eat back calories burned during training</div>
                 </div>
                 <Toggle enabled={!!prefs.eat_back_calories} onChange={v => savePref('eat_back_calories', v)} />
-              </div>
-
-              {/* Body Map Figure */}
-              <div className="flex items-center justify-between py-4">
-                <div>
-                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Body Map Figure</div>
-                  <div className="text-xs text-stone-500 font-mono mt-0.5">
-                    Override the figure shown in Forge muscle map
-                    {bodyMapGender === null && (
-                      <span className="ml-1 text-stone-600">(auto: using profile sex)</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-1">
-                  {['male', 'female'].map(g => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => saveBodyMapGender(bodyMapGender === g ? null : g)}
-                      className="px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider border transition-all"
-                      style={{
-                        borderColor: bodyMapGender === g ? '#ed7a2a' : 'rgba(68,64,60,0.6)',
-                        background:  bodyMapGender === g ? 'rgba(237,122,42,0.15)' : 'transparent',
-                        color:       bodyMapGender === g ? '#fed7aa' : '#78716c',
-                      }}
-                    >
-                      {g}
-                    </button>
-                  ))}
-                </div>
               </div>
 
             </div>
