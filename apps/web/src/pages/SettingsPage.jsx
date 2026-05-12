@@ -261,6 +261,11 @@ export default function SettingsPage() {
   const [prefs, setPrefs]           = useState(DEFAULT_SETTINGS);
   const [prefsSaving, setPrefsSaving] = useState(false);
 
+  // ---- Units section (batch save, not per-toggle) ----
+  const [unitDraft,  setUnitDraft]  = useState({});  // pending edits before Save
+  const [unitSaving, setUnitSaving] = useState(false);
+  const [unitSaved,  setUnitSaved]  = useState(false);
+
   // ---- Account section ----
   const [tier,         setTier]         = useState('basic');
   const [createdAt,    setCreatedAt]    = useState(null);
@@ -294,7 +299,15 @@ export default function SettingsPage() {
     setGoal(storeProfile.goal ?? 'cut');
     setTier(storeProfile.subscription_tier ?? 'basic');
     setCreatedAt(storeProfile.created_at ? new Date(storeProfile.created_at) : null);
-    setPrefs({ ...DEFAULT_SETTINGS, ...(storeProfile.settings ?? {}) });
+    const merged = { ...DEFAULT_SETTINGS, ...(storeProfile.settings ?? {}) };
+    setPrefs(merged);
+    setUnitDraft({
+      weight_unit:   merged.weight_unit   ?? 'kg',
+      height_unit:   merged.height_unit   ?? 'cm',
+      energy_unit:   merged.energy_unit   ?? 'kcal',
+      volume_unit:   merged.volume_unit   ?? 'ml',
+      distance_unit: merged.distance_unit ?? 'km',
+    });
     setPageLoading(false);
   }, [storeProfile, user?.email]);
 
@@ -388,6 +401,27 @@ export default function SettingsPage() {
         .eq('id', user.id);
       setPrefsSaving(false);
       if (!error) updateProfile({ settings: next });
+    }
+  };
+
+  const saveUnits = async () => {
+    if (!user?.id) return;
+    setUnitSaving(true);
+    setUnitSaved(false);
+    // Merge unit draft into the existing prefs and write the full settings object
+    const next = { ...prefs, ...unitDraft };
+    const { error } = await supabase
+      .from('profiles')
+      .update({ settings: next })
+      .eq('id', user.id);
+    setUnitSaving(false);
+    if (!error) {
+      setPrefs(next);
+      updateProfile({ settings: next });
+      setUnitSaved(true);
+      setTimeout(() => setUnitSaved(false), 3000);
+    } else {
+      console.error('[settings] saveUnits failed:', error);
     }
   };
 
@@ -649,8 +683,8 @@ export default function SettingsPage() {
                 <div className="w-32">
                   <SegmentedControl
                     options={[{ id: 'kg', label: 'kg' }, { id: 'lbs', label: 'lbs' }]}
-                    value={prefs.weight_unit ?? 'kg'}
-                    onChange={v => savePref('weight_unit', v)}
+                    value={unitDraft.weight_unit ?? 'kg'}
+                    onChange={v => setUnitDraft(d => ({ ...d, weight_unit: v }))}
                   />
                 </div>
               </div>
@@ -664,8 +698,8 @@ export default function SettingsPage() {
                 <div className="w-32">
                   <SegmentedControl
                     options={[{ id: 'cm', label: 'cm' }, { id: 'in', label: 'ft/in' }]}
-                    value={prefs.height_unit ?? 'cm'}
-                    onChange={v => savePref('height_unit', v)}
+                    value={unitDraft.height_unit ?? 'cm'}
+                    onChange={v => setUnitDraft(d => ({ ...d, height_unit: v }))}
                   />
                 </div>
               </div>
@@ -679,8 +713,8 @@ export default function SettingsPage() {
                 <div className="w-32">
                   <SegmentedControl
                     options={[{ id: 'kcal', label: 'kcal' }, { id: 'kj', label: 'kJ' }]}
-                    value={prefs.energy_unit ?? 'kcal'}
-                    onChange={v => savePref('energy_unit', v)}
+                    value={unitDraft.energy_unit ?? 'kcal'}
+                    onChange={v => setUnitDraft(d => ({ ...d, energy_unit: v }))}
                   />
                 </div>
               </div>
@@ -694,8 +728,8 @@ export default function SettingsPage() {
                 <div className="w-36">
                   <SegmentedControl
                     options={[{ id: 'ml', label: 'ml' }, { id: 'floz', label: 'fl oz' }]}
-                    value={prefs.volume_unit ?? 'ml'}
-                    onChange={v => savePref('volume_unit', v)}
+                    value={unitDraft.volume_unit ?? 'ml'}
+                    onChange={v => setUnitDraft(d => ({ ...d, volume_unit: v }))}
                   />
                 </div>
               </div>
@@ -709,17 +743,28 @@ export default function SettingsPage() {
                 <div className="w-32">
                   <SegmentedControl
                     options={[{ id: 'km', label: 'km' }, { id: 'mi', label: 'mi' }]}
-                    value={prefs.distance_unit ?? 'km'}
-                    onChange={v => savePref('distance_unit', v)}
+                    value={unitDraft.distance_unit ?? 'km'}
+                    onChange={v => setUnitDraft(d => ({ ...d, distance_unit: v }))}
                   />
                 </div>
               </div>
 
             </div>
 
-            {prefsSaving && (
-              <p className="mt-3 text-[10px] font-mono text-stone-600 uppercase tracking-wider">Saving…</p>
-            )}
+            <div className="flex items-center gap-4 mt-6">
+              <button
+                onClick={saveUnits}
+                disabled={unitSaving}
+                className="px-5 py-2 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-50"
+              >
+                {unitSaving ? 'Saving…' : 'Save Units'}
+              </button>
+              {unitSaved && (
+                <span className="text-[11px] font-mono text-green-400 uppercase tracking-wider">
+                  Saved ✓
+                </span>
+              )}
+            </div>
           </section>
 
           {/* ========== SECTION 4: ACCOUNT ========== */}

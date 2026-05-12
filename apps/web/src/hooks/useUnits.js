@@ -15,7 +15,7 @@ const KCAL_TO_KJ   = 4.184;
 // parseWeight() converts a user-entered value back to kg for DB storage.
 
 export function useUnits() {
-  const settings = useProfileStore(s => s.settings);
+  const settings = useProfileStore(s => s.profile?.settings);
 
   const weightUnit   = settings?.weight_unit   ?? 'kg';
   const heightUnit   = settings?.height_unit   ?? 'cm';
