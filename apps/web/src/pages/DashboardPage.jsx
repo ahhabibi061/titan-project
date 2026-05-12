@@ -12,7 +12,7 @@ const NAV_MODULES = [
   { id: 'home',       label: 'Home',       path: '/dashboard'  },
   { id: 'logger',     label: 'Forge',      path: '/logger'     },
   { id: 'vision',     label: 'Sentinel',   path: '/nutrition'  },
-  { id: 'biometrics', label: 'Biometrics', path: '/biometrics' },
+  { id: 'biometrics', label: 'Vault',       path: '/biometrics' },
   { id: 'library',    label: 'Codex',      path: '/exercises'  },
   { id: 'coach',      label: 'Oracle',     path: '/coach'      },
 ];
@@ -641,7 +641,7 @@ export default function Dashboard() {
                       </div>
                     ))}
                     {workout.exercises.length === 0 && (
-                      <p className="text-xs font-mono text-stone-600 py-4">No exercises added yet. Open the Logger to build this workout.</p>
+                      <p className="text-xs font-mono text-stone-600 py-4">No exercises added yet. Open Forge to build this workout.</p>
                     )}
                   </div>
                   <Link
@@ -951,7 +951,7 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
-                { name: 'IRONLAB', sub: 'Logger',    accent: 'from-orange-300 to-orange-600', to: '/logger' },
+                { name: 'FORGE',   sub: 'Workout',   accent: 'from-orange-300 to-orange-600', to: '/logger' },
                 { name: 'Sentinel', sub: 'Nutrition', accent: 'from-amber-300 to-orange-500',  to: '/nutrition' },
                 { name: 'Vault',   sub: 'Biometric', accent: 'from-orange-300 to-red-500',    to: '/biometrics' },
                 { name: 'Codex',   sub: 'Exercises', accent: 'from-stone-300 to-stone-500',   to: '/exercises' },

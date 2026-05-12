@@ -6,7 +6,7 @@ const NAV_LINKS = [
   { label: 'Home',       path: '/dashboard'  },
   { label: 'Forge',      path: '/logger'     },
   { label: 'Sentinel',   path: '/nutrition'  },
-  { label: 'Biometrics', path: '/biometrics' },
+  { label: 'Vault',      path: '/biometrics' },
   { label: 'Codex',      path: '/exercises'  },
   { label: 'Oracle',     path: '/coach'      },
 ];

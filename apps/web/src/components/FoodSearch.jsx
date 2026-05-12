@@ -572,7 +572,7 @@ function ManualFallback({ onAdd, onBack, initialName = '' }) {
 }
 
 // -------------------- MAIN FOOD SEARCH --------------------
-export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
+export function FoodSearch({ onAdd, onCancel, confirmLabel, userId, isPro = false }) {
   const [query,          setQuery]          = useState('');
   const [historyResults, setHistoryResults] = useState([]);
   const [usdaResults,    setUsdaResults]    = useState([]);
@@ -581,15 +581,74 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
   const [showCamera,     setShowCamera]     = useState(false);
   const [barcodeError,   setBarcodeError]   = useState(null);
   const [barcodeLoading, setBarcodeLoading] = useState(false);
-  const [view,           setView]           = useState('search'); // 'search' | 'serving' | 'manual'
+  const [view,           setView]           = useState('search'); // 'search' | 'serving' | 'manual' | 'scan_result'
   const [cameraAvail]   = useState(() => !!navigator.mediaDevices?.getUserMedia);
   const [showTip, setShowTip] = useState(() => {
     try { return !localStorage.getItem('food_search_tip_dismissed'); } catch { return true; }
   });
 
+  // AI Meal Scanner state
+  const [scanLoading,  setScanLoading]  = useState(false);
+  const [scanResult,   setScanResult]   = useState(null);
+  const [scanError,    setScanError]    = useState(null);
+  const [scanToast,    setScanToast]    = useState('');
+  const cameraInputRef = useRef(null);
+
   function dismissTip() {
     try { localStorage.setItem('food_search_tip_dismissed', '1'); } catch {}
     setShowTip(false);
+  }
+
+  async function handleCameraCapture(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScanError(null);
+    setScanLoading(true);
+    setScanResult(null);
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('Not authenticated');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const res = await fetch(`${supabaseUrl}/functions/v1/analyze-meal-image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ imageBase64: base64, mimeType: file.type || 'image/jpeg' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setScanError(data);
+        return;
+      }
+      setScanResult(data);
+      setView('scan_result');
+    } catch (err) {
+      setScanError({ error: 'general', message: err.message || 'Scan failed' });
+    } finally {
+      setScanLoading(false);
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+    }
+  }
+
+  async function handleLogScan() {
+    if (!scanResult) return;
+    await onAdd({
+      name:      scanResult.meal_name,
+      kcal:      scanResult.totals.kcal,
+      protein_g: scanResult.totals.protein_g,
+      carbs_g:   scanResult.totals.carbs_g,
+      fat_g:     scanResult.totals.fat_g,
+      source:    'vision_api',
+    });
+    onCancel();
   }
 
   const timerRef        = useRef(null);
@@ -681,6 +740,86 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
     onCancel();
   };
 
+  // ---- SCAN RESULT VIEW ----
+  if (view === 'scan_result' && scanResult) {
+    const scansLabel = scanResult.scans_limit >= 999
+      ? 'Unlimited'
+      : `${scanResult.scans_used}/${scanResult.scans_limit} scans today`;
+    return (
+      <div className="p-6">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="text-[9px] font-mono uppercase tracking-wider text-orange-300 bg-orange-500/10 border border-orange-500/25 px-1.5 py-0.5">📷 Scan Result</span>
+              <span className="text-[9px] font-mono text-stone-500">{scanResult.confidence}% confidence</span>
+              <span className="text-[9px] font-mono text-stone-600">{scansLabel}</span>
+            </div>
+            <div className="font-anton text-lg uppercase tracking-tight text-stone-100">{scanResult.meal_name}</div>
+          </div>
+          <button onClick={() => { setView('search'); setScanResult(null); }} className="text-stone-600 hover:text-stone-300 font-mono text-sm ml-3 shrink-0">✕</button>
+        </div>
+
+        {/* Low confidence warning */}
+        {scanResult.confidence < 60 && (
+          <div className="mb-3 px-3 py-2 border border-orange-500/30 bg-orange-500/5 text-[10px] font-mono text-orange-400 uppercase tracking-wider">
+            ⚠ Low confidence — please verify
+          </div>
+        )}
+
+        {/* Items */}
+        {scanResult.items?.length > 0 && (
+          <div className="mb-4">
+            <div className="text-[9px] font-mono uppercase tracking-wider text-stone-500 mb-2">Identified:</div>
+            <div className="space-y-1.5">
+              {scanResult.items.map((item, i) => (
+                <div key={i} className="flex items-center justify-between py-1 border-b border-stone-800/40 last:border-0">
+                  <span className="text-stone-300 text-sm">• {item.name}</span>
+                  <span className="font-mono text-[10px] text-stone-500 shrink-0 ml-2">~{item.estimated_grams}g · {item.kcal} kcal</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Totals */}
+        <div className="mb-4 border border-orange-500/20 bg-orange-500/5 px-4 py-3">
+          <div className="font-mono text-sm tabular-nums text-stone-200">
+            <span className="text-orange-300 font-anton text-xl">{scanResult.totals.kcal}</span>
+            <span className="text-stone-500 text-xs ml-1">kcal</span>
+            <span className="text-stone-500 mx-2">·</span>
+            <span className="text-orange-300">{scanResult.totals.protein_g}</span><span className="text-stone-500 text-xs">p</span>
+            <span className="text-stone-500 mx-1">·</span>
+            <span className="text-stone-300">{scanResult.totals.carbs_g}</span><span className="text-stone-500 text-xs">c</span>
+            <span className="text-stone-500 mx-1">·</span>
+            <span className="text-stone-300">{scanResult.totals.fat_g}</span><span className="text-stone-500 text-xs">f</span>
+          </div>
+        </div>
+
+        {/* Notes */}
+        {scanResult.notes && (
+          <div className="mb-4 text-[10px] font-mono text-stone-600 italic">{scanResult.notes}</div>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-3">
+          <button
+            onClick={handleLogScan}
+            className="flex-1 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors"
+          >
+            Log This Meal →
+          </button>
+          <button
+            onClick={() => { setView('search'); setScanResult(null); }}
+            className="px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-[10px] uppercase tracking-wider hover:border-stone-500 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ---- SERVING VIEW ----
   if (view === 'serving' && selected) {
     return (
@@ -734,7 +873,7 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
               type="text"
               value={query}
               onChange={e => setQuery(e.target.value)}
-              placeholder="Search foods…"
+              placeholder="Search databases…"
               autoFocus
               className="w-full pl-9 pr-4 py-2.5 bg-stone-900/60 border border-stone-700 text-stone-100 font-mono text-sm placeholder-stone-600 focus:outline-none focus:border-orange-500/60 transition-colors"
             />
@@ -745,18 +884,62 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
             )}
           </div>
 
+          {/* AI camera button — 36×36px */}
+          <button
+            type="button"
+            onClick={() => {
+              if (!isPro) {
+                setScanToast('AI Meal Scanner — Pro Feature');
+                setTimeout(() => setScanToast(''), 2500);
+                return;
+              }
+              setScanError(null);
+              cameraInputRef.current?.click();
+            }}
+            disabled={scanLoading}
+            title={isPro ? 'AI Meal Scanner' : 'AI Meal Scanner — Pro Feature'}
+            className="relative w-9 h-9 shrink-0 border border-stone-700 bg-stone-950 text-stone-400 hover:text-orange-400 hover:border-orange-500/40 transition-colors disabled:opacity-50 flex items-center justify-center"
+          >
+            {scanLoading ? (
+              <div className="w-4 h-4 border border-stone-600 border-t-orange-400 rounded-full animate-spin" />
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            )}
+            {!isPro && (
+              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-stone-900 border border-stone-700 flex items-center justify-center">
+                <svg width="7" height="7" viewBox="0 0 10 12" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <rect x="1" y="5" width="8" height="6" rx="0.5"/>
+                  <path d="M3 5V3.5a2 2 0 0 1 4 0V5"/>
+                </svg>
+              </span>
+            )}
+          </button>
+          {/* Hidden file input for camera */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handleCameraCapture}
+          />
+
+          {/* Barcode button — 36×36px */}
           {cameraAvail && (
             <button
               type="button"
               onClick={() => { setBarcodeError(null); setShowCamera(true); }}
               disabled={barcodeLoading}
               title="Scan barcode"
-              className="px-3 py-2 border border-stone-700 text-stone-400 hover:text-orange-300 hover:border-orange-500/40 transition-colors disabled:opacity-50 flex flex-col items-center justify-center gap-0.5"
+              className="w-9 h-9 shrink-0 border border-stone-700 bg-stone-950 text-stone-400 hover:text-orange-400 hover:border-orange-500/40 transition-colors disabled:opacity-50 flex items-center justify-center"
             >
               {barcodeLoading ? (
                 <div className="w-4 h-4 border border-stone-600 border-t-orange-400 rounded-full animate-spin" />
               ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M3 8V6a2 2 0 0 1 2-2h2"/>
                   <path d="M3 16v2a2 2 0 0 0 2 2h2"/>
                   <path d="M16 3h2a2 2 0 0 1 2 2v2"/>
@@ -764,7 +947,6 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
                   <line x1="7" y1="12" x2="17" y2="12" strokeDasharray="2 1"/>
                 </svg>
               )}
-              <span className="font-mono text-[8px] uppercase tracking-wider text-stone-400">SCAN</span>
             </button>
           )}
 
@@ -776,6 +958,36 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
             Cancel
           </button>
         </div>
+
+        {/* Pro-gate toast */}
+        {scanToast && (
+          <div className="mb-3 px-3 py-2 border border-orange-500/30 bg-orange-500/5 text-[11px] font-mono text-orange-400 uppercase tracking-wider flex items-center justify-between">
+            <span>{scanToast}</span>
+            <a href="/settings" className="text-orange-300 hover:underline ml-3">Upgrade →</a>
+          </div>
+        )}
+
+        {/* Scan error banners */}
+        {scanError && scanError.error === 'upgrade_required' && (
+          <div className="mb-3 px-3 py-2.5 border border-orange-500/30 bg-orange-500/5 flex items-center justify-between">
+            <span className="text-[11px] font-mono text-orange-400 uppercase tracking-wider">AI Meal Scanner is a Pro feature</span>
+            <a href="/settings" className="text-[10px] font-mono uppercase tracking-wider text-orange-300 hover:underline ml-3">Upgrade to Pro →</a>
+          </div>
+        )}
+        {scanError && scanError.error === 'rate_limit_exceeded' && (
+          <div className="mb-3 px-3 py-2.5 border border-stone-700 bg-stone-900/40 flex items-center justify-between">
+            <div>
+              <div className="text-[11px] font-mono text-stone-300 uppercase tracking-wider">{scanError.message}</div>
+              <div className="text-[9px] font-mono text-stone-600 mt-0.5">Resets at midnight</div>
+            </div>
+            <button onClick={() => setScanError(null)} className="text-stone-600 hover:text-stone-400 font-mono text-sm ml-3">✕</button>
+          </div>
+        )}
+        {scanError && scanError.error !== 'upgrade_required' && scanError.error !== 'rate_limit_exceeded' && (
+          <div className="mb-3 px-3 py-2 border border-red-500/30 bg-red-500/5 text-[11px] font-mono text-red-400 uppercase tracking-wider">
+            {scanError.message || 'Scan failed — try again'}
+          </div>
+        )}
 
         {/* Barcode error */}
         {barcodeError && (
@@ -800,7 +1012,7 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
         {usdaResults.length > 0 && (
           <div className="border border-stone-800/60 bg-stone-950/60 mb-3">
             <div className="px-4 py-1.5 border-b border-stone-800/60">
-              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-stone-600">USDA Database</span>
+              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-stone-600">Food Database</span>
             </div>
             {usdaResults.map(f => (
               <ResultRow key={f.id} food={f} onSelect={handleSelectFood} />
@@ -812,7 +1024,7 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
         {usdaSearching && usdaResults.length === 0 && (
           <div className="border border-stone-800/60 bg-stone-950/60 mb-3">
             <div className="px-4 py-1.5 border-b border-stone-800/60">
-              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-stone-600">USDA Database</span>
+              <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-stone-600">Food Database</span>
             </div>
             <div className="p-3 space-y-2">
               <Sk h="h-12" />
@@ -839,7 +1051,7 @@ export function FoodSearch({ onAdd, onCancel, confirmLabel, userId }) {
         {!query && historyResults.length === 0 && usdaResults.length === 0 && !usdaSearching && (
           <div className="text-center py-6">
             <div className="text-[10px] uppercase tracking-[0.18em] text-stone-700 font-mono mb-1">
-              Search USDA · your logged foods appear first
+              Search databases · your logged foods appear first
             </div>
             <div className="text-stone-700 text-xs">
               Type 2+ characters to search

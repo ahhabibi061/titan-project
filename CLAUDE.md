@@ -20,6 +20,7 @@ Full project context in HANDOFF.md. Full technical spec in PRD.md.
 - Vision / Vision Nutrition → **Sentinel**
 - Library / Exercise Library → **Codex**
 - Coach / Coach Engine → **Oracle**
+- Biometrics → **Vault**
 
 ## CURRENT BUILD STATUS
 - 10 prototype artifacts migrated into apps/web/src/pages/

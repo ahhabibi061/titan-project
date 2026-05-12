@@ -1356,7 +1356,7 @@ export default function IronLabLogger() {
 
           {/* RIGHT — MUSCLE MAP + BREAKDOWN */}
           <aside className="col-span-12 lg:col-span-5 xl:col-span-4 space-y-6">
-            <div className="border border-stone-800/60 bg-stone-950/40 p-5 lg:sticky lg:top-6">
+            <div className="border border-stone-800/60 bg-stone-950/40 p-5 relative overflow-hidden">
               <div className="flex items-baseline justify-between mb-3">
                 <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Muscle Map</h2>
                 <span className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">recovery · growth</span>

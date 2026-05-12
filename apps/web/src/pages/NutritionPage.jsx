@@ -14,42 +14,6 @@ import { useWaterTracker } from '../hooks/useWaterTracker';
  * Manual entry, date navigation, delete with inline confirm.
  * ========================================================================= */
 
-// Vision-API scan demo candidates (UI demo only — scan writes via addMeal)
-const SCAN_CANDIDATES = [
-  {
-    id: 'a',
-    name: 'Grilled Chicken Bowl',
-    portion: '1 medium bowl · ~480 g',
-    confidence: 92,
-    macros: { kcal: 620, protein: 45, carbs: 55, fat: 22 },
-    detected: ['Grilled chicken', 'Brown rice', 'Avocado', 'Black beans', 'Salsa'],
-  },
-  {
-    id: 'b',
-    name: 'Mediterranean Power Bowl',
-    portion: '1 medium bowl · ~490 g',
-    confidence: 78,
-    macros: { kcal: 580, protein: 38, carbs: 62, fat: 18 },
-    detected: ['Chicken', 'Rice', 'Hummus', 'Olives'],
-  },
-  {
-    id: 'c',
-    name: 'Buddha Bowl',
-    portion: '1 medium bowl · ~470 g',
-    confidence: 64,
-    macros: { kcal: 540, protein: 28, carbs: 70, fat: 16 },
-    detected: ['Mixed grains', 'Roasted vegetables', 'Plant protein'],
-  },
-];
-
-const DETECTED_REGIONS = [
-  { x: 28, y: 18, w: 30, h: 28, label: 'Grilled Chicken', conf: 94 },
-  { x: 56, y: 32, w: 30, h: 36, label: 'Brown Rice',      conf: 89 },
-  { x: 14, y: 52, w: 22, h: 26, label: 'Avocado',          conf: 91 },
-  { x: 46, y: 64, w: 26, h: 20, label: 'Black Beans',      conf: 86 },
-  { x: 70, y: 14, w: 22, h: 22, label: 'Salsa',            conf: 81 },
-];
-
 // -------------------- HELPERS --------------------
 const fmt0 = (n) => Math.round(n).toLocaleString('en-US');
 
@@ -111,146 +75,6 @@ function MealIllustration() {
       <path d="M 138,238 Q 120,238 122,256 Q 138,254 144,244 Z" fill="#b8c84a" />
       <path d="M 138,240 L 138,254" stroke="#7a8a2a" strokeWidth="0.5" />
     </svg>
-  );
-}
-
-// -------------------- CAMERA VIEW --------------------
-function CameraView({ state }) {
-  const showBoxes = state === 'results' || state === 'confirmed';
-  return (
-    <div className="relative aspect-square w-full max-w-md mx-auto bg-stone-950 overflow-hidden">
-      <div className={`absolute inset-0 transition-all duration-500 ${state === 'capturing' ? 'brightness-150' : ''} ${state === 'analyzing' ? 'brightness-75' : ''}`}>
-        <MealIllustration />
-      </div>
-      {state === 'analyzing' && (
-        <>
-          <div className="absolute inset-0 pointer-events-none" style={{
-            background: 'linear-gradient(180deg, transparent 0%, rgba(237,122,42,0.15) 48%, rgba(237,122,42,0.4) 50%, rgba(237,122,42,0.15) 52%, transparent 100%)',
-            animation: 'scan 1.4s ease-in-out infinite',
-          }} />
-          <div className="absolute inset-0 pointer-events-none" style={{
-            backgroundImage: 'repeating-linear-gradient(0deg, rgba(237,122,42,0.08) 0px, rgba(237,122,42,0.08) 1px, transparent 1px, transparent 4px)',
-          }} />
-        </>
-      )}
-      {state === 'capturing' && (
-        <div className="absolute inset-0 bg-white pointer-events-none animate-pulse" style={{ opacity: 0.7 }} />
-      )}
-      <div className="absolute inset-0 pointer-events-none">
-        {[
-          { top: 12, left: 12,   rot: 0   },
-          { top: 12, right: 12,  rot: 90  },
-          { bottom: 12, right: 12, rot: 180 },
-          { bottom: 12, left: 12,  rot: 270 },
-        ].map((p, i) => (
-          <div key={i} className="absolute w-6 h-6" style={{ ...p, transform: `rotate(${p.rot}deg)` }}>
-            <div className="absolute top-0 left-0 w-full h-px bg-orange-400" />
-            <div className="absolute top-0 left-0 w-px h-full bg-orange-400" />
-          </div>
-        ))}
-      </div>
-      {showBoxes && DETECTED_REGIONS.map((r, i) => (
-        <div
-          key={i}
-          className="absolute border-2 border-orange-400/80 transition-all duration-300"
-          style={{
-            left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%`,
-            animation: `boxIn 400ms ${i * 80}ms ease-out both`,
-            backgroundColor: 'rgba(237,122,42,0.06)',
-          }}
-        >
-          <div className="absolute -top-6 left-0 bg-orange-500 text-stone-950 px-1.5 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider whitespace-nowrap">
-            {r.label} <span className="opacity-70">{r.conf}%</span>
-          </div>
-        </div>
-      ))}
-      <div className="absolute top-3 left-3 right-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.2em]">
-        <span className="bg-stone-950/80 backdrop-blur-sm border border-orange-500/40 px-2 py-1 text-orange-300">
-          {state === 'idle'      && '● ready'}
-          {state === 'capturing' && '◉ capture'}
-          {state === 'analyzing' && '◌ analyzing'}
-          {state === 'results'   && `▣ ${DETECTED_REGIONS.length} items`}
-          {state === 'confirmed' && '✓ logged'}
-        </span>
-        <span className="bg-stone-950/80 backdrop-blur-sm border border-stone-700 px-2 py-1 text-stone-500">logmeal v3</span>
-      </div>
-      {state === 'idle' && (
-        <div className="absolute inset-0 bg-stone-950/70 backdrop-blur-sm flex items-center justify-center">
-          <div className="text-center">
-            <div className="font-anton text-3xl uppercase tracking-tight text-stone-100 mb-2">Tap to Scan</div>
-            <div className="text-[11px] font-mono uppercase tracking-wider text-stone-500">point camera at meal</div>
-          </div>
-        </div>
-      )}
-      {state === 'analyzing' && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-stone-950/90 border border-orange-500/40 px-4 py-2 backdrop-blur-sm">
-          <div className="font-anton text-sm uppercase tracking-wider text-orange-300">Analyzing Meal…</div>
-          <div className="text-[9px] font-mono text-stone-500 tracking-wider">vision model · 1.4s avg</div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// -------------------- CANDIDATE ROW --------------------
-function CandidateRow({ candidate, selected, onSelect, isTop }) {
-  const { name, portion, confidence, macros, detected } = candidate;
-  const ringColor = confidence >= 90 ? 'text-orange-400' : confidence >= 75 ? 'text-stone-300' : 'text-stone-500';
-  return (
-    <button
-      onClick={() => onSelect(candidate.id)}
-      className={`w-full text-left p-4 border transition-all ${
-        selected
-          ? 'border-orange-500/60 bg-orange-500/10'
-          : 'border-stone-800/60 bg-stone-950/40 hover:border-stone-700 hover:bg-stone-900/40'
-      }`}
-    >
-      <div className="flex items-start gap-4">
-        <div className="relative w-14 h-14 shrink-0">
-          <svg viewBox="0 0 56 56" className="w-full h-full -rotate-90">
-            <circle cx="28" cy="28" r="24" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3" />
-            <circle cx="28" cy="28" r="24" fill="none" stroke="currentColor" strokeWidth="3"
-              strokeDasharray={`${(confidence / 100) * 150.8} 150.8`} strokeLinecap="square" className={ringColor} />
-          </svg>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className={`font-anton text-base tabular-nums ${ringColor}`}>{confidence}</span>
-          </div>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-2 mb-1">
-            <span className="font-anton text-lg uppercase tracking-tight text-stone-100">{name}</span>
-            {isTop && (
-              <span className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-500/20 text-orange-300 border border-orange-500/30 font-mono">
-                TOP MATCH
-              </span>
-            )}
-          </div>
-          <div className="text-[10px] uppercase tracking-wider text-stone-500 font-mono mb-2">{portion}</div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono tabular-nums">
-            <span className="text-stone-300">{macros.kcal} <span className="text-stone-600">kcal</span></span>
-            <span className="text-orange-300">{macros.protein}g <span className="text-stone-600">P</span></span>
-            <span className="text-stone-400">{macros.carbs}g <span className="text-stone-600">C</span></span>
-            <span className="text-stone-400">{macros.fat}g <span className="text-stone-600">F</span></span>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1">
-            {detected.map((d, i) => (
-              <span key={i} className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-stone-800/60 text-stone-500 border border-stone-700/50 font-mono">
-                {d}
-              </span>
-            ))}
-          </div>
-        </div>
-        <div className={`w-5 h-5 border-2 shrink-0 flex items-center justify-center mt-1 ${
-          selected ? 'border-orange-500 bg-orange-500' : 'border-stone-600'
-        }`}>
-          {selected && (
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M2 6L5 9L10 3" stroke="#0a0908" strokeWidth="2" strokeLinecap="square" />
-            </svg>
-          )}
-        </div>
-      </div>
-    </button>
   );
 }
 
@@ -379,7 +203,7 @@ function MealEntry({ meal, onDelete }) {
 // -------------------- MEAL SECTION --------------------
 const MEAL_COLORS = { breakfast: '#fbbf24', lunch: '#ed7a2a', dinner: '#f87171', snacks: '#78716c' };
 
-function MealSection({ type, section, activeAddSection, setActiveAddSection, addMeal, deleteMeal, userId }) {
+function MealSection({ type, section, activeAddSection, setActiveAddSection, addMeal, deleteMeal, userId, isPro }) {
   const [collapsed, setCollapsed] = useState(false);
   const label = type.charAt(0).toUpperCase() + type.slice(1);
   const color = MEAL_COLORS[type];
@@ -428,6 +252,7 @@ function MealSection({ type, section, activeAddSection, setActiveAddSection, add
               onCancel={() => setActiveAddSection(null)}
               confirmLabel="Add →"
               userId={userId}
+              isPro={isPro}
             />
           ) : (
             <button
@@ -646,6 +471,7 @@ function TemplatePanel({ templates, loading, onClose, onLogAll, onSave, onDelete
                       onCancel={() => setShowFoodSearch(false)}
                       confirmLabel="Add to Bundle →"
                       userId={userId}
+                      isPro={isPro}
                     />
                   ) : (
                     <button
@@ -1023,8 +849,6 @@ export default function VisionNutrition() {
   const mealTemplates = useMealTemplates(user?.id);
   const water         = useWaterTracker(user?.id);
 
-  const [scanState, setScanState]       = useState('results');
-  const [selectedId, setSelectedId]     = useState('a');
   const [activeAddSection, setActiveAddSection] = useState(null);
   const [showBreakdown, setShowBreakdown]       = useState(false);
   const [showTemplates, setShowTemplates]       = useState(false);
@@ -1080,26 +904,6 @@ export default function VisionNutrition() {
       f: Math.round((totals.fat     * 9 / t) * 100),
     };
   }, [totals]);
-
-  const startScan = () => {
-    setScanState('capturing');
-    setTimeout(() => setScanState('analyzing'), 350);
-    setTimeout(() => setScanState('results'), 1900);
-  };
-
-  const confirmSelection = () => {
-    const c = SCAN_CANDIDATES.find(x => x.id === selectedId);
-    if (!c) return;
-    addMeal({
-      name:      c.name,
-      kcal:      c.macros.kcal,
-      protein_g: c.macros.protein,
-      carbs_g:   c.macros.carbs,
-      fat_g:     c.macros.fat,
-    });
-    setScanState('confirmed');
-    setTimeout(() => setScanState('idle'), 1800);
-  };
 
   return (
     <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
@@ -1163,13 +967,6 @@ export default function VisionNutrition() {
               className="px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-sm uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
             >
               Meal Templates
-            </button>
-            <button
-              onClick={startScan}
-              disabled={scanState !== 'idle' && scanState !== 'results'}
-              className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-lg uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {scanState === 'idle' ? 'Scan Meal' : scanState === 'results' ? 'Re-scan' : 'Scanning…'}
             </button>
           </div>
         </header>
@@ -1328,6 +1125,7 @@ export default function VisionNutrition() {
                   addMeal={addMeal}
                   deleteMeal={deleteMeal}
                   userId={user?.id}
+                  isPro={isPro}
                 />
               ))}
               {sections.uncategorized?.meals?.length > 0 && (
@@ -1338,58 +1136,6 @@ export default function VisionNutrition() {
               )}
             </div>
           )}
-        </div>
-
-        {/* SCAN SECTION */}
-        <div className="border border-stone-800/60 bg-stone-950/40 mb-8">
-          <div className="flex items-baseline justify-between p-6 pb-4 border-b border-stone-800/60">
-            <div>
-              <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Sentinel Scan</h2>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-stone-600 mt-1">vendor: logmeal · response 1.4s · cost $0.008/scan</div>
-            </div>
-            <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">edge function · pro tier</span>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-6">
-            <div className="lg:col-span-5">
-              <CameraView state={scanState} />
-              <div className="mt-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-stone-600">
-                <span>{DETECTED_REGIONS.length} components detected</span>
-                <span>conf avg {Math.round(DETECTED_REGIONS.reduce((a, r) => a + r.conf, 0) / DETECTED_REGIONS.length)}%</span>
-              </div>
-            </div>
-            <div className="lg:col-span-7">
-              <div className="flex items-baseline justify-between mb-3">
-                <h3 className="font-anton text-lg uppercase tracking-tight text-stone-200">Match Candidates</h3>
-                <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">tap to select · {SCAN_CANDIDATES.length} results</span>
-              </div>
-              <div className="space-y-2">
-                {SCAN_CANDIDATES.map((c, i) => (
-                  <CandidateRow
-                    key={c.id}
-                    candidate={c}
-                    selected={c.id === selectedId}
-                    onSelect={setSelectedId}
-                    isTop={i === 0}
-                  />
-                ))}
-              </div>
-              <div className="mt-5 flex items-center justify-between gap-3">
-                <button
-                  onClick={() => setActiveAddSection('snacks')}
-                  className="text-[10px] uppercase tracking-wider font-mono text-stone-500 hover:text-stone-300 px-3 py-2 border border-stone-800 hover:border-stone-700 transition-colors"
-                >
-                  None of these — search database
-                </button>
-                <button
-                  onClick={confirmSelection}
-                  disabled={scanState !== 'results'}
-                  className="px-6 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {scanState === 'confirmed' ? '✓ Logged' : 'Confirm & Log →'}
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* WATER TRACKER */}
