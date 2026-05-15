@@ -343,7 +343,7 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, weigh
       <header className="flex items-baseline justify-between gap-4 px-5 py-4 border-b border-stone-800/60 bg-gradient-to-r from-stone-950/80 to-transparent">
         <div className="flex items-baseline gap-3 flex-wrap">
           <span className="font-mono text-[10px] text-stone-600 tabular-nums">{String(index + 1).padStart(2,'0')}</span>
-          <h3 className="font-anton text-2xl tracking-tight text-stone-100 uppercase">{exercise.name}</h3>
+          <h3 className="forge-exercise-name font-anton text-2xl tracking-tight text-stone-100 uppercase">{exercise.name}</h3>
           <div className="flex gap-1.5 flex-wrap">
             {exercise.primary.map(m => (
               <span key={m} className="muscle-chip text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25 font-mono">

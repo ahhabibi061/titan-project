@@ -134,6 +134,8 @@
 /* Exercise card header text → blue (not near-black) */
 [data-theme="neutral"] [class*="from-stone-950"] .text-stone-100 { color: #1e3a8a !important; }
 [data-theme="neutral"] [class*="from-stone-950"] .text-stone-600 { color: #3b82f6 !important; }
+/* Exercise name specifically → vivid navy blue */
+[data-theme="neutral"] .forge-exercise-name { color: #1d4ed8 !important; }
 
 /*
   ── WEEKLY ADHERENCE GRID (neutral) ─────────────────────────
@@ -141,8 +143,9 @@
 [data-theme="neutral"] .weekly-done { background-color: #34d399 !important; }
 [data-theme="neutral"] .weekly-rest { background-color: #bfdbfe !important; border-color: #93c5fd !important; }
 
-/* This Week stats numbers → orange */
-[data-theme="neutral"] .weekly-stats-grid .text-stone-100 { color: #f97316 !important; }
+/* This Week stats numbers → orange (text-stone-100 + text-orange-300 both) */
+[data-theme="neutral"] .weekly-stats-grid .text-stone-100  { color: #f97316 !important; }
+[data-theme="neutral"] .weekly-stats-grid .text-orange-300 { color: #f97316 !important; }
 
 /*
   ── FORGE STAT BOX COLORS (neutral) ─────────────────────────
