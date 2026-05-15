@@ -647,6 +647,7 @@ export default function Dashboard() {
                   </div>
                   <Link
                     to={workout.completed ? `/logger?workoutId=${workout.id}` : '/logger'}
+                    onClick={e => e.stopPropagation()}
                     className="w-full px-5 py-3 bg-orange-500 text-stone-950 font-anton text-base uppercase tracking-wider hover:bg-orange-400 transition-colors text-center no-underline block"
                   >
                     {workout.completed ? 'View Workout →' : 'Start Workout →'}
