@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useSession } from '../hooks/useSession';
 import { useProfileStore } from '../store/useProfileStore';
-import { useTheme, THEME_OPTIONS } from '../hooks/useTheme';
 
 // -------------------- DOMAIN --------------------
 const ACTIVITY_LEVELS = [
@@ -241,8 +240,6 @@ export default function SettingsPage() {
   const { session, user, loading: sessionLoading } = useSession();
   const storeProfile  = useProfileStore((s) => s.profile);
   const updateProfile = useProfileStore((s) => s.updateProfile);
-  const { theme, setTheme } = useTheme();
-
   // ---- Profile section ----
   const [displayName, setDisplayName]   = useState('');
   const [email, setEmail]               = useState('');
@@ -545,7 +542,7 @@ export default function SettingsPage() {
   // ---- Render ----
   if (sessionLoading || pageLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0908' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#111318' }}>
         <div className="flex flex-col items-center gap-3">
           <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 28, letterSpacing: 4, color: '#ed7a2a' }}>IRONLAB</span>
           <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
@@ -557,14 +554,14 @@ export default function SettingsPage() {
 
   if (loadError) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0908' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#111318' }}>
         <p className="text-red-400 font-mono text-sm">{loadError}</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen w-full" style={{ background: '#0a0908', fontFamily: 'Manrope, sans-serif' }}>
+    <div className="min-h-screen w-full" style={{ background: '#111318', fontFamily: 'Manrope, sans-serif' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap');
         .font-mono  { font-family: 'JetBrains Mono', ui-monospace, monospace; }
@@ -574,10 +571,10 @@ export default function SettingsPage() {
 
       {/* Ambient background */}
       <div className="fixed inset-0 pointer-events-none" aria-hidden>
-        <div className="absolute inset-0 opacity-[0.025]" style={{
+        <div className="absolute inset-0 opacity-[0.03]" style={{
           backgroundImage: 'repeating-linear-gradient(0deg, transparent 0, transparent 38px, #fff 38px, #fff 39px)'
         }} />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80vw] h-[40vh] opacity-[0.05] blur-3xl"
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[80vw] h-[50vh] opacity-[0.08] blur-3xl"
           style={{ background: 'radial-gradient(ellipse, #ff5a2a 0%, transparent 60%)' }} />
       </div>
 
@@ -614,7 +611,7 @@ export default function SettingsPage() {
         <div className="space-y-10">
 
           {/* ========== SECTION 1: PROFILE ========== */}
-          <section className="border border-stone-800/60 bg-stone-950/40 p-6 md:p-8">
+          <section className="border border-stone-700/40 bg-stone-900/30 p-6 md:p-8">
             <SectionHeader label="Profile" />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
@@ -640,7 +637,7 @@ export default function SettingsPage() {
           </section>
 
           {/* ========== SECTION 2: BIOMETRICS ========== */}
-          <section className="border border-stone-800/60 bg-stone-950/40 p-6 md:p-8">
+          <section className="border border-stone-700/40 bg-stone-900/30 p-6 md:p-8">
             <SectionHeader label="Biometrics" />
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
@@ -707,7 +704,7 @@ export default function SettingsPage() {
           </section>
 
           {/* ========== SECTION 3: MACRO TARGETS ========== */}
-          <section className="border border-stone-800/60 bg-stone-950/40 p-6 md:p-8">
+          <section className="border border-stone-700/40 bg-stone-900/30 p-6 md:p-8">
             <SectionHeader label="Macro Targets" />
 
             {/* Mode toggle */}
@@ -814,7 +811,7 @@ export default function SettingsPage() {
           </section>
 
           {/* ========== SECTION 4: PREFERENCES ========== */}
-          <section className="border border-stone-800/60 bg-stone-950/40 p-6 md:p-8">
+          <section className="border border-stone-700/40 bg-stone-900/30 p-6 md:p-8">
             <SectionHeader label="Preferences" />
 
             <div className="space-y-0 divide-y divide-stone-800/60">
@@ -860,54 +857,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Theme */}
-              <div className="flex items-start justify-between py-4 gap-4">
-                <div className="flex-1">
-                  <div className="text-sm text-stone-100 mb-1" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>App Theme</div>
-                  <div className="text-xs text-stone-500 font-mono mb-4">Visual appearance. Orange accent stays in all themes.</div>
-                  <div className="flex flex-wrap gap-3">
-                    {THEME_OPTIONS.map(t => (
-                      <button
-                        key={t.id}
-                        onClick={() => setTheme(t.id)}
-                        className={`flex flex-col items-center gap-2 p-3 border transition-colors ${
-                          theme === t.id
-                            ? 'border-orange-500/60 bg-orange-500/5'
-                            : 'border-stone-800 hover:border-stone-700'
-                        }`}
-                      >
-                        {/* Mini preview swatch */}
-                        <div
-                          className="w-20 h-12 relative overflow-hidden"
-                          style={{ background: t.bg, border: `1px solid ${t.border}` }}
-                        >
-                          <div
-                            className="absolute top-1.5 left-1.5 right-1.5 h-2.5"
-                            style={{ background: t.card, border: `1px solid ${t.border}` }}
-                          />
-                          <div
-                            className="absolute bottom-2 left-1.5 w-6 h-1.5"
-                            style={{ background: t.accent }}
-                          />
-                          <div
-                            className="absolute bottom-2 right-1.5 w-3 h-1.5"
-                            style={{ background: t.border }}
-                          />
-                        </div>
-                        <span className={`text-[9px] font-mono uppercase tracking-wider ${
-                          theme === t.id ? 'text-orange-300' : 'text-stone-500'
-                        }`}>
-                          {t.name}
-                        </span>
-                        {theme === t.id && (
-                          <div className="w-1 h-1 rounded-full bg-orange-400" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
             </div>
 
             {prefsSaving && (
@@ -916,7 +865,7 @@ export default function SettingsPage() {
           </section>
 
           {/* ========== SECTION 3b: UNITS & MEASUREMENTS ========== */}
-          <section className="border border-stone-800/60 bg-stone-950/40 p-6 md:p-8">
+          <section className="border border-stone-700/40 bg-stone-900/30 p-6 md:p-8">
             <SectionHeader label="Units & Measurements" />
 
             <div className="space-y-0 divide-y divide-stone-800/60">
@@ -1015,7 +964,7 @@ export default function SettingsPage() {
           </section>
 
           {/* ========== SECTION 4: ACCOUNT ========== */}
-          <section className="border border-stone-800/60 bg-stone-950/40 p-6 md:p-8">
+          <section className="border border-stone-700/40 bg-stone-900/30 p-6 md:p-8">
             <SectionHeader label="Account" />
 
             {/* Tier + Trial */}

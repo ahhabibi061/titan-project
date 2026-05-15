@@ -828,10 +828,10 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
 
             {/* TODAY'S WORKOUT */}
-            <div onClick={() => navigate('/logger')} className="lg:col-span-5 border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col cursor-pointer hover:border-stone-700 transition-colors group">
+            <div className="lg:col-span-5 border border-stone-800/60 bg-stone-950/40 p-6 flex flex-col">
               <div className="flex items-baseline justify-between mb-4">
                 <span className="text-[10px] uppercase tracking-[0.2em] text-stone-500 font-mono">Today's Workout</span>
-                <span className="text-[9px] text-stone-600 group-hover:text-orange-400 font-mono transition-colors">→ FORGE</span>
+                <span className="text-[9px] text-stone-600 font-mono">FORGE</span>
               </div>
 
               {loading ? (
@@ -1189,11 +1189,11 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
-                { name: 'FORGE',   sub: 'Workout',   accent: 'from-orange-300 to-orange-600', to: '/logger' },
-                { name: 'Sentinel', sub: 'Nutrition', accent: 'from-amber-300 to-orange-500',  to: '/nutrition' },
-                { name: 'Vault',   sub: 'Biometric', accent: 'from-orange-300 to-red-500',    to: '/biometrics' },
-                { name: 'Codex',   sub: 'Exercises', accent: 'from-stone-300 to-stone-500',   to: '/exercises' },
-                { name: 'Oracle',  sub: 'Engine',    accent: 'from-orange-400 to-orange-700', to: '/coach' },
+                { name: 'FORGE',    sub: 'Workout',   accent: 'from-red-400 to-red-600',         to: '/logger' },
+                { name: 'Sentinel', sub: 'Nutrition', accent: 'from-amber-300 to-orange-500',    to: '/nutrition' },
+                { name: 'Vault',    sub: 'Biometric', accent: 'from-stone-400 to-stone-600',     to: '/biometrics' },
+                { name: 'Codex',    sub: 'Exercises', accent: 'from-sky-300 to-blue-500',        to: '/exercises' },
+                { name: 'Oracle',   sub: 'Engine',    accent: 'from-orange-400 to-orange-700',   to: '/coach' },
               ].map(m => (
                 <Link
                   key={m.name}

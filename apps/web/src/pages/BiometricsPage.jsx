@@ -621,7 +621,7 @@ function EntryModal({ mode, initialEntry, rawEntries, onClose, onSave, unit, sav
 // -------------------- STAT BLOCK --------------------
 function StatBlock({ label, value, sub, accent }) {
   return (
-    <div className="flex flex-col gap-1 px-5 py-4 border-r border-stone-800/60 last:border-r-0 first:pl-0">
+    <div className="flex flex-col gap-1 px-5 py-4 border-r border-stone-800/60 last:border-r-0">
       <span className="text-[10px] uppercase tracking-[0.18em] text-stone-500 font-medium">{label}</span>
       <span className={`text-3xl font-anton tracking-tight tabular-nums ${accent || 'text-stone-100'}`}>{value}</span>
       {sub && <span className="text-[11px] text-stone-500 tabular-nums">{sub}</span>}

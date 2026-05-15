@@ -2,8 +2,11 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { useProfileStore } from '../store/useProfileStore';
 
-function toDateStr(d) {
-  return d.toISOString().split('T')[0];
+function toLocalMidnightISO(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString();
+}
+function toNextLocalMidnightISO(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).toISOString();
 }
 
 export const MICRO_TARGETS = {
@@ -65,10 +68,8 @@ export function useSentinel(userId) {
   const fetchMeals = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     setLoading(true);
-    const dateStr = toDateStr(selectedDate);
-    const nextDay = new Date(selectedDate);
-    nextDay.setDate(nextDay.getDate() + 1);
-    const nextStr = toDateStr(nextDay);
+    const dateISO = toLocalMidnightISO(selectedDate);
+    const nextISO = toNextLocalMidnightISO(selectedDate);
 
     const { data } = await supabase
       .from('nutrition_logs')
@@ -79,8 +80,8 @@ export function useSentinel(userId) {
         vitamin_a_iu, vitamin_c_mg, calcium_mg, iron_mg
       `)
       .eq('user_id', userId)
-      .gte('logged_at', dateStr)
-      .lt('logged_at', nextStr)
+      .gte('logged_at', dateISO)
+      .lt('logged_at', nextISO)
       .order('logged_at', { ascending: true });
 
     setMeals((data ?? []).map(m => ({ ...m, name: m.meal_name })));
