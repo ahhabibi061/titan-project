@@ -22,17 +22,13 @@ export const MICRO_TARGETS = {
 export function useSentinel(userId) {
   const storeProfile = useProfileStore((s) => s.profile);
   const [meals, setMeals]                   = useState([]);
-  const [targets, setTargets]               = useState({ kcal: 2200, protein: 180, carbs: 220, fat: 70 });
   const [loading, setLoading]               = useState(true);
   const [selectedDate, setSelectedDate]     = useState(new Date());
   const [calsBurned, setCalsBurned]         = useState(null);
   const [eatBackCalories, setEatBackCalories] = useState(false);
 
-  // Sync macro targets from the global profile store
-  useEffect(() => {
-    if (!storeProfile) return;
-    if (storeProfile.current_macros) setTargets(storeProfile.current_macros);
-  }, [storeProfile]);
+  // Derive targets directly from store — same source as Dashboard, always in sync
+  const targets = storeProfile?.current_macros ?? { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
 
   // Read eat_back_calories from settings table (same source as Dashboard)
   useEffect(() => {
