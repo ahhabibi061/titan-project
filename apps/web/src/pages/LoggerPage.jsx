@@ -1237,6 +1237,11 @@ export default function IronLabLogger() {
   const [pastWorkouts, setPastWorkouts]               = useState([]);
   const [pastWorkoutsLoading, setPastWorkoutsLoading] = useState(false);
 
+  // Today's sessions (multi-session support)
+  const [todaySessions, setTodaySessions]               = useState([]);
+  const [todaySessionsLoading, setTodaySessionsLoading] = useState(true);
+  const [mergeSessions, setMergeSessions]               = useState(false);
+
   // Sync workout name from Supabase into local input
   useEffect(() => {
     if (logger.workout?.name) setName(logger.workout.name);
@@ -1273,6 +1278,12 @@ export default function IronLabLogger() {
     const t = setTimeout(() => navigate('/dashboard'), 3000);
     return () => clearTimeout(t);
   }, [logger.completed, navigate]);
+
+  // Load today's completed sessions for multi-session view
+  useEffect(() => {
+    if (!userId) return;
+    loadTodaySessions();
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle template load after workout starts
   useEffect(() => {
@@ -1324,7 +1335,6 @@ export default function IronLabLogger() {
     }
   }, [logger.exercises, logSet, removeSetFromExercise]);
 
-  const isCompletedToday = !workoutId && !!logger.workout?.completed_at;
   const usedIds = new Set(workout.map(we => we.exerciseId));
   const mins    = String(Math.floor(seconds / 60)).padStart(2, '0');
   const secs    = String(seconds % 60).padStart(2, '0');
@@ -1353,6 +1363,24 @@ export default function IronLabLogger() {
         logger.startWorkout(loaded.name);
       }
     }
+  }
+
+  async function loadTodaySessions() {
+    if (!userId) return;
+    setTodaySessionsLoading(true);
+    const _d = new Date();
+    const todayStart   = new Date(_d.getFullYear(), _d.getMonth(), _d.getDate()).toISOString();
+    const tomorrowStart = new Date(_d.getFullYear(), _d.getMonth(), _d.getDate() + 1).toISOString();
+    const { data } = await supabase
+      .from('workouts')
+      .select('id, name, completed_at, workout_exercises(id, exercise_id, order_index, exercises(name), sets(id))')
+      .eq('user_id', userId)
+      .not('completed_at', 'is', null)
+      .gte('completed_at', todayStart)
+      .lt('completed_at', tomorrowStart)
+      .order('completed_at', { ascending: true });
+    setTodaySessions(data ?? []);
+    setTodaySessionsLoading(false);
   }
 
   // Reset: restarts the session timer only — sets are never touched
@@ -1402,7 +1430,7 @@ export default function IronLabLogger() {
   };
 
   // ---- Loading ----
-  if (logger.loading) {
+  if (logger.loading || (!logger.workout && !workoutId && todaySessionsLoading)) {
     return (
       <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 flex items-center justify-center">
         <style>{FONT_STYLE}</style>
@@ -1436,11 +1464,145 @@ export default function IronLabLogger() {
         </div>
       );
     }
-    // Non-blocking start screen with bottom banner
     const startNewWorkout = () => {
       const day = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()];
       logger.startWorkout(`Workout — ${day}`);
     };
+
+    // ---- Today's Sessions view ----
+    if (todaySessions.length > 0) {
+      const mergedExercises = todaySessions.flatMap(s =>
+        (s.workout_exercises ?? [])
+          .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+          .map(we => ({ ...we, sessionName: s.name }))
+      );
+      return (
+        <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
+          <style>{FONT_STYLE}</style>
+          <Backdrop />
+          <AppNav />
+          <div className="relative z-10 max-w-[1400px] mx-auto px-6 py-8 pb-36">
+            <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
+              <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">FORGE</span>
+              {todaySessions.length > 1 && (
+                <button
+                  onClick={() => setMergeSessions(m => !m)}
+                  className={`px-3 py-1.5 border font-mono text-[10px] uppercase tracking-wider transition-colors ${
+                    mergeSessions
+                      ? 'border-orange-500/60 text-orange-300 bg-orange-500/10'
+                      : 'border-stone-700 text-stone-500 hover:border-stone-600 hover:text-stone-300'
+                  }`}
+                >
+                  {mergeSessions ? '⊕ Merged' : '⊕ Merge Sessions'}
+                </button>
+              )}
+            </header>
+
+            <div className="text-[10px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-5">
+              {todaySessions.length} Session{todaySessions.length !== 1 ? 's' : ''} Completed Today
+            </div>
+
+            {mergeSessions ? (
+              <div className="border border-stone-800/60">
+                <div className="px-5 py-3 bg-stone-900/40 border-b border-stone-800/60">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-orange-400">Merged — All Today's Exercises</div>
+                  <div className="text-xs font-mono text-stone-500 mt-0.5">
+                    {mergedExercises.length} exercise{mergedExercises.length !== 1 ? 's' : ''} across {todaySessions.length} sessions
+                  </div>
+                </div>
+                {mergedExercises.map((we, i) => (
+                  <div key={`${we.id}-${i}`} className="flex items-center justify-between px-5 py-3.5 border-b border-stone-800/40 last:border-b-0">
+                    <div>
+                      <div className="text-sm font-mono text-stone-200">{we.exercises?.name ?? we.exercise_id}</div>
+                      <div className="text-[9px] font-mono text-stone-600 uppercase tracking-wider mt-0.5">{we.sessionName}</div>
+                    </div>
+                    <div className="text-[10px] font-mono text-stone-500">{we.sets?.length ?? 0} sets</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {todaySessions.map(s => {
+                  const exCount  = s.workout_exercises?.length ?? 0;
+                  const setCount = s.workout_exercises?.reduce((a, we) => a + (we.sets?.length ?? 0), 0) ?? 0;
+                  return (
+                    <Link
+                      key={s.id}
+                      to={`/logger?workoutId=${s.id}`}
+                      className="block border border-stone-800/60 hover:border-stone-700 hover:bg-stone-900/20 transition-colors no-underline p-5"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="font-anton text-xl uppercase text-stone-100">{s.name}</div>
+                          <div className="text-[10px] font-mono text-stone-500 mt-1">
+                            <span className="text-green-400">✓</span>
+                            {' '}Completed {new Date(s.completed_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            {' · '}{exCount} exercise{exCount !== 1 ? 's' : ''}
+                            {' · '}{setCount} sets
+                          </div>
+                        </div>
+                        <svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-stone-600 shrink-0 mt-1">
+                          <path d="M5 2l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </div>
+                      {s.workout_exercises && s.workout_exercises.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-1.5">
+                          {s.workout_exercises.slice(0, 5).map(we => (
+                            <span key={we.id} className="px-2 py-0.5 bg-stone-900 border border-stone-800/60 text-[9px] font-mono text-stone-500 uppercase tracking-wider">
+                              {we.exercises?.name ?? we.exercise_id}
+                            </span>
+                          ))}
+                          {s.workout_exercises.length > 5 && (
+                            <span className="px-2 py-0.5 text-[9px] font-mono text-stone-600">+{s.workout_exercises.length - 5} more</span>
+                          )}
+                        </div>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="fixed bottom-0 left-0 right-0 z-40 bg-stone-950 border-t border-stone-800 px-6 py-4 flex items-center justify-between gap-4">
+            <span className="font-mono text-xs text-stone-500 uppercase tracking-wider hidden sm:block">Add another session today</span>
+            <div className="flex gap-3 ml-auto">
+              <button
+                onClick={() => { loadPastWorkouts(); setShowPastSessions(true); }}
+                className="px-5 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
+              >Past Sessions</button>
+              <button
+                onClick={() => setShowLoadTemplate(true)}
+                className="px-5 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
+              >Load Template</button>
+              <button
+                onClick={startNewWorkout}
+                className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors"
+              >+ New Session</button>
+            </div>
+          </div>
+
+          {showLoadTemplate && (
+            <LoadTemplatePicker
+              templates={workoutTemplates.templates}
+              loading={workoutTemplates.loading}
+              onLoad={handleLoadTemplate}
+              onClose={() => setShowLoadTemplate(false)}
+              onDelete={workoutTemplates.deleteTemplate}
+            />
+          )}
+          {showPastSessions && (
+            <PastSessionsPicker
+              workouts={pastWorkouts}
+              loading={pastWorkoutsLoading}
+              onClose={() => setShowPastSessions(false)}
+            />
+          )}
+        </div>
+      );
+    }
+
+    // ---- Non-blocking start screen with bottom banner ----
     return (
       <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
         <style>{FONT_STYLE}</style>
@@ -1643,18 +1805,18 @@ export default function IronLabLogger() {
             />
           </div>
 
-          {/* CENTER — timer (hidden for completed today and view-by-id) */}
-          {!workoutId && !isCompletedToday && (
+          {/* CENTER — timer (hidden when viewing a specific past workout) */}
+          {!workoutId && (
             <div className="flex flex-col items-center">
               <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono">Session</div>
               <div className="font-anton text-4xl tabular-nums text-orange-400 leading-tight">{mins}:{secs}</div>
             </div>
           )}
-          {(workoutId || isCompletedToday) && <div />}
+          {workoutId && <div />}
 
           {/* RIGHT — template buttons + reset + finish */}
           <div className="flex items-center gap-2 justify-end flex-wrap">
-            {!workoutId && !isCompletedToday && (
+            {!workoutId && (
               <button
                 onClick={() => setShowLoadTemplate(true)}
                 className="hidden sm:block px-3 py-1.5 border border-stone-700 text-stone-500 font-mono text-[10px] uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
@@ -1662,7 +1824,7 @@ export default function IronLabLogger() {
                 Templates
               </button>
             )}
-            {!workoutId && !isCompletedToday && logger.exercises.length > 0 && (
+            {!workoutId && logger.exercises.length > 0 && (
               <button
                 onClick={() => setShowSaveTemplate(true)}
                 className="hidden md:block px-3 py-1.5 border border-stone-700 text-stone-500 font-mono text-[10px] uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
@@ -1671,7 +1833,7 @@ export default function IronLabLogger() {
               </button>
             )}
             {/* Reset with inline confirm */}
-            {!workoutId && !isCompletedToday && !resetConfirm && (
+            {!workoutId && !resetConfirm && (
               <button
                 onClick={() => setResetConfirm(true)}
                 className="px-3 py-1.5 border border-stone-700 text-stone-500 font-mono text-[10px] uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-400 transition-colors"
@@ -1680,7 +1842,7 @@ export default function IronLabLogger() {
                 ↺ Reset Timer
               </button>
             )}
-            {!workoutId && !isCompletedToday && resetConfirm && (
+            {!workoutId && resetConfirm && (
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-mono text-[10px] text-stone-400 uppercase tracking-wider whitespace-nowrap">
                   Restart timer? Sets stay —
@@ -1707,21 +1869,6 @@ export default function IronLabLogger() {
               >
                 ← Dashboard
               </button>
-            ) : isCompletedToday ? (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => { loadPastWorkouts(); setShowPastSessions(true); }}
-                  className="px-3 py-2 border border-stone-700 text-stone-400 font-mono text-[10px] uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
-                >
-                  Past Sessions
-                </button>
-                <button
-                  onClick={() => { const day = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date().getDay()]; logger.startWorkout(`Workout — ${day}`); }}
-                  className="px-4 py-2 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors"
-                >
-                  + New Session
-                </button>
-              </div>
             ) : (
               <button
                 onClick={handleComplete}
@@ -1732,19 +1879,6 @@ export default function IronLabLogger() {
             )}
           </div>
         </header>
-
-        {/* COMPLETED TODAY BANNER */}
-        {isCompletedToday && (
-          <div className="mb-6 px-5 py-4 border border-green-500/30 bg-green-500/5 flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <div className="text-[10px] font-mono uppercase tracking-wider text-green-400">✓ Session Complete</div>
-              <div className="text-xs text-stone-400 font-mono mt-0.5">
-                {logger.workout.name} · finished at {new Date(logger.workout.completed_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-              </div>
-            </div>
-            <div className="text-[10px] font-mono text-stone-600 uppercase tracking-wider">Read-only view</div>
-          </div>
-        )}
 
         {/* STATS BAR */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-0 mb-8 border border-stone-800/60 bg-stone-950/40">

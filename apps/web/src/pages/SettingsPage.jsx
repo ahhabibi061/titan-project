@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useSession } from '../hooks/useSession';
 import { useProfileStore } from '../store/useProfileStore';
+import { useTheme, THEME_OPTIONS } from '../hooks/useTheme';
 
 // -------------------- DOMAIN --------------------
 const ACTIVITY_LEVELS = [
@@ -240,6 +241,7 @@ export default function SettingsPage() {
   const { session, user, loading: sessionLoading } = useSession();
   const storeProfile  = useProfileStore((s) => s.profile);
   const updateProfile = useProfileStore((s) => s.updateProfile);
+  const { theme, setTheme } = useTheme();
 
   // ---- Profile section ----
   const [displayName, setDisplayName]   = useState('');
@@ -855,6 +857,54 @@ export default function SettingsPage() {
                     </span>
                   </div>
                   <div className="text-[10px] font-mono text-stone-600 mt-1.5">To change, update your device timezone in system settings.</div>
+                </div>
+              </div>
+
+              {/* Theme */}
+              <div className="flex items-start justify-between py-4 gap-4">
+                <div className="flex-1">
+                  <div className="text-sm text-stone-100 mb-1" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>App Theme</div>
+                  <div className="text-xs text-stone-500 font-mono mb-4">Visual appearance. Orange accent stays in all themes.</div>
+                  <div className="flex flex-wrap gap-3">
+                    {THEME_OPTIONS.map(t => (
+                      <button
+                        key={t.id}
+                        onClick={() => setTheme(t.id)}
+                        className={`flex flex-col items-center gap-2 p-3 border transition-colors ${
+                          theme === t.id
+                            ? 'border-orange-500/60 bg-orange-500/5'
+                            : 'border-stone-800 hover:border-stone-700'
+                        }`}
+                      >
+                        {/* Mini preview swatch */}
+                        <div
+                          className="w-20 h-12 relative overflow-hidden"
+                          style={{ background: t.bg, border: `1px solid ${t.border}` }}
+                        >
+                          <div
+                            className="absolute top-1.5 left-1.5 right-1.5 h-2.5"
+                            style={{ background: t.card, border: `1px solid ${t.border}` }}
+                          />
+                          <div
+                            className="absolute bottom-2 left-1.5 w-6 h-1.5"
+                            style={{ background: '#ed7a2a' }}
+                          />
+                          <div
+                            className="absolute bottom-2 right-1.5 w-3 h-1.5"
+                            style={{ background: t.border }}
+                          />
+                        </div>
+                        <span className={`text-[9px] font-mono uppercase tracking-wider ${
+                          theme === t.id ? 'text-orange-300' : 'text-stone-500'
+                        }`}>
+                          {t.name}
+                        </span>
+                        {theme === t.id && (
+                          <div className="w-1 h-1 rounded-full bg-orange-400" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

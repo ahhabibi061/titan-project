@@ -1,0 +1,167 @@
+/* ============================================================
+   IRONLAB — Visual Themes
+   Dark   = default warm black (no overrides — this is the base)
+   Neutral = cool slate/GitHub-dark
+   Rose    = deep plum/violet
+   Orange accent stays in all themes per brand rules.
+   ============================================================ */
+
+/* ── NEUTRAL ──────────────────────────────────────────────── */
+
+[data-theme="neutral"] body,
+[data-theme="neutral"] .bg-\[\#0a0908\] {
+  background-color: #0d1117 !important;
+}
+
+[data-theme="neutral"] .bg-stone-950 {
+  background-color: rgb(13, 17, 23) !important;
+}
+[data-theme="neutral"] .bg-stone-950\/40 {
+  background-color: rgba(22, 27, 34, 0.4) !important;
+}
+[data-theme="neutral"] .bg-stone-950\/60 {
+  background-color: rgba(22, 27, 34, 0.6) !important;
+}
+[data-theme="neutral"] .bg-stone-950\/80 {
+  background-color: rgba(22, 27, 34, 0.8) !important;
+}
+[data-theme="neutral"] .bg-stone-950\/90 {
+  background-color: rgba(22, 27, 34, 0.9) !important;
+}
+[data-theme="neutral"] .bg-stone-950\/95 {
+  background-color: rgba(22, 27, 34, 0.95) !important;
+}
+[data-theme="neutral"] .bg-stone-950\/96 {
+  background-color: rgba(22, 27, 34, 0.96) !important;
+}
+[data-theme="neutral"] .bg-stone-900 {
+  background-color: rgb(22, 27, 34) !important;
+}
+[data-theme="neutral"] .bg-stone-900\/20 {
+  background-color: rgba(22, 27, 34, 0.2) !important;
+}
+[data-theme="neutral"] .bg-stone-900\/40 {
+  background-color: rgba(22, 27, 34, 0.4) !important;
+}
+[data-theme="neutral"] .bg-stone-900\/60 {
+  background-color: rgba(22, 27, 34, 0.6) !important;
+}
+[data-theme="neutral"] .bg-stone-900\/95 {
+  background-color: rgba(22, 27, 34, 0.95) !important;
+}
+
+[data-theme="neutral"] .border-stone-800,
+[data-theme="neutral"] .divide-stone-800\/60 > * {
+  border-color: rgb(48, 54, 61) !important;
+}
+[data-theme="neutral"] .border-stone-800\/40 {
+  border-color: rgba(48, 54, 61, 0.4) !important;
+}
+[data-theme="neutral"] .border-stone-800\/60 {
+  border-color: rgba(48, 54, 61, 0.6) !important;
+}
+[data-theme="neutral"] .border-stone-700 {
+  border-color: rgb(48, 54, 61) !important;
+}
+[data-theme="neutral"] .border-stone-700\/60 {
+  border-color: rgba(48, 54, 61, 0.6) !important;
+}
+[data-theme="neutral"] .border-stone-600 {
+  border-color: rgb(69, 77, 87) !important;
+}
+
+[data-theme="neutral"] .text-stone-100 { color: rgb(230, 237, 243) !important; }
+[data-theme="neutral"] .text-stone-200 { color: rgb(208, 215, 222) !important; }
+[data-theme="neutral"] .text-stone-300 { color: rgb(189, 193, 198) !important; }
+[data-theme="neutral"] .text-stone-400 { color: rgb(155, 163, 174) !important; }
+[data-theme="neutral"] .text-stone-500 { color: rgb(110, 118, 129) !important; }
+[data-theme="neutral"] .text-stone-600 { color: rgb(86, 92, 100) !important;  }
+[data-theme="neutral"] .text-stone-700 { color: rgb(48, 54, 61) !important;   }
+[data-theme="neutral"] .text-stone-950 { color: rgb(13, 17, 23) !important;   }
+
+[data-theme="neutral"] .hover\:bg-stone-900\/40:hover {
+  background-color: rgba(22, 27, 34, 0.4) !important;
+}
+[data-theme="neutral"] .hover\:bg-stone-900\/20:hover {
+  background-color: rgba(22, 27, 34, 0.2) !important;
+}
+
+/* ── ROSE (plum/violet) ───────────────────────────────────── */
+
+[data-theme="rose"] body,
+[data-theme="rose"] .bg-\[\#0a0908\] {
+  background-color: #0e0a1a !important;
+}
+
+[data-theme="rose"] .bg-stone-950 {
+  background-color: rgb(14, 10, 26) !important;
+}
+[data-theme="rose"] .bg-stone-950\/40 {
+  background-color: rgba(26, 18, 40, 0.4) !important;
+}
+[data-theme="rose"] .bg-stone-950\/60 {
+  background-color: rgba(26, 18, 40, 0.6) !important;
+}
+[data-theme="rose"] .bg-stone-950\/80 {
+  background-color: rgba(26, 18, 40, 0.8) !important;
+}
+[data-theme="rose"] .bg-stone-950\/90 {
+  background-color: rgba(26, 18, 40, 0.9) !important;
+}
+[data-theme="rose"] .bg-stone-950\/95 {
+  background-color: rgba(26, 18, 40, 0.95) !important;
+}
+[data-theme="rose"] .bg-stone-950\/96 {
+  background-color: rgba(26, 18, 40, 0.96) !important;
+}
+[data-theme="rose"] .bg-stone-900 {
+  background-color: rgb(26, 18, 40) !important;
+}
+[data-theme="rose"] .bg-stone-900\/20 {
+  background-color: rgba(26, 18, 40, 0.2) !important;
+}
+[data-theme="rose"] .bg-stone-900\/40 {
+  background-color: rgba(26, 18, 40, 0.4) !important;
+}
+[data-theme="rose"] .bg-stone-900\/60 {
+  background-color: rgba(26, 18, 40, 0.6) !important;
+}
+[data-theme="rose"] .bg-stone-900\/95 {
+  background-color: rgba(26, 18, 40, 0.95) !important;
+}
+
+[data-theme="rose"] .border-stone-800,
+[data-theme="rose"] .divide-stone-800\/60 > * {
+  border-color: rgb(61, 45, 92) !important;
+}
+[data-theme="rose"] .border-stone-800\/40 {
+  border-color: rgba(61, 45, 92, 0.4) !important;
+}
+[data-theme="rose"] .border-stone-800\/60 {
+  border-color: rgba(61, 45, 92, 0.6) !important;
+}
+[data-theme="rose"] .border-stone-700 {
+  border-color: rgb(61, 45, 92) !important;
+}
+[data-theme="rose"] .border-stone-700\/60 {
+  border-color: rgba(61, 45, 92, 0.6) !important;
+}
+[data-theme="rose"] .border-stone-600 {
+  border-color: rgb(80, 60, 116) !important;
+}
+
+[data-theme="rose"] .text-stone-100 { color: rgb(237, 233, 249) !important; }
+[data-theme="rose"] .text-stone-200 { color: rgb(216, 210, 240) !important; }
+[data-theme="rose"] .text-stone-300 { color: rgb(192, 183, 225) !important; }
+[data-theme="rose"] .text-stone-400 { color: rgb(160, 148, 204) !important; }
+[data-theme="rose"] .text-stone-500 { color: rgb(124, 112, 168) !important; }
+[data-theme="rose"] .text-stone-600 { color: rgb(96, 85, 136) !important;  }
+[data-theme="rose"] .text-stone-700 { color: rgb(61, 45, 92) !important;   }
+[data-theme="rose"] .text-stone-950 { color: rgb(14, 10, 26) !important;   }
+
+[data-theme="rose"] .hover\:bg-stone-900\/40:hover {
+  background-color: rgba(26, 18, 40, 0.4) !important;
+}
+[data-theme="rose"] .hover\:bg-stone-900\/20:hover {
+  background-color: rgba(26, 18, 40, 0.2) !important;
+}

@@ -174,13 +174,12 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
       .eq('user_id', userId)
       .eq('scheduled_date', today)
       .is('completed_at', null)
-      .limit(1)
       .maybeSingle();
 
     if (err) { console.error('[useLogger] loadTodayWorkout error:', err); return; }
     if (!w)  { console.log('[useLogger] no in-progress workout today'); return; }
 
-    console.log('[useLogger] resuming workout:', w.id, w.name);
+    console.log('[useLogger] resuming in-progress workout:', w.id, w.name);
     setWorkout(w);
     workoutRef.current = w;
     await loadExercises(w.id);
