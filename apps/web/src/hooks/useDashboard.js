@@ -81,6 +81,9 @@ export function useDashboard(userId) {
         const sunday  = new Date(monday); sunday.setDate(monday.getDate() + 6);
         const weekStart = toDateStr(monday);
         const weekEnd   = toDateStr(sunday);
+        // Local midnight ISO boundaries for timestamptz nutrition_logs.logged_at
+        const weekStartISO = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate()).toISOString();
+        const weekEndISO   = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + 1).toISOString();
 
         const fourteenDaysAgo = new Date(today); fourteenDaysAgo.setDate(today.getDate() - 13);
         const fourteenDaysAgoStr = toDateStr(fourteenDaysAgo);
@@ -139,8 +142,8 @@ export function useDashboard(userId) {
           supabase.from('nutrition_logs')
             .select('kcal, protein_g, logged_at')
             .eq('user_id', userId)
-            .gte('logged_at', weekStart)
-            .lte('logged_at', weekEnd),
+            .gte('logged_at', weekStartISO)
+            .lt('logged_at', weekEndISO),
 
           // 6. Workouts this week — adherence + set count
           supabase.from('workouts')
@@ -291,7 +294,8 @@ export function useDashboard(userId) {
         const kcalByDay    = {};
         const proteinByDay = {};
         nlWeek.forEach(r => {
-          const d = r.logged_at.split('T')[0];
+          const _ld = new Date(r.logged_at);
+          const d = `${_ld.getFullYear()}-${String(_ld.getMonth()+1).padStart(2,'0')}-${String(_ld.getDate()).padStart(2,'0')}`;
           kcalByDay[d]    = (kcalByDay[d]    ?? 0) + (r.kcal      ?? 0);
           proteinByDay[d] = (proteinByDay[d] ?? 0) + (r.protein_g ?? 0);
         });
