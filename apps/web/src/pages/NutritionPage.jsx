@@ -901,14 +901,16 @@ export default function VisionNutrition() {
   const remaining   = Math.max(0, tgt.kcal - totals.kcal);
   const kcalPct     = Math.round((remaining / Math.max(tgt.kcal, 1)) * 100);
 
+  // Each macro's calorie contribution as % of the daily calorie TARGET
+  // e.g. 50g protein = 200 cal, target 2000 cal → protein shows 10%
   const macroSplit = useMemo(() => {
-    const t = totals.kcal || 1;
+    const t = tgt.kcal || 1;
     return {
       p: Math.round((totals.protein * 4 / t) * 100),
       c: Math.round((totals.carbs   * 4 / t) * 100),
       f: Math.round((totals.fat     * 9 / t) * 100),
     };
-  }, [totals]);
+  }, [totals, tgt.kcal]);
 
   return (
     <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
@@ -1049,7 +1051,7 @@ export default function VisionNutrition() {
           >
             <div className="flex items-baseline justify-between mb-5">
               <h2 className="font-anton text-xl uppercase tracking-tight text-stone-100">Macros</h2>
-              <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">target split</span>
+              <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">% of cal target</span>
             </div>
             {loading ? (
               <div className="space-y-5">

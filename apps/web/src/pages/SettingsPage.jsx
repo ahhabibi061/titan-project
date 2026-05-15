@@ -44,6 +44,7 @@ const DEFAULT_SETTINGS = {
   distance_unit:  'km',
   coach_alerts:   true,
   eat_back_calories: false,
+  macro_mode:     'auto',
 };
 
 // -------------------- UI PRIMITIVES --------------------
@@ -257,6 +258,15 @@ export default function SettingsPage() {
   const [bioSaving,  setBioSaving]  = useState(false);
   const [bioStatus,  setBioStatus]  = useState({ error: null, success: null });
 
+  // ---- Custom macro targets ----
+  const [macroMode,        setMacroMode]        = useState('auto'); // 'auto' | 'custom'
+  const [customKcal,       setCustomKcal]       = useState('');
+  const [customProteinPct, setCustomProteinPct] = useState('');
+  const [customCarbsPct,   setCustomCarbsPct]   = useState('');
+  const [customFatPct,     setCustomFatPct]     = useState('');
+  const [macroSaving,      setMacroSaving]      = useState(false);
+  const [macroStatus,      setMacroStatus]      = useState({ error: null, success: null });
+
   // ---- Preferences section ----
   const [prefs, setPrefs]           = useState(DEFAULT_SETTINGS);
   const [prefsSaving, setPrefsSaving] = useState(false);
@@ -301,6 +311,14 @@ export default function SettingsPage() {
     setCreatedAt(storeProfile.created_at ? new Date(storeProfile.created_at) : null);
     const merged = { ...DEFAULT_SETTINGS, ...(storeProfile.settings ?? {}) };
     setPrefs(merged);
+    setMacroMode(merged.macro_mode ?? 'auto');
+    const cm = storeProfile.current_macros;
+    if (cm && cm.kcal > 0) {
+      setCustomKcal(String(cm.kcal));
+      setCustomProteinPct(String(Math.round(cm.protein * 4 / cm.kcal * 100)));
+      setCustomCarbsPct(String(Math.round(cm.carbs   * 4 / cm.kcal * 100)));
+      setCustomFatPct(String(Math.round(cm.fat       * 9 / cm.kcal * 100)));
+    }
     setUnitDraft({
       weight_unit:   merged.weight_unit   ?? 'kg',
       height_unit:   merged.height_unit   ?? 'cm',
@@ -335,6 +353,20 @@ export default function SettingsPage() {
     activity,
     goal,
   }), [weight, height, age, sex, activity, goal]);
+
+  // Live gram preview for custom macro mode
+  const customGrams = useMemo(() => {
+    const kcal = parseFloat(customKcal) || 0;
+    const p    = parseFloat(customProteinPct) || 0;
+    const c    = parseFloat(customCarbsPct)   || 0;
+    const f    = parseFloat(customFatPct)     || 0;
+    return {
+      protein: Math.round(kcal * p / 100 / 4),
+      carbs:   Math.round(kcal * c / 100 / 4),
+      fat:     Math.round(kcal * f / 100 / 9),
+      pctSum:  Math.round(p + c + f),
+    };
+  }, [customKcal, customProteinPct, customCarbsPct, customFatPct]);
 
   // ---- Handlers ----
   const saveProfile = async () => {
@@ -376,6 +408,50 @@ export default function SettingsPage() {
     } else {
       updateProfile(bioPayload);
       setBioStatus({ error: null, success: 'Biometrics saved. Macros updated.' });
+    }
+  };
+
+  const saveMacros = async () => {
+    setMacroSaving(true);
+    setMacroStatus({ error: null, success: null });
+
+    let macrosToSave;
+    if (macroMode === 'auto') {
+      if (!macros) {
+        setMacroSaving(false);
+        setMacroStatus({ error: 'Fill in biometrics first to use auto mode.', success: null });
+        return;
+      }
+      macrosToSave = macros;
+    } else {
+      const kcal = parseFloat(customKcal) || 0;
+      const { pctSum, protein, carbs, fat } = customGrams;
+      if (kcal < 500 || kcal > 10000) {
+        setMacroSaving(false);
+        setMacroStatus({ error: 'Calories must be between 500 and 10,000.', success: null });
+        return;
+      }
+      if (pctSum < 99 || pctSum > 101) {
+        setMacroSaving(false);
+        setMacroStatus({ error: `Percentages must sum to 100% (currently ${pctSum}%).`, success: null });
+        return;
+      }
+      macrosToSave = { kcal: Math.round(kcal), protein, carbs, fat };
+    }
+
+    const newSettings = { ...prefs, macro_mode: macroMode };
+    const { error } = await supabase
+      .from('profiles')
+      .update({ current_macros: macrosToSave, settings: newSettings })
+      .eq('id', user.id);
+
+    setMacroSaving(false);
+    if (error) {
+      setMacroStatus({ error: error.message, success: null });
+    } else {
+      updateProfile({ current_macros: macrosToSave, settings: newSettings });
+      setPrefs(newSettings);
+      setMacroStatus({ error: null, success: 'Macro targets saved.' });
     }
   };
 
@@ -628,7 +704,114 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* ========== SECTION 3: PREFERENCES ========== */}
+          {/* ========== SECTION 3: MACRO TARGETS ========== */}
+          <section className="border border-stone-800/60 bg-stone-950/40 p-6 md:p-8">
+            <SectionHeader label="Macro Targets" />
+
+            {/* Mode toggle */}
+            <div className="mb-6">
+              <FieldLabel>Mode</FieldLabel>
+              <SegmentedControl
+                options={[
+                  { id: 'auto',   label: 'Auto — from biometrics' },
+                  { id: 'custom', label: 'Custom — I set my own' },
+                ]}
+                value={macroMode}
+                onChange={setMacroMode}
+              />
+            </div>
+
+            {macroMode === 'auto' ? (
+              <div>
+                <p className="text-xs font-mono text-stone-500 mb-4">
+                  Macros are calculated automatically from your height, weight, age, activity level, and goal.
+                  Update those in the Biometrics section above.
+                </p>
+                {macros && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <MacroStatCard label="Calories" value={macros.kcal}    unit="kcal / day" highlight />
+                    <MacroStatCard label="Protein"  value={macros.protein} unit="grams / day" />
+                    <MacroStatCard label="Carbs"    value={macros.carbs}   unit="grams / day" />
+                    <MacroStatCard label="Fat"      value={macros.fat}     unit="grams / day" />
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-5">
+                <p className="text-xs font-mono text-stone-500">
+                  Set your total daily calories and the % each macro contributes. Grams are calculated automatically.
+                </p>
+
+                {/* Total calories */}
+                <div className="max-w-xs">
+                  <FieldLabel>Total Daily Calories</FieldLabel>
+                  <NumberInput
+                    value={customKcal}
+                    onChange={e => setCustomKcal(e.target.value)}
+                    unit="kcal"
+                    min="500"
+                    max="10000"
+                  />
+                </div>
+
+                {/* Macro % inputs */}
+                <div className="grid grid-cols-3 gap-4">
+                  {[
+                    { label: 'Protein %', val: customProteinPct, set: setCustomProteinPct, cals: 4, color: '#ed7a2a' },
+                    { label: 'Carbs %',   val: customCarbsPct,   set: setCustomCarbsPct,   cals: 4, color: '#7eb6ff' },
+                    { label: 'Fat %',     val: customFatPct,     set: setCustomFatPct,     cals: 9, color: '#fbbf24' },
+                  ].map(m => (
+                    <div key={m.label}>
+                      <FieldLabel>{m.label}</FieldLabel>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={m.val}
+                          onChange={e => m.set(e.target.value)}
+                          min="0"
+                          max="100"
+                          className="w-full bg-stone-950/60 border border-stone-800 px-4 py-3 pr-8 text-stone-100 font-mono text-sm tabular-nums focus:outline-none focus:border-orange-500/60 transition-colors"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-500 font-mono text-xs">%</span>
+                      </div>
+                      {m.val && customKcal && (
+                        <div className="mt-1 text-[10px] font-mono tabular-nums" style={{ color: m.color }}>
+                          = {Math.round(parseFloat(customKcal) * parseFloat(m.val) / 100 / m.cals)}g
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Live sum indicator */}
+                <div className={`text-[10px] font-mono uppercase tracking-wider ${
+                  customGrams.pctSum === 100 ? 'text-green-400' :
+                  Math.abs(customGrams.pctSum - 100) <= 1 ? 'text-orange-300' : 'text-red-400'
+                }`}>
+                  {customGrams.pctSum === 0
+                    ? 'Enter percentages above — they must sum to 100%'
+                    : `Total: ${customGrams.pctSum}% ${customGrams.pctSum === 100 ? '✓' : `(need ${100 - customGrams.pctSum > 0 ? '+' : ''}${100 - customGrams.pctSum}%)`}`}
+                </div>
+
+                {/* Preview */}
+                {customKcal && customGrams.pctSum >= 99 && customGrams.pctSum <= 101 && (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <MacroStatCard label="Calories" value={parseFloat(customKcal) || 0} unit="kcal / day" highlight />
+                    <MacroStatCard label="Protein"  value={customGrams.protein} unit="grams / day" />
+                    <MacroStatCard label="Carbs"    value={customGrams.carbs}   unit="grams / day" />
+                    <MacroStatCard label="Fat"      value={customGrams.fat}     unit="grams / day" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-4 mt-6">
+              <SaveButton onClick={saveMacros} saving={macroSaving} label="Save Macro Targets" />
+              <StatusMessage {...macroStatus} />
+            </div>
+          </section>
+
+          {/* ========== SECTION 4: PREFERENCES ========== */}
           <section className="border border-stone-800/60 bg-stone-950/40 p-6 md:p-8">
             <SectionHeader label="Preferences" />
 
