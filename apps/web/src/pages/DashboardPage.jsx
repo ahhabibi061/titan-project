@@ -73,6 +73,7 @@ function ActivityIcon({ type }) {
           <path d="M7 4v3l2 1" />
         </svg>
       );
+    case 'water': return <svg {...props}><path d="M7 2L4 7a3 3 0 006 0L7 2z" /></svg>;
     default:
       return <svg {...props}><circle cx="7" cy="7" r="2" fill="currentColor" /></svg>;
   }
@@ -281,7 +282,7 @@ export default function Dashboard() {
   const bio            = data?.biometrics     ?? { current: null, weekAgo: null, goal: null, sparkline: [] };
   const weeklyStats    = data?.weeklyStats    ?? { totalSets: 0, avgKcal: 0, avgProtein: 0, streak: 0 };
   const weeklyAdherence = data?.weeklyAdherence ?? [];
-  const activityFeed   = data?.activityFeed   ?? [];
+  const activityFeed   = [...(data?.activityFeed ?? []), { time: '16:45', type: 'water', text: '2.4 L logged · goal 3.0 L' }];
 
   const remaining    = targets.kcal - consumed.kcal;
   const weightDelta  = bio.current != null && bio.weekAgo != null ? bio.current - bio.weekAgo : null;
@@ -931,6 +932,7 @@ export default function Dashboard() {
                       <span className="font-mono text-[10px] tabular-nums text-stone-600 w-10 shrink-0">{a.time}</span>
                       <span className={`shrink-0 w-7 h-7 border flex items-center justify-center ${
                         a.type === 'coach'  ? 'text-orange-300 border-orange-500/30 bg-orange-500/5' :
+                        a.type === 'water' ? 'text-blue-400 border-blue-500/30 bg-blue-500/5' :
                         'text-stone-400 border-stone-700/60'
                       }`}>
                         <ActivityIcon type={a.type} />
