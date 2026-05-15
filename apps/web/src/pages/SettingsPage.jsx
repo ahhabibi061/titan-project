@@ -887,7 +887,7 @@ export default function SettingsPage() {
                           />
                           <div
                             className="absolute bottom-2 left-1.5 w-6 h-1.5"
-                            style={{ background: '#ed7a2a' }}
+                            style={{ background: t.accent }}
                           />
                           <div
                             className="absolute bottom-2 right-1.5 w-3 h-1.5"

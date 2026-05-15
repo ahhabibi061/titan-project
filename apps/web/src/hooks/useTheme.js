@@ -9,20 +9,26 @@ export const THEME_OPTIONS = [
     bg: '#0a0908',
     card: '#1c1917',
     border: '#292524',
+    accent: '#ed7a2a',  /* orange */
+    textOnAccent: '#0a0908',
   },
   {
     id: 'neutral',
     name: 'Neutral',
-    bg: '#0d1117',
-    card: '#161b22',
-    border: '#30363d',
+    bg: '#f8fafc',
+    card: '#e2e8f0',
+    border: '#cbd5e1',
+    accent: '#0ea5e9',  /* sky-blue */
+    textOnAccent: '#ffffff',
   },
   {
     id: 'rose',
     name: 'Rose',
-    bg: '#0e0a1a',
-    card: '#1a1228',
-    border: '#3d2d5c',
+    bg: '#fdf2f8',
+    card: '#fce7f3',
+    border: '#fbcfe8',
+    accent: '#ec4899',  /* pink-500 */
+    textOnAccent: '#ffffff',
   },
 ];
 
