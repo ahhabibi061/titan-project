@@ -101,13 +101,12 @@ export function useDashboard(userId) {
             .lt('logged_at', tomorrowStr)
             .order('logged_at', { ascending: true }),
 
-          // 2. Today's workout — match by created_at so Logger workouts (no scheduled_date) appear
+          // 2. Today's workout — query by scheduled_date (avoids needing created_at column)
           supabase.from('workouts')
-            .select('id, name, created_at, completed_at, calories_burned, workout_exercises(id, exercises(name), sets(id, reps))')
+            .select('id, name, completed_at, calories_burned, workout_exercises(id, exercises(name), sets(id, reps))')
             .eq('user_id', userId)
-            .gte('created_at', todayStr)
-            .lt('created_at', tomorrowStr)
-            .order('created_at', { ascending: false })
+            .eq('scheduled_date', todayStr)
+            .order('completed_at', { ascending: false, nullsFirst: false })
             .limit(1)
             .maybeSingle(),
 
@@ -252,12 +251,8 @@ export function useDashboard(userId) {
           exerciseCount:    exCount,
           setCount:         allWeSets.length,
           totalReps:        allWeSets.reduce((s, set) => s + (set.reps ?? 0), 0),
-          estimatedMinutes: workoutRaw.completed_at
-            ? Math.round((new Date(workoutRaw.completed_at) - new Date(workoutRaw.created_at)) / 60000)
-            : exCount * 12,
-          duration:         workoutRaw.completed_at
-            ? `${Math.round((new Date(workoutRaw.completed_at) - new Date(workoutRaw.created_at)) / 60000)} min`
-            : null,
+          estimatedMinutes: exCount * 12,
+          duration:         null,
         } : null;
 
         // ── Coach recommendation ──

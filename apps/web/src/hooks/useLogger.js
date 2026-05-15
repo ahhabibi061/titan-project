@@ -165,17 +165,14 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
   }
 
   async function loadTodayWorkout() {
-    const today    = new Date().toISOString().split('T')[0];
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
 
     const { data: w, error: err } = await supabase
       .from('workouts')
-      .select('id, name, created_at, completed_at, calories_burned')
+      .select('id, name, completed_at, calories_burned')
       .eq('user_id', userId)
-      .gte('created_at', today)
-      .lt('created_at', tomorrow)
+      .eq('scheduled_date', today)
       .is('completed_at', null)
-      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
@@ -192,7 +189,7 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
   async function loadWorkoutById(id) {
     const { data: w, error: err } = await supabase
       .from('workouts')
-      .select('id, name, created_at, completed_at, calories_burned')
+      .select('id, name, completed_at, calories_burned')
       .eq('id', id)
       .eq('user_id', userId)
       .single();
@@ -272,13 +269,15 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
     const { data, error: err } = await supabase
       .from('workouts')
       .insert({ user_id: uid, name, scheduled_date: new Date().toISOString().split('T')[0] })
-      .select('id, name, created_at, completed_at, calories_burned')
+      .select('id, name, completed_at, calories_burned')
       .single();
 
     if (err) { console.error('[useLogger] workouts insert error:', err); setError('Failed to start workout.'); return; }
     console.log('[useLogger] workout created:', data.id);
-    setWorkout(data);
-    workoutRef.current = data;
+    // Inject local created_at so the Forge timer ticks even if column is missing in DB
+    const withStart = { ...data, created_at: new Date().toISOString() };
+    setWorkout(withStart);
+    workoutRef.current = withStart;
     setExercises([]);
   }, []);
 

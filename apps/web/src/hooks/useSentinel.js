@@ -148,13 +148,18 @@ export function useSentinel(userId) {
     };
     setMeals(prev => [...prev, optimistic]);
 
-    const payload = {
+    // Base payload — columns guaranteed to exist in all schema versions
+    const basePayload = {
       user_id: userId, logged_at: now, meal_name: safeName,
       kcal: safeKcal, protein_g: safeProtein, carbs_g: safeCarbs, fat_g: safeFat,
       source, confidence: 100,
-      meal_type: meal_type ?? 'uncategorized',
-      serving_amount: serving_amount ?? null,
-      serving_unit:   serving_unit   ?? null,
+    };
+    // Extended payload — requires migration 012 to have been run in Supabase
+    const extPayload = {
+      ...basePayload,
+      meal_type:       meal_type ?? 'uncategorized',
+      serving_amount:  serving_amount  ?? null,
+      serving_unit:    serving_unit    ?? null,
       fiber_g:         fiber_g         ?? null,
       sugar_g:         sugar_g         ?? null,
       sodium_mg:       sodium_mg       ?? null,
@@ -166,18 +171,24 @@ export function useSentinel(userId) {
       calcium_mg:      calcium_mg      ?? null,
       iron_mg:         iron_mg         ?? null,
     };
-    console.log('[useSentinel] addMeal insert:', payload);
 
-    const { data, error } = await supabase
+    // Try extended insert first; fall back to base if schema columns are missing
+    let data, error;
+    ({ data, error } = await supabase
       .from('nutrition_logs')
-      .insert(payload)
-      .select(`
-        id, logged_at, meal_name, kcal, protein_g, carbs_g, fat_g, source, meal_type,
-        serving_amount, serving_unit,
-        fiber_g, sugar_g, sodium_mg, potassium_mg, cholesterol_mg, saturated_fat_g,
-        vitamin_a_iu, vitamin_c_mg, calcium_mg, iron_mg
-      `)
-      .single();
+      .insert(extPayload)
+      .select('id, logged_at, meal_name, kcal, protein_g, carbs_g, fat_g, source')
+      .single());
+
+    if (error) {
+      // Column doesn't exist yet — retry with base-only payload
+      console.warn('[useSentinel] extended insert failed, retrying with base columns:', error.message);
+      ({ data, error } = await supabase
+        .from('nutrition_logs')
+        .insert(basePayload)
+        .select('id, logged_at, meal_name, kcal, protein_g, carbs_g, fat_g, source')
+        .single());
+    }
 
     if (error) {
       console.error('[useSentinel] addMeal error:', error);
