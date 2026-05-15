@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import Model from 'react-body-highlighter';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useSession } from '../hooks/useSession';
 import { useDashboard } from '../hooks/useDashboard';
@@ -33,7 +34,19 @@ const MUSCLE_DATA = {
   },
 };
 
-// -------------------- MUSCLE MAP --------------------
+const MOCK_GROWTH_MAP = (() => {
+  const m = {};
+  for (const [key, vol] of Object.entries(MUSCLE_DATA.weeklyVolume)) {
+    const pct = MUSCLE_DATA.progression[key] ?? 0;
+    if (pct === 0) continue;
+    const status = pct > 10 ? 'pr' : pct > 0 ? 'improved' : pct > -10 ? 'regressed' : 'dropped';
+    m[key] = { status, growthPct: Math.round(pct * 10) / 10, currentVol: Math.round(vol), prevVol: Math.round(vol / (1 + pct / 100)) };
+  }
+  return m;
+})();
+const MOCK_RECOVERY_MAP = {};
+
+// ================== BODY MAP (react-body-highlighter) ==================
 const MUSCLES = {
   chest: 'Chest', front_delts: 'Front Delts', side_delts: 'Side Delts',
   rear_delts: 'Rear Delts', biceps: 'Biceps', triceps: 'Triceps',
@@ -42,101 +55,178 @@ const MUSCLES = {
   quads: 'Quads', hamstrings: 'Hamstrings', calves: 'Calves',
 };
 
-function volumeToFill(volume, max) {
-  if (!volume || volume <= 0) return 'rgba(255,255,255,0.025)';
-  const t = Math.min(volume / Math.max(max, 1), 1);
-  const stops = [
-    { t: 0.00, c: [44, 36, 30] },
-    { t: 0.18, c: [98, 42, 18] },
-    { t: 0.45, c: [186, 74, 28] },
-    { t: 0.72, c: [240, 110, 38] },
-    { t: 1.00, c: [255, 78, 38] },
-  ];
-  for (let i = 0; i < stops.length - 1; i++) {
-    if (t <= stops[i + 1].t) {
-      const local = (t - stops[i].t) / (stops[i + 1].t - stops[i].t || 1);
-      const r = Math.round(stops[i].c[0] + (stops[i + 1].c[0] - stops[i].c[0]) * local);
-      const g = Math.round(stops[i].c[1] + (stops[i + 1].c[1] - stops[i].c[1]) * local);
-      const b = Math.round(stops[i].c[2] + (stops[i + 1].c[2] - stops[i].c[2]) * local);
-      return `rgb(${r},${g},${b})`;
-    }
-  }
-  const last = stops[stops.length - 1].c;
-  return `rgb(${last[0]},${last[1]},${last[2]})`;
+const MUSCLE_MAP = {
+  chest: 'chest', front_delts: 'front-deltoids', rear_delts: 'back-deltoids',
+  biceps: 'biceps', triceps: 'triceps', forearms: 'forearm',
+  abs: 'abs', obliques: 'obliques', traps: 'trapezius',
+  lats: 'upper-back', lower_back: 'lower-back', glutes: 'gluteal',
+  quads: 'quadriceps', hamstrings: 'hamstring', calves: 'calves',
+};
+
+const MUSCLE_DISPLAY_NAMES = {
+  'chest': 'Pectoralis Major', 'front-deltoids': 'Anterior Deltoids',
+  'back-deltoids': 'Posterior Deltoids', 'biceps': 'Biceps Brachii',
+  'triceps': 'Triceps Brachii', 'forearm': 'Forearm Flexors',
+  'abs': 'Rectus Abdominis', 'obliques': 'Obliques', 'trapezius': 'Trapezius',
+  'upper-back': 'Latissimus Dorsi', 'lower-back': 'Erector Spinae',
+  'gluteal': 'Gluteus Maximus', 'quadriceps': 'Quadriceps',
+  'hamstring': 'Hamstrings', 'calves': 'Gastrocnemius',
+};
+
+const MUSCLE_WINDOWS = {
+  'chest': 72, 'front-deltoids': 48, 'back-deltoids': 48,
+  'biceps': 48, 'triceps': 48, 'forearm': 36,
+  'abs': 24, 'obliques': 24, 'trapezius': 36,
+  'upper-back': 72, 'lower-back': 72, 'gluteal': 72,
+  'quadriceps': 72, 'hamstring': 72, 'calves': 36,
+};
+
+const RECOVERY_HIGHLIGHTED = ['#4ade80', '#a3e635', '#fbbf24', '#f87171'];
+const GROWTH_HIGHLIGHTED   = ['#fb923c', '#4ade80', '#60a5fa', '#fbbf24', '#f87171'];
+
+const fmt = (n) => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+function getRecoveryFreq(status) {
+  return { ready: 1, almost: 2, partial: 3, resting: 4 }[status] ?? null;
+}
+function getGrowthFreq(status) {
+  return { pr: 1, improved: 2, first: 3, regressed: 4, dropped: 5 }[status] ?? null;
 }
 
-const FRONT_PATHS = {
-  chest: 'M 76,96 Q 90,88 108,90 L 108,138 Q 96,144 84,140 Q 76,134 74,124 Z M 144,96 Q 130,88 112,90 L 112,138 Q 124,144 136,140 Q 144,134 146,124 Z',
-  front_delts: 'M 64,86 Q 56,88 52,102 Q 50,116 56,124 Q 66,124 74,118 Q 76,104 74,94 Q 70,86 64,86 Z M 156,86 Q 164,88 168,102 Q 170,116 164,124 Q 154,124 146,118 Q 144,104 146,94 Q 150,86 156,86 Z',
-  side_delts: 'M 50,100 Q 42,104 40,118 Q 40,128 46,134 Q 52,132 56,124 Q 50,116 52,102 Z M 170,100 Q 178,104 180,118 Q 180,128 174,134 Q 168,132 164,124 Q 170,116 168,102 Z',
-  traps: 'M 102,68 Q 98,76 100,84 Q 106,86 110,84 L 110,68 Z M 118,68 Q 122,76 120,84 Q 114,86 110,84 L 110,68 Z',
-  biceps: 'M 46,128 Q 38,134 38,158 Q 42,176 50,178 Q 56,176 56,156 Q 56,138 52,130 Z M 174,128 Q 182,134 182,158 Q 178,176 170,178 Q 164,176 164,156 Q 164,138 168,130 Z',
-  forearms: 'M 38,182 Q 32,196 32,222 Q 36,238 44,236 Q 50,234 52,218 Q 52,200 50,184 Z M 182,182 Q 188,196 188,222 Q 184,238 176,236 Q 170,234 168,218 Q 168,200 170,184 Z',
-  abs: 'M 96,144 L 124,144 L 124,160 L 96,160 Z M 96,164 L 124,164 L 124,180 L 96,180 Z M 96,184 L 124,184 L 124,200 L 96,200 Z M 96,204 L 124,204 L 124,220 L 96,220 Z M 96,224 L 124,224 L 124,238 L 96,238 Z',
-  obliques: 'M 78,150 Q 76,180 86,224 L 96,222 L 96,148 Q 86,146 78,150 Z M 142,150 Q 144,180 134,224 L 124,222 L 124,148 Q 134,146 142,150 Z',
-  quads: 'M 78,250 Q 70,290 76,348 L 104,348 L 104,250 Q 90,246 78,250 Z M 142,250 Q 150,290 144,348 L 116,348 L 116,250 Q 130,246 142,250 Z',
-  calves: 'M 84,388 Q 80,408 84,438 L 102,438 L 102,388 Z M 136,388 Q 140,408 136,438 L 118,438 L 118,388 Z',
-};
+function buildModelData(recoveryMap, growthMap, mode) {
+  const slugFreq = {};
+  const map = mode === 'recovery' ? recoveryMap : growthMap;
+  for (const [key, val] of Object.entries(map)) {
+    const slug = MUSCLE_MAP[key];
+    if (!slug) continue;
+    const freq = mode === 'recovery'
+      ? (val.status && val.status !== 'no_data' ? getRecoveryFreq(val.status) : null)
+      : (val.status ? getGrowthFreq(val.status) : null);
+    if (freq === null) continue;
+    if (!slugFreq[slug] || freq < slugFreq[slug]) slugFreq[slug] = freq;
+  }
+  return Object.entries(slugFreq).map(([slug, frequency]) => ({ name: slug, muscles: [slug], frequency }));
+}
 
-const BACK_PATHS = {
-  traps: 'M 110,72 L 90,86 Q 84,108 92,124 L 110,118 L 128,124 Q 136,108 130,86 Z',
-  rear_delts: 'M 64,90 Q 56,96 52,110 Q 52,124 60,128 Q 70,126 76,118 Q 78,104 74,94 Z M 156,90 Q 164,96 168,110 Q 168,124 160,128 Q 150,126 144,118 Q 142,104 146,94 Z',
-  triceps: 'M 46,132 Q 40,144 40,166 Q 44,180 52,180 Q 58,178 58,158 Q 58,140 52,132 Z M 174,132 Q 180,144 180,166 Q 176,180 168,180 Q 162,178 162,158 Q 162,140 168,132 Z',
-  forearms: 'M 38,184 Q 32,200 32,224 Q 36,238 44,236 Q 50,234 52,218 Q 52,200 50,186 Z M 182,184 Q 188,200 188,224 Q 184,238 176,236 Q 170,234 168,218 Q 168,200 170,186 Z',
-  lats: 'M 76,118 Q 60,150 64,200 L 102,206 L 102,134 Q 88,124 76,118 Z M 144,118 Q 160,150 156,200 L 118,206 L 118,134 Q 132,124 144,118 Z',
-  lower_back: 'M 100,206 L 120,206 L 122,244 Q 110,248 98,244 Z',
-  glutes: 'M 86,250 Q 76,272 88,300 Q 102,304 108,294 L 108,254 Q 96,248 86,250 Z M 134,250 Q 144,272 132,300 Q 118,304 112,294 L 112,254 Q 124,248 134,250 Z',
-  hamstrings: 'M 80,300 Q 72,340 78,386 L 104,386 L 104,300 Q 92,296 80,300 Z M 140,300 Q 148,340 142,386 L 116,386 L 116,300 Q 128,296 140,300 Z',
-  calves: 'M 76,388 Q 72,416 80,442 L 104,442 L 104,388 Z M 144,388 Q 148,416 140,442 L 116,442 L 116,388 Z',
-};
-
-const HEAD_FRONT = <circle cx="110" cy="44" r="22" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />;
-const HEAD_BACK  = <circle cx="110" cy="44" r="22" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />;
-const NECK       = <rect x="100" y="62" width="20" height="14" fill="rgba(255,255,255,0.04)" />;
-
-const fmtVol = (n) => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
-
-function MuscleMap({ volumes, max }) {
-  const [hover, setHover] = useState(null);
-  const renderMuscle = (key, d) => (
-    <path
-      key={key}
-      d={d}
-      fill={volumeToFill(volumes[key] || 0, max)}
-      stroke="rgba(255,255,255,0.05)"
-      strokeWidth="0.5"
-      style={{ transition: 'fill 320ms ease', cursor: 'pointer' }}
-      onMouseEnter={() => setHover({ key, vol: volumes[key] || 0 })}
-      onMouseLeave={() => setHover(null)}
-    />
-  );
+function MuscleTooltip({ muscle, recoveryData, growthData, mode, position }) {
+  if (!muscle) return null;
+  const displayName = MUSCLE_DISPLAY_NAMES[muscle] || muscle.replace(/-/g, ' ').toUpperCase();
+  const internalKey = Object.entries(MUSCLE_MAP).find(([, s]) => s === muscle)?.[0];
+  let value = null, line2 = null;
+  if (mode === 'recovery' && internalKey) {
+    const e = recoveryData?.[internalKey];
+    if (e && e.status !== 'no_data') { value = e.pct ?? (e.status === 'ready' ? 100 : null); line2 = e.hoursRemaining > 0 ? `${e.hoursRemaining}h remaining` : null; }
+  } else if (mode === 'growth' && internalKey) {
+    const e = growthData?.[internalKey];
+    if (e) { value = e.growthPct; line2 = e.prevVol !== null ? `${fmt(e.currentVol)} vs ${fmt(e.prevVol)} kg·reps` : e.currentVol != null ? `${fmt(e.currentVol)} kg·reps` : null; }
+  }
+  const getStatus = () => {
+    if (mode === 'recovery') {
+      if (value === null) return { label: 'NO DATA',      color: '#78716c' };
+      if (value >= 100)   return { label: 'READY',        color: '#22c55e' };
+      if (value >= 67)    return { label: 'ALMOST READY', color: '#eab308' };
+      if (value >= 34)    return { label: 'PARTIAL',      color: '#f97316' };
+      return                     { label: 'RESTING',      color: '#ef4444' };
+    } else {
+      if (value === null) return { label: 'NO DATA',      color: '#78716c' };
+      if (value > 10)     return { label: 'PR TERRITORY', color: '#22c55e' };
+      if (value > 0)      return { label: 'IMPROVED',     color: '#86efac' };
+      if (value > -10)    return { label: 'SLIGHT DROP',  color: '#f97316' };
+      return                     { label: 'REGRESSED',    color: '#ef4444' };
+    }
+  };
+  const status = getStatus();
+  const clampedX = Math.min(Math.max(position.x, 80), 260);
   return (
-    <div className="relative">
-      <div className="grid grid-cols-2 gap-2">
-        <div className="relative">
-          <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1 text-center">Anterior</div>
-          <svg viewBox="0 0 220 460" className="w-full">
-            {HEAD_FRONT}{NECK}
-            {Object.entries(FRONT_PATHS).map(([k, d]) => renderMuscle(k, d))}
-          </svg>
+    <div style={{ position: 'absolute', left: clampedX, top: Math.max(position.y, 0), zIndex: 50, background: '#0c0a09', border: '1px solid #292524', padding: '10px 14px', minWidth: '164px', pointerEvents: 'none', transform: 'translateX(-50%)', boxShadow: '0 4px 24px rgba(0,0,0,0.7)' }}>
+      <div style={{ fontFamily: 'Anton, sans-serif', fontSize: '13px', color: '#f5f5f4', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: '6px' }}>{displayName}</div>
+      {value !== null && (
+        <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: status.color, marginBottom: '4px' }}>
+          {mode === 'recovery' ? `${Math.round(value)}% recovered` : value > 0 ? `↑ ${Math.round(value)}% vs last` : `↓ ${Math.abs(Math.round(value))}% vs last`}
         </div>
-        <div className="relative">
-          <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1 text-center">Posterior</div>
-          <svg viewBox="0 0 220 460" className="w-full">
-            {HEAD_BACK}{NECK}
-            {Object.entries(BACK_PATHS).map(([k, d]) => renderMuscle(k, d))}
-          </svg>
-        </div>
+      )}
+      {line2 && <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: '#78716c', marginBottom: '6px', letterSpacing: '0.04em' }}>{line2}</div>}
+      <div style={{ display: 'inline-flex', padding: '2px 8px', background: `${status.color}22`, border: `1px solid ${status.color}44`, fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', letterSpacing: '0.15em', textTransform: 'uppercase', color: status.color }}>{status.label}</div>
+    </div>
+  );
+}
+
+function BodyMapDual({ recoveryMap, growthMap, mode, setMode }) {
+  const containerRef = useRef(null);
+  const lastMouse    = useRef({ x: 90, y: 80 });
+  const [tooltip, setTooltip]       = useState(null);
+  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const highlightedColors = mode === 'recovery' ? RECOVERY_HIGHLIGHTED : GROWTH_HIGHLIGHTED;
+  const data = buildModelData(recoveryMap, growthMap, mode);
+
+  function handleMouseMove(e) {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    lastMouse.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+  function handleMuscleClick(muscleStats) {
+    if (!muscleStats?.muscle) return;
+    const { x, y } = lastMouse.current;
+    setTooltip(muscleStats.muscle);
+    setTooltipPos({ x, y: Math.max(y - 20, 0) });
+  }
+
+  const summaryItems = mode === 'recovery'
+    ? Object.entries(recoveryMap).filter(([, v]) => v.status !== 'no_data' && v.status !== 'ready').sort(([, a], [, b]) => (a.pct ?? 100) - (b.pct ?? 100)).slice(0, 3).map(([k, v]) => ({ key: k, label: MUSCLES[k], value: `${v.pct}%`, sub: `${v.hoursRemaining}h left`, color: RECOVERY_HIGHLIGHTED[(getRecoveryFreq(v.status) ?? 1) - 1] }))
+    : Object.entries(growthMap).filter(([, v]) => v.growthPct !== null).sort(([, a], [, b]) => (b.growthPct ?? 0) - (a.growthPct ?? 0)).slice(0, 3).map(([k, v]) => ({ key: k, label: MUSCLES[k], value: `${v.growthPct > 0 ? '+' : ''}${v.growthPct}%`, sub: `${fmt(v.currentVol)} kg·reps`, color: GROWTH_HIGHLIGHTED[(getGrowthFreq(v.status) ?? 1) - 1] }));
+
+  return (
+    <div>
+      <div className="flex gap-1 mb-4">
+        {['recovery', 'growth'].map(m => (
+          <button key={m} onClick={() => setMode(m)}
+            className={`px-3 py-1 font-mono text-[10px] uppercase tracking-wider border transition-colors ${mode === m ? 'border-orange-500/60 text-orange-300 bg-orange-500/10' : 'border-stone-700 text-stone-500 hover:text-stone-300 hover:border-stone-600'}`}
+          >{m}</button>
+        ))}
       </div>
-      <div className="absolute top-0 right-0 min-h-[42px] text-right">
-        {hover && (
-          <div className="bg-stone-950/95 border border-orange-500/30 px-3 py-2 backdrop-blur-sm">
-            <div className="text-[9px] uppercase tracking-wider text-stone-500 font-mono">{MUSCLES[hover.key]}</div>
-            <div className="font-anton text-lg text-orange-300 tabular-nums leading-none mt-0.5">{fmtVol(hover.vol)}</div>
-            <div className="text-[9px] text-stone-600 font-mono">kg·reps</div>
+      <style>{`
+        .body-map-container svg { filter: drop-shadow(0px 0px 8px rgba(237,122,42,0.06)); }
+        .body-map-container svg path, .body-map-container svg polygon { stroke-linejoin: round; stroke-linecap: round; }
+        .rbh polygon { transition: fill 150ms ease; }
+        .rbh polygon:hover { fill: rgba(237,122,42,0.28) !important; cursor: pointer; }
+      `}</style>
+      <div ref={containerRef} className="body-map-container flex gap-3 justify-center relative" onMouseMove={handleMouseMove} onClick={(e) => { if (e.target.tagName !== 'polygon') setTooltip(null); }}>
+        <div>
+          <Model type="anterior" data={data} bodyColor="#1c1917" highlightedColors={highlightedColors} onClick={handleMuscleClick} style={{ width: '180px', padding: '4px' }} />
+          <div style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: '9px', letterSpacing: '0.15em', color: '#57534e', textTransform: 'uppercase', textAlign: 'center', marginTop: '6px' }}>ANTERIOR</div>
+        </div>
+        <div>
+          <Model type="posterior" data={data} bodyColor="#1c1917" highlightedColors={highlightedColors} onClick={handleMuscleClick} style={{ width: '180px', padding: '4px' }} />
+          <div style={{ fontFamily: 'JetBrains Mono,monospace', fontSize: '9px', letterSpacing: '0.15em', color: '#57534e', textTransform: 'uppercase', textAlign: 'center', marginTop: '6px' }}>POSTERIOR</div>
+        </div>
+        {tooltip && <MuscleTooltip muscle={tooltip} recoveryData={recoveryMap} growthData={growthMap} mode={mode} position={tooltipPos} />}
+      </div>
+      <div className="mt-3 pt-3 border-t border-stone-800/60">
+        {mode === 'recovery' ? (
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {[['#4ade80','Ready'],['#a3e635','Almost'],['#fbbf24','Partial'],['#f87171','Resting']].map(([c, label]) => (
+              <div key={label} className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} /><span className="text-[9px] font-mono text-stone-500 uppercase tracking-wider">{label}</span></div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
+            {[['#fb923c','PR'],['#4ade80','Improved'],['#60a5fa','First'],['#fbbf24','Regressed'],['#f87171','Dropped']].map(([c, label]) => (
+              <div key={label} className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} /><span className="text-[9px] font-mono text-stone-500 uppercase tracking-wider">{label}</span></div>
+            ))}
           </div>
         )}
       </div>
+      {summaryItems.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-stone-800/60 space-y-2">
+          <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">{mode === 'recovery' ? 'Most Fatigued' : 'Top Gains'}</div>
+          {summaryItems.map(item => (
+            <div key={item.key} className="flex items-center justify-between">
+              <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: item.color }} /><span className="text-[10px] font-mono text-stone-400">{item.label}</span></div>
+              <div className="text-right"><span className="text-[10px] font-mono text-stone-200">{item.value}</span><span className="text-[9px] font-mono text-stone-600 ml-1.5">{item.sub}</span></div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -332,6 +422,7 @@ export default function Dashboard() {
   const [showCheckinBanner, setShowCheckinBanner] = useState(getCheckinBannerVisible);
   const [showCheckinModal, setShowCheckinModal]   = useState(false);
   const [showBreakdown, setShowBreakdown]         = useState(false);
+  const [bodyMode, setBodyMode]                   = useState('growth');
   const checkin = useCheckin(user?.id);
   const [plateauAlerts, setPlateauAlerts] = useState([]);
   const { displayWeight, displayEnergy, weightLabel, energyLabel } = useUnits();
@@ -1075,7 +1166,7 @@ export default function Dashboard() {
               <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Weekly Volume</h2>
               <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">kg·reps</span>
             </div>
-            <MuscleMap volumes={MUSCLE_DATA.weeklyVolume} max={Math.max(...Object.values(MUSCLE_DATA.weeklyVolume))} />
+            <BodyMapDual recoveryMap={MOCK_RECOVERY_MAP} growthMap={MOCK_GROWTH_MAP} mode={bodyMode} setMode={setBodyMode} />
           </div>
 
           {/* QUICK ACCESS TILES */}
