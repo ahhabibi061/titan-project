@@ -855,11 +855,11 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
 
             {/* THIS WEEK */}
-            <div onClick={() => navigate('/logger')} className="lg:col-span-7 border border-stone-800/60 bg-stone-950/40 p-6 cursor-pointer hover:border-stone-700 transition-colors group">
+            <div onClick={() => navigate('/biometrics')} className="lg:col-span-7 border border-stone-800/60 bg-stone-950/40 p-6 cursor-pointer hover:border-stone-700 transition-colors group">
               <div className="flex items-baseline justify-between mb-5">
                 <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">This Week</h2>
                 <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 group-hover:text-orange-400 font-mono transition-colors">
-                  {loading ? '…' : `${completedDays}/${totalWorkoutDays} workouts →`}
+                  vault →
                 </span>
               </div>
 
