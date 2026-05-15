@@ -8,6 +8,7 @@ import { useProfileStore } from '../store/useProfileStore';
 import { useMealTemplates } from '../hooks/useMealTemplates';
 import { useWaterTracker } from '../hooks/useWaterTracker';
 import { useUnits } from '../hooks/useUnits';
+import { supabase } from '../lib/supabase';
 
 /* =========================================================================
  * SENTINEL — Module 1
@@ -848,8 +849,9 @@ export default function VisionNutrition() {
     calsBurned, eatBackCalories,
   } = useSentinel(user?.id);
 
-  const profile      = useProfileStore(s => s.profile);
-  const isPro        = ['pro', 'elite'].includes(profile?.subscription_tier ?? '');
+  const profile       = useProfileStore(s => s.profile);
+  const updateProfile = useProfileStore(s => s.updateProfile);
+  const isPro         = ['pro', 'elite'].includes(profile?.subscription_tier ?? '');
   const mealTemplates = useMealTemplates(user?.id);
   const water         = useWaterTracker(user?.id);
   const { displayEnergy, energyLabel, displayVolume, parseVolume, volumeUnit, volumeLabel } = useUnits();
@@ -857,6 +859,14 @@ export default function VisionNutrition() {
   const [activeAddSection, setActiveAddSection] = useState(null);
   const [showBreakdown, setShowBreakdown]       = useState(false);
   const [showTemplates, setShowTemplates]       = useState(false);
+
+  // Inline macro editing state
+  const [editingMacros,    setEditingMacros]    = useState(false);
+  const [draftKcal,        setDraftKcal]        = useState('');
+  const [draftProteinPct,  setDraftProteinPct]  = useState('');
+  const [draftCarbsPct,    setDraftCarbsPct]    = useState('');
+  const [draftFatPct,      setDraftFatPct]      = useState('');
+  const [macroSaving,      setMacroSaving]      = useState(false);
 
   // Date helpers
   const todayMidnight = new Date();
@@ -911,6 +921,47 @@ export default function VisionNutrition() {
       f: Math.round((totals.fat     * 9 / t) * 100),
     };
   }, [totals, tgt.kcal]);
+
+  // Live draft calculations for inline macro editor
+  const draftKcalNum   = parseFloat(draftKcal)       || 0;
+  const draftPPct      = parseFloat(draftProteinPct)  || 0;
+  const draftCPct      = parseFloat(draftCarbsPct)    || 0;
+  const draftFPct      = parseFloat(draftFatPct)      || 0;
+  const draftPctSum    = Math.round(draftPPct + draftCPct + draftFPct);
+  const draftProteinG  = Math.round(draftKcalNum * draftPPct / 100 / 4);
+  const draftCarbsG    = Math.round(draftKcalNum * draftCPct / 100 / 4);
+  const draftFatG      = Math.round(draftKcalNum * draftFPct / 100 / 9);
+
+  function openMacroEdit() {
+    setDraftKcal(String(tgt.kcal));
+    const k = tgt.kcal || 1;
+    setDraftProteinPct(String(Math.round(tgt.protein * 4 / k * 100)));
+    setDraftCarbsPct(String(Math.round(tgt.carbs   * 4 / k * 100)));
+    setDraftFatPct(String(Math.round(tgt.fat       * 9 / k * 100)));
+    setEditingMacros(true);
+  }
+
+  async function saveMacroTargets() {
+    if (draftKcalNum < 500 || draftKcalNum > 10000) return;
+    if (draftPctSum < 99 || draftPctSum > 101) return;
+    setMacroSaving(true);
+    const newMacros = {
+      kcal:    Math.round(draftKcalNum),
+      protein: draftProteinG,
+      carbs:   draftCarbsG,
+      fat:     draftFatG,
+    };
+    const newSettings = { ...(profile?.settings ?? {}), macro_mode: 'custom' };
+    const { error } = await supabase
+      .from('profiles')
+      .update({ current_macros: newMacros, settings: newSettings })
+      .eq('id', user.id);
+    setMacroSaving(false);
+    if (!error) {
+      updateProfile({ current_macros: newMacros, settings: newSettings });
+      setEditingMacros(false);
+    }
+  }
 
   return (
     <div className="min-h-screen w-full bg-[#0a0908] text-stone-100 font-sans antialiased">
@@ -1046,13 +1097,35 @@ export default function VisionNutrition() {
 
           {/* Macro bars */}
           <div
-            className="border border-stone-800/60 bg-stone-950/40 p-6 cursor-pointer hover:border-stone-700 transition-colors"
-            onClick={() => setShowBreakdown(true)}
+            className={`border border-stone-800/60 bg-stone-950/40 p-6 transition-colors ${editingMacros ? '' : 'cursor-pointer hover:border-stone-700'}`}
+            onClick={editingMacros ? undefined : () => setShowBreakdown(true)}
           >
-            <div className="flex items-baseline justify-between mb-5">
+            <div className="flex items-center justify-between mb-5">
               <h2 className="font-anton text-xl uppercase tracking-tight text-stone-100">Macros</h2>
-              <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">% of cal target</span>
+              <div className="flex items-center gap-3">
+                {!editingMacros && (
+                  <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">% of cal target</span>
+                )}
+                <button
+                  onClick={e => { e.stopPropagation(); editingMacros ? setEditingMacros(false) : openMacroEdit(); }}
+                  className={`flex items-center gap-1 px-2 py-1 border font-mono text-[9px] uppercase tracking-wider transition-colors ${
+                    editingMacros
+                      ? 'border-stone-700 text-stone-500 hover:text-stone-300'
+                      : 'border-stone-800 text-stone-600 hover:border-orange-500/40 hover:text-orange-300'
+                  }`}
+                >
+                  {editingMacros ? 'Cancel' : (
+                    <>
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M7 1L9 3L3.5 8.5L1 9L1.5 6.5L7 1Z" strokeLinejoin="round" />
+                      </svg>
+                      Edit
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
+
             {loading ? (
               <div className="space-y-5">
                 <Sk w="w-full" h="h-7" />
@@ -1066,21 +1139,87 @@ export default function VisionNutrition() {
                 <MacroBar label="Fat"     consumed={totals.fat}     target={tgt.fat}     color="rgb(251, 191, 36)" />
               </div>
             )}
-            <div className="mt-5 pt-4 border-t border-stone-800/60 grid grid-cols-3 gap-2 text-center">
-              {[
-                { l: 'P', v: macroSplit.p },
-                { l: 'C', v: macroSplit.c },
-                { l: 'F', v: macroSplit.f },
-              ].map(x => (
-                <div key={x.l}>
-                  <div className="text-[9px] font-mono uppercase text-stone-600 tracking-wider">{x.l}</div>
-                  {loading
-                    ? <Sk w="w-8 mx-auto" h="h-4" />
-                    : <div className="font-anton text-stone-300 text-base tabular-nums">{x.v}%</div>
-                  }
+
+            {/* Inline macro editor — shown instead of P/C/F % strip */}
+            {editingMacros ? (
+              <div className="mt-5 pt-4 border-t border-stone-800/60" onClick={e => e.stopPropagation()}>
+                <div className="text-[9px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-3">Set daily targets</div>
+
+                {/* Calories */}
+                <div className="mb-3">
+                  <label className="text-[9px] uppercase tracking-wider text-stone-600 font-mono block mb-1">Total calories</label>
+                  <div className="relative max-w-[160px]">
+                    <input
+                      type="number"
+                      value={draftKcal}
+                      onChange={e => setDraftKcal(e.target.value)}
+                      min="500" max="10000"
+                      className="w-full bg-stone-950/60 border border-stone-800 px-3 py-2 pr-10 text-stone-100 font-mono text-sm tabular-nums focus:outline-none focus:border-orange-500/60 transition-colors"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-600 font-mono text-[10px]">kcal</span>
+                  </div>
                 </div>
-              ))}
-            </div>
+
+                {/* Macro % inputs */}
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                  {[
+                    { label: 'Protein', pct: draftProteinPct, setPct: setDraftProteinPct, g: draftProteinG, color: '#ed7a2a' },
+                    { label: 'Carbs',   pct: draftCarbsPct,   setPct: setDraftCarbsPct,   g: draftCarbsG,   color: '#7eb6ff' },
+                    { label: 'Fat',     pct: draftFatPct,     setPct: setDraftFatPct,     g: draftFatG,     color: '#fbbf24' },
+                  ].map(m => (
+                    <div key={m.label}>
+                      <label className="text-[9px] uppercase tracking-wider text-stone-600 font-mono block mb-1">{m.label}</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={m.pct}
+                          onChange={e => m.setPct(e.target.value)}
+                          min="0" max="100"
+                          className="w-full bg-stone-950/60 border border-stone-800 px-2 py-2 pr-5 text-stone-100 font-mono text-sm tabular-nums focus:outline-none focus:border-orange-500/60 transition-colors"
+                        />
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-stone-600 font-mono text-[10px]">%</span>
+                      </div>
+                      {m.pct && draftKcal && (
+                        <div className="mt-0.5 text-[9px] font-mono tabular-nums" style={{ color: m.color }}>{m.g}g</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Sum indicator + Save */}
+                <div className="flex items-center justify-between gap-3">
+                  <span className={`text-[9px] font-mono ${
+                    draftPctSum === 100 ? 'text-green-400' :
+                    Math.abs(draftPctSum - 100) <= 1 ? 'text-orange-300' : 'text-red-400'
+                  }`}>
+                    {draftPctSum === 0 ? 'enter % above' : `${draftPctSum}% total ${draftPctSum === 100 ? '✓' : `(need ${100 - draftPctSum > 0 ? '+' : ''}${100 - draftPctSum}%)`}`}
+                  </span>
+                  <button
+                    disabled={macroSaving || draftPctSum < 99 || draftPctSum > 101 || draftKcalNum < 500}
+                    onClick={saveMacroTargets}
+                    className="px-4 py-1.5 bg-orange-500 text-stone-950 font-anton text-xs uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {macroSaving ? 'Saving…' : 'Save →'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-5 pt-4 border-t border-stone-800/60 grid grid-cols-3 gap-2 text-center">
+                {[
+                  { l: 'P', v: macroSplit.p },
+                  { l: 'C', v: macroSplit.c },
+                  { l: 'F', v: macroSplit.f },
+                ].map(x => (
+                  <div key={x.l}>
+                    <div className="text-[9px] font-mono uppercase text-stone-600 tracking-wider">{x.l}</div>
+                    {loading
+                      ? <Sk w="w-8 mx-auto" h="h-4" />
+                      : <div className="font-anton text-stone-300 text-base tabular-nums">{x.v}%</div>
+                    }
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
