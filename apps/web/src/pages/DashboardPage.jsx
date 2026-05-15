@@ -18,6 +18,129 @@ const NAV_MODULES = [
   { id: 'coach',      label: 'Oracle',     path: '/coach'      },
 ];
 
+const MUSCLE_DATA = {
+  weeklyVolume: {
+    chest: 4200, front_delts: 1800, side_delts: 900, triceps: 2100,
+    lats: 3800, biceps: 1600, rear_delts: 800, traps: 600,
+    quads: 8400, hamstrings: 4200, glutes: 3100, calves: 1200,
+    abs: 900, obliques: 400, lower_back: 1400, forearms: 600,
+  },
+  progression: {
+    chest: -8.2, front_delts: -3.1, side_delts: 2.4, triceps: 1.5,
+    lats: 4.2, biceps: 0.5, rear_delts: 1.8, traps: -1.2,
+    quads: -5.4, hamstrings: -1.8, glutes: 2.1, calves: 3.0,
+    abs: 0, obliques: 0, lower_back: -2.0, forearms: 0,
+  },
+};
+
+// -------------------- MUSCLE MAP --------------------
+const MUSCLES = {
+  chest: 'Chest', front_delts: 'Front Delts', side_delts: 'Side Delts',
+  rear_delts: 'Rear Delts', biceps: 'Biceps', triceps: 'Triceps',
+  forearms: 'Forearms', abs: 'Abs', obliques: 'Obliques', traps: 'Traps',
+  lats: 'Lats', lower_back: 'Lower Back', glutes: 'Glutes',
+  quads: 'Quads', hamstrings: 'Hamstrings', calves: 'Calves',
+};
+
+function volumeToFill(volume, max) {
+  if (!volume || volume <= 0) return 'rgba(255,255,255,0.025)';
+  const t = Math.min(volume / Math.max(max, 1), 1);
+  const stops = [
+    { t: 0.00, c: [44, 36, 30] },
+    { t: 0.18, c: [98, 42, 18] },
+    { t: 0.45, c: [186, 74, 28] },
+    { t: 0.72, c: [240, 110, 38] },
+    { t: 1.00, c: [255, 78, 38] },
+  ];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t <= stops[i + 1].t) {
+      const local = (t - stops[i].t) / (stops[i + 1].t - stops[i].t || 1);
+      const r = Math.round(stops[i].c[0] + (stops[i + 1].c[0] - stops[i].c[0]) * local);
+      const g = Math.round(stops[i].c[1] + (stops[i + 1].c[1] - stops[i].c[1]) * local);
+      const b = Math.round(stops[i].c[2] + (stops[i + 1].c[2] - stops[i].c[2]) * local);
+      return `rgb(${r},${g},${b})`;
+    }
+  }
+  const last = stops[stops.length - 1].c;
+  return `rgb(${last[0]},${last[1]},${last[2]})`;
+}
+
+const FRONT_PATHS = {
+  chest: 'M 76,96 Q 90,88 108,90 L 108,138 Q 96,144 84,140 Q 76,134 74,124 Z M 144,96 Q 130,88 112,90 L 112,138 Q 124,144 136,140 Q 144,134 146,124 Z',
+  front_delts: 'M 64,86 Q 56,88 52,102 Q 50,116 56,124 Q 66,124 74,118 Q 76,104 74,94 Q 70,86 64,86 Z M 156,86 Q 164,88 168,102 Q 170,116 164,124 Q 154,124 146,118 Q 144,104 146,94 Q 150,86 156,86 Z',
+  side_delts: 'M 50,100 Q 42,104 40,118 Q 40,128 46,134 Q 52,132 56,124 Q 50,116 52,102 Z M 170,100 Q 178,104 180,118 Q 180,128 174,134 Q 168,132 164,124 Q 170,116 168,102 Z',
+  traps: 'M 102,68 Q 98,76 100,84 Q 106,86 110,84 L 110,68 Z M 118,68 Q 122,76 120,84 Q 114,86 110,84 L 110,68 Z',
+  biceps: 'M 46,128 Q 38,134 38,158 Q 42,176 50,178 Q 56,176 56,156 Q 56,138 52,130 Z M 174,128 Q 182,134 182,158 Q 178,176 170,178 Q 164,176 164,156 Q 164,138 168,130 Z',
+  forearms: 'M 38,182 Q 32,196 32,222 Q 36,238 44,236 Q 50,234 52,218 Q 52,200 50,184 Z M 182,182 Q 188,196 188,222 Q 184,238 176,236 Q 170,234 168,218 Q 168,200 170,184 Z',
+  abs: 'M 96,144 L 124,144 L 124,160 L 96,160 Z M 96,164 L 124,164 L 124,180 L 96,180 Z M 96,184 L 124,184 L 124,200 L 96,200 Z M 96,204 L 124,204 L 124,220 L 96,220 Z M 96,224 L 124,224 L 124,238 L 96,238 Z',
+  obliques: 'M 78,150 Q 76,180 86,224 L 96,222 L 96,148 Q 86,146 78,150 Z M 142,150 Q 144,180 134,224 L 124,222 L 124,148 Q 134,146 142,150 Z',
+  quads: 'M 78,250 Q 70,290 76,348 L 104,348 L 104,250 Q 90,246 78,250 Z M 142,250 Q 150,290 144,348 L 116,348 L 116,250 Q 130,246 142,250 Z',
+  calves: 'M 84,388 Q 80,408 84,438 L 102,438 L 102,388 Z M 136,388 Q 140,408 136,438 L 118,438 L 118,388 Z',
+};
+
+const BACK_PATHS = {
+  traps: 'M 110,72 L 90,86 Q 84,108 92,124 L 110,118 L 128,124 Q 136,108 130,86 Z',
+  rear_delts: 'M 64,90 Q 56,96 52,110 Q 52,124 60,128 Q 70,126 76,118 Q 78,104 74,94 Z M 156,90 Q 164,96 168,110 Q 168,124 160,128 Q 150,126 144,118 Q 142,104 146,94 Z',
+  triceps: 'M 46,132 Q 40,144 40,166 Q 44,180 52,180 Q 58,178 58,158 Q 58,140 52,132 Z M 174,132 Q 180,144 180,166 Q 176,180 168,180 Q 162,178 162,158 Q 162,140 168,132 Z',
+  forearms: 'M 38,184 Q 32,200 32,224 Q 36,238 44,236 Q 50,234 52,218 Q 52,200 50,186 Z M 182,184 Q 188,200 188,224 Q 184,238 176,236 Q 170,234 168,218 Q 168,200 170,186 Z',
+  lats: 'M 76,118 Q 60,150 64,200 L 102,206 L 102,134 Q 88,124 76,118 Z M 144,118 Q 160,150 156,200 L 118,206 L 118,134 Q 132,124 144,118 Z',
+  lower_back: 'M 100,206 L 120,206 L 122,244 Q 110,248 98,244 Z',
+  glutes: 'M 86,250 Q 76,272 88,300 Q 102,304 108,294 L 108,254 Q 96,248 86,250 Z M 134,250 Q 144,272 132,300 Q 118,304 112,294 L 112,254 Q 124,248 134,250 Z',
+  hamstrings: 'M 80,300 Q 72,340 78,386 L 104,386 L 104,300 Q 92,296 80,300 Z M 140,300 Q 148,340 142,386 L 116,386 L 116,300 Q 128,296 140,300 Z',
+  calves: 'M 76,388 Q 72,416 80,442 L 104,442 L 104,388 Z M 144,388 Q 148,416 140,442 L 116,442 L 116,388 Z',
+};
+
+const HEAD_FRONT = <circle cx="110" cy="44" r="22" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />;
+const HEAD_BACK  = <circle cx="110" cy="44" r="22" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth="1" />;
+const NECK       = <rect x="100" y="62" width="20" height="14" fill="rgba(255,255,255,0.04)" />;
+
+const fmtVol = (n) => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+function MuscleMap({ volumes, max }) {
+  const [hover, setHover] = useState(null);
+  const renderMuscle = (key, d) => (
+    <path
+      key={key}
+      d={d}
+      fill={volumeToFill(volumes[key] || 0, max)}
+      stroke="rgba(255,255,255,0.05)"
+      strokeWidth="0.5"
+      style={{ transition: 'fill 320ms ease', cursor: 'pointer' }}
+      onMouseEnter={() => setHover({ key, vol: volumes[key] || 0 })}
+      onMouseLeave={() => setHover(null)}
+    />
+  );
+  return (
+    <div className="relative">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="relative">
+          <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1 text-center">Anterior</div>
+          <svg viewBox="0 0 220 460" className="w-full">
+            {HEAD_FRONT}{NECK}
+            {Object.entries(FRONT_PATHS).map(([k, d]) => renderMuscle(k, d))}
+          </svg>
+        </div>
+        <div className="relative">
+          <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1 text-center">Posterior</div>
+          <svg viewBox="0 0 220 460" className="w-full">
+            {HEAD_BACK}{NECK}
+            {Object.entries(BACK_PATHS).map(([k, d]) => renderMuscle(k, d))}
+          </svg>
+        </div>
+      </div>
+      <div className="absolute top-0 right-0 min-h-[42px] text-right">
+        {hover && (
+          <div className="bg-stone-950/95 border border-orange-500/30 px-3 py-2 backdrop-blur-sm">
+            <div className="text-[9px] uppercase tracking-wider text-stone-500 font-mono">{MUSCLES[hover.key]}</div>
+            <div className="font-anton text-lg text-orange-300 tabular-nums leading-none mt-0.5">{fmtVol(hover.vol)}</div>
+            <div className="text-[9px] text-stone-600 font-mono">kg·reps</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // -------------------- HELPERS --------------------
 const fmt0 = (n) => Math.round(n).toLocaleString('en-US');
 const fmt1 = (n) => (n ?? 0).toFixed(1);
@@ -944,6 +1067,15 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* MUSCLE MAP */}
+          <div className="mb-8 border border-stone-800/60 bg-stone-950/40 p-6">
+            <div className="flex items-baseline justify-between mb-5">
+              <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Weekly Volume</h2>
+              <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">kg·reps</span>
+            </div>
+            <MuscleMap volumes={MUSCLE_DATA.weeklyVolume} max={Math.max(...Object.values(MUSCLE_DATA.weeklyVolume))} />
           </div>
 
           {/* QUICK ACCESS TILES */}
