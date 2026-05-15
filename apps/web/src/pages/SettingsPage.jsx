@@ -844,6 +844,20 @@ export default function SettingsPage() {
                 <Toggle enabled={!!prefs.eat_back_calories} onChange={v => savePref('eat_back_calories', v)} />
               </div>
 
+              {/* Timezone */}
+              <div className="flex items-start justify-between py-4 gap-4">
+                <div>
+                  <div className="text-sm text-stone-100" style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 600 }}>Timezone</div>
+                  <div className="text-xs text-stone-500 font-mono mt-0.5">Auto-detected from your device. All logs use local time.</div>
+                  <div className="mt-1.5 inline-flex items-center gap-1.5 px-2 py-1 bg-stone-900/60 border border-stone-700/60">
+                    <span className="text-[10px] font-mono text-orange-300 tracking-wider">
+                      {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-mono text-stone-600 mt-1.5">To change, update your device timezone in system settings.</div>
+                </div>
+              </div>
+
             </div>
 
             {prefsSaving && (

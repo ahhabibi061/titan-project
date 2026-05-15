@@ -87,9 +87,11 @@ export function useDashboard(userId) {
 
         const fourteenDaysAgo = new Date(today); fourteenDaysAgo.setDate(today.getDate() - 13);
         const fourteenDaysAgoStr = toDateStr(fourteenDaysAgo);
+        const fourteenDaysAgoISO = new Date(fourteenDaysAgo.getFullYear(), fourteenDaysAgo.getMonth(), fourteenDaysAgo.getDate()).toISOString();
 
         const sixtyDaysAgo = new Date(today); sixtyDaysAgo.setDate(today.getDate() - 59);
         const sixtyDaysAgoStr = toDateStr(sixtyDaysAgo);
+        const sixtyDaysAgoISO = new Date(sixtyDaysAgo.getFullYear(), sixtyDaysAgo.getMonth(), sixtyDaysAgo.getDate()).toISOString();
 
         const [
           nutritionTodayRes,
@@ -134,8 +136,8 @@ export function useDashboard(userId) {
           supabase.from('biometric_entries')
             .select('weight_kg, logged_at')
             .eq('user_id', userId)
-            .gte('logged_at', fourteenDaysAgoStr)
-            .lte('logged_at', todayStr)
+            .gte('logged_at', fourteenDaysAgoISO)
+            .lt('logged_at', tomorrowISO)
             .order('logged_at', { ascending: true }),
 
           // 5. Nutrition this week — avg kcal / protein
@@ -157,14 +159,14 @@ export function useDashboard(userId) {
             .select('completed_at')
             .eq('user_id', userId)
             .not('completed_at', 'is', null)
-            .gte('completed_at', sixtyDaysAgoStr),
+            .gte('completed_at', sixtyDaysAgoISO),
 
           // 8. Biometrics this week — adherence weight column
           supabase.from('biometric_entries')
             .select('logged_at')
             .eq('user_id', userId)
-            .gte('logged_at', weekStart)
-            .lte('logged_at', weekEnd),
+            .gte('logged_at', weekStartISO)
+            .lt('logged_at', weekEndISO),
 
           // 9. Recent completed workouts — last 3
           supabase.from('workouts')
@@ -318,7 +320,11 @@ export function useDashboard(userId) {
         const completedDates = [
           ...new Set(
             (workoutsStreakRes.data ?? [])
-              .map(w => w.completed_at?.split('T')[0])
+              .map(w => {
+                if (!w.completed_at) return null;
+                const _d = new Date(w.completed_at);
+                return `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
+              })
               .filter(Boolean)
           ),
         ];

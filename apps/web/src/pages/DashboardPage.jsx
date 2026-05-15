@@ -44,7 +44,19 @@ const MOCK_GROWTH_MAP = (() => {
   }
   return m;
 })();
-const MOCK_RECOVERY_MAP = {};
+const MOCK_RECOVERY_MAP = {
+  quads:       { status: 'resting',  pct: 28,  hoursRemaining: 36 },
+  hamstrings:  { status: 'partial',  pct: 55,  hoursRemaining: 18 },
+  glutes:      { status: 'partial',  pct: 62,  hoursRemaining: 12 },
+  chest:       { status: 'almost',   pct: 80,  hoursRemaining: 6  },
+  triceps:     { status: 'almost',   pct: 76,  hoursRemaining: 8  },
+  front_delts: { status: 'almost',   pct: 72,  hoursRemaining: 10 },
+  lats:        { status: 'ready',    pct: 100, hoursRemaining: 0  },
+  biceps:      { status: 'ready',    pct: 100, hoursRemaining: 0  },
+  rear_delts:  { status: 'ready',    pct: 100, hoursRemaining: 0  },
+  calves:      { status: 'ready',    pct: 100, hoursRemaining: 0  },
+  lower_back:  { status: 'partial',  pct: 58,  hoursRemaining: 14 },
+};
 
 // ================== BODY MAP (react-body-highlighter) ==================
 const MUSCLES = {
@@ -1141,7 +1153,7 @@ export default function Dashboard() {
                   <p className="text-xs font-mono text-stone-700 mt-1">Log a meal or start a workout to see it here.</p>
                 </div>
               ) : (
-                <div className="space-y-0">
+                <div className="overflow-y-auto max-h-[220px] space-y-0 pr-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-stone-700">
                   {activityFeed.map((a, i) => (
                     <div key={i} className="flex items-center gap-3 py-2.5 border-b border-stone-800/40 last:border-b-0">
                       <span className="font-mono text-[10px] tabular-nums text-stone-600 w-10 shrink-0">{a.time}</span>
