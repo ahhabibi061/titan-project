@@ -414,7 +414,7 @@ function getCheckinBannerVisible() {
 
 export default function Dashboard() {
   const { user } = useSession();
-  const { data, loading } = useDashboard(user?.id);
+  const { data, loading, refetch } = useDashboard(user?.id);
   const zustandProfile = useProfileStore(s => s.profile);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();

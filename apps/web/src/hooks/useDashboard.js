@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useProfileStore } from '../store/useProfileStore';
 
@@ -44,6 +44,17 @@ export function useDashboard(userId) {
   const [data, setData]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+
+  // Expose a manual refetch so callers can trigger it after mutations
+  const refetch = useCallback(() => setRefreshTick(t => t + 1), []);
+
+  // Re-fetch whenever the browser tab becomes visible again
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') setRefreshTick(t => t + 1); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   useEffect(() => {
     if (!userId || !storeProfile) return;
@@ -371,7 +382,7 @@ export function useDashboard(userId) {
 
     fetchAll();
     return () => { cancelled = true; };
-  }, [userId, storeProfile]);
+  }, [userId, storeProfile, refreshTick]);
 
-  return { data, loading, error };
+  return { data, loading, error, refetch };
 }
