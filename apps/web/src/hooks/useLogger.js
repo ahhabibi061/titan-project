@@ -271,7 +271,7 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
 
     const { data, error: err } = await supabase
       .from('workouts')
-      .insert({ user_id: uid, name })
+      .insert({ user_id: uid, name, scheduled_date: new Date().toISOString().split('T')[0] })
       .select('id, name, created_at, completed_at, calories_burned')
       .single();
 
