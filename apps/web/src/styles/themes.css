@@ -43,6 +43,21 @@
 [data-theme="neutral"] .text-stone-700 { color: #cbd5e1 !important; }
 [data-theme="neutral"] .text-stone-950 { color: #ffffff  !important; } /* button label */
 
+/*
+  Settings page exception — dark bg (#111318) identical to dark theme,
+  so all text must stay white/light. Specificity (0,3,0) beats global (0,2,0).
+  Hook: .settings-page class on the outer wrapper div.
+*/
+[data-theme="neutral"] .settings-page .text-stone-100 { color: #e7e5e4 !important; }
+[data-theme="neutral"] .settings-page .text-stone-200 { color: #d6d3d1 !important; }
+[data-theme="neutral"] .settings-page .text-stone-300 { color: #a8a29e !important; }
+[data-theme="neutral"] .settings-page .text-stone-400 { color: #78716c !important; }
+[data-theme="neutral"] .settings-page .text-stone-500 { color: #57534e !important; }
+[data-theme="neutral"] .settings-page .text-stone-600 { color: #44403c !important; }
+[data-theme="neutral"] .settings-page .text-orange-300 { color: #fb923c !important; }
+[data-theme="neutral"] .settings-page .text-orange-400 { color: #f97316 !important; }
+[data-theme="neutral"] .settings-page .text-orange-500 { color: #ea580c !important; }
+
 /* Accent: sky-blue + emerald green */
 [data-theme="neutral"] .text-orange-300 { color: #34d399 !important; } /* emerald-400 */
 [data-theme="neutral"] .text-orange-400 { color: #0ea5e9 !important; } /* sky-500 */

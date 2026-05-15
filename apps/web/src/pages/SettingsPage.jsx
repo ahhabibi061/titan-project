@@ -564,7 +564,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen w-full" style={{ background: '#111318', fontFamily: 'Manrope, sans-serif' }}>
+    <div className="settings-page min-h-screen w-full" style={{ background: '#111318', fontFamily: 'Manrope, sans-serif' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap');
         .font-mono  { font-family: 'JetBrains Mono', ui-monospace, monospace; }
