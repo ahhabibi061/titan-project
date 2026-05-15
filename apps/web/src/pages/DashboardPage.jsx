@@ -359,9 +359,9 @@ function MiniSparkline({ values }) {
 function WeeklyGrid({ days }) {
   const Cell = ({ status, label }) => {
     const colors = {
-      done:   'bg-orange-500',
+      done:   'bg-orange-500 weekly-done',
       missed: 'bg-red-500/20 border border-red-500/40',
-      rest:   'bg-stone-800 border border-stone-700',
+      rest:   'bg-stone-800 border border-stone-700 weekly-rest',
       future: 'bg-stone-900/40 border border-stone-800/40',
       empty:  'bg-stone-900/40 border border-stone-800/40',
     };

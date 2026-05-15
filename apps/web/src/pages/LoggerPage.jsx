@@ -154,9 +154,9 @@ function volumeToFill(volume, max) {
 const fmt = (n) => n.toLocaleString('en-US', { maximumFractionDigits: 0 });
 const fmtKg = (n) => `${n}${Number.isInteger(n) ? '' : ''}`;
 
-function StatBlock({ label, value, sub, accent }) {
+function StatBlock({ label, value, sub, accent, className: extraClass }) {
   return (
-    <div className="flex flex-col gap-1 px-5 py-4 border-r border-stone-800/60 last:border-r-0 first:pl-0">
+    <div className={`flex flex-col gap-1 px-5 py-4 border-r border-stone-800/60 last:border-r-0 ${extraClass || ''}`}>
       <span className="text-[10px] uppercase tracking-[0.18em] text-stone-500 font-medium">{label}</span>
       <span className={`text-3xl font-anton tracking-tight tabular-nums ${accent || 'text-stone-100'}`}>{value}</span>
       {sub && <span className="text-[11px] text-stone-500 tabular-nums">{sub}</span>}
@@ -1882,10 +1882,10 @@ export default function IronLabLogger() {
 
         {/* STATS BAR */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-0 mb-8 border border-stone-800/60 bg-stone-950/40">
-          <StatBlock label="Total Volume"  value={fmt(totalVolume)}            sub="kg · reps"                         accent="text-orange-300" />
-          <StatBlock label="Sets"          value={totalSets}                   sub="logged" />
-          <StatBlock label="Reps"          value={fmt(totalReps)}              sub="working sets" />
-          <StatBlock label="Muscles Hit"   value={Object.keys(volumes).length} sub={`/ ${Object.keys(MUSCLES).length} total`} />
+          <StatBlock label="Total Volume"  value={fmt(totalVolume)}            sub="kg · reps"                         accent="text-orange-300" className="forge-stat-volume" />
+          <StatBlock label="Sets"          value={totalSets}                   sub="logged"                                                             className="forge-stat-sets" />
+          <StatBlock label="Reps"          value={fmt(totalReps)}              sub="working sets"                                                       className="forge-stat-reps" />
+          <StatBlock label="Muscles Hit"   value={Object.keys(volumes).length} sub={`/ ${Object.keys(MUSCLES).length} total`}                          className="forge-stat-muscles" />
         </div>
 
         {/* MAIN GRID */}

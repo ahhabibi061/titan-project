@@ -630,7 +630,7 @@ function WaterTracker({ water }) {
     ? '#93c5fd'
     : pct >= 0.50
     ? '#60a5fa'
-    : '#a8a29e';
+    : '#1e40af';
 
   const isFlOz    = volumeUnit === 'floz';
   const dispTotal  = isFlOz ? Math.round(totalMl  * ML_TO_OZ) : totalMl;
@@ -673,7 +673,7 @@ function WaterTracker({ water }) {
         {/* Drop icon */}
         <svg width="40" height="52" viewBox="0 0 40 52" fill="none" className="shrink-0">
           <path d="M20 4 C20 4 4 22 4 34 C4 44.5 11.2 50 20 50 C28.8 50 36 44.5 36 34 C36 22 20 4 20 4Z"
-            fill={pct >= 1.0 ? '#4ade80' : pct >= 0.75 ? '#93c5fd' : pct >= 0.5 ? '#60a5fa' : '#60a5fa'}
+            fill={pct >= 1.0 ? '#4ade80' : pct >= 0.75 ? '#93c5fd' : pct >= 0.5 ? '#60a5fa' : '#1e40af'}
             opacity={0.15 + pct * 0.6}
             stroke={pct >= 1.0 ? '#4ade80' : '#60a5fa'}
             strokeWidth="1.5"

@@ -919,7 +919,7 @@ export default function BiometricVault() {
           <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
             <div className="flex items-baseline gap-3">
               <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Biometric</span>
-              <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">Vault</span>
+              <span className="vault-gradient-title font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">Vault</span>
             </div>
           </header>
           <div className="border border-stone-800/60 bg-stone-950/40 p-12 text-center space-y-6">
@@ -955,7 +955,7 @@ export default function BiometricVault() {
           <div>
             <div className="flex items-baseline gap-3 mb-2">
               <span className="font-anton text-5xl uppercase tracking-tight text-stone-100">Biometric</span>
-              <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">Vault</span>
+              <span className="vault-gradient-title font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">Vault</span>
             </div>
             <div className="flex items-center gap-3 text-xs font-mono text-stone-500">
               <span>90-day window</span>
