@@ -69,6 +69,14 @@ export function useDashboard(userId) {
         const tomorrow    = new Date(today); tomorrow.setDate(today.getDate() + 1);
         const tomorrowStr = toDateStr(tomorrow);
 
+        // timestamptz columns (logged_at, completed_at) are stored as UTC.
+        // Use local-midnight ISO strings so evening meals/workouts aren't cut off
+        // when the user's local date differs from UTC date (any non-UTC timezone).
+        const localMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const localMidnightTomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+        const todayISO     = localMidnight.toISOString();
+        const tomorrowISO  = localMidnightTomorrow.toISOString();
+
         const monday  = getMondayOfWeek(today);
         const sunday  = new Date(monday); sunday.setDate(monday.getDate() + 6);
         const weekStart = toDateStr(monday);
@@ -97,8 +105,8 @@ export function useDashboard(userId) {
           supabase.from('nutrition_logs')
             .select('kcal, protein_g, carbs_g, fat_g, meal_name, logged_at')
             .eq('user_id', userId)
-            .gte('logged_at', todayStr)
-            .lt('logged_at', tomorrowStr)
+            .gte('logged_at', todayISO)
+            .lt('logged_at', tomorrowISO)
             .order('logged_at', { ascending: true }),
 
           // 2. Today's workout — query by scheduled_date (avoids needing created_at column)
@@ -175,8 +183,8 @@ export function useDashboard(userId) {
             .select('calories_burned')
             .eq('user_id', userId)
             .not('completed_at', 'is', null)
-            .gte('completed_at', todayStr)
-            .lt('completed_at', tomorrowStr)
+            .gte('completed_at', todayISO)
+            .lt('completed_at', tomorrowISO)
             .order('completed_at', { ascending: false })
             .limit(1)
             .maybeSingle(),

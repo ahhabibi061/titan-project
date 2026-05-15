@@ -165,7 +165,8 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
   }
 
   async function loadTodayWorkout() {
-    const today = new Date().toISOString().split('T')[0];
+    const _d = new Date();
+    const today = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
 
     const { data: w, error: err } = await supabase
       .from('workouts')
@@ -266,9 +267,12 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
     console.log('[useLogger] startWorkout → userId:', uid);
     if (!uid) { console.error('[useLogger] startWorkout: no userId'); return; }
 
+    const _sd = new Date();
+    const localDate = `${_sd.getFullYear()}-${String(_sd.getMonth()+1).padStart(2,'0')}-${String(_sd.getDate()).padStart(2,'0')}`;
+
     const { data, error: err } = await supabase
       .from('workouts')
-      .insert({ user_id: uid, name, scheduled_date: new Date().toISOString().split('T')[0] })
+      .insert({ user_id: uid, name, scheduled_date: localDate })
       .select('id, name, completed_at')
       .single();
 
