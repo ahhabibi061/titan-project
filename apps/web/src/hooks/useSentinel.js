@@ -28,25 +28,37 @@ export function useSentinel(userId) {
   const [calsBurned, setCalsBurned]         = useState(null);
   const [eatBackCalories, setEatBackCalories] = useState(false);
 
-  // Sync macro targets + eat-back preference from the global profile store
+  // Sync macro targets from the global profile store
   useEffect(() => {
     if (!storeProfile) return;
     if (storeProfile.current_macros) setTargets(storeProfile.current_macros);
-    setEatBackCalories(false);
   }, [storeProfile]);
 
+  // Read eat_back_calories from settings table (same source as Dashboard)
   useEffect(() => {
     if (!userId) return;
-    const today    = new Date().toISOString().split('T')[0];
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    supabase
+      .from('settings')
+      .select('eat_back_calories')
+      .eq('user_id', userId)
+      .maybeSingle()
+      .then(({ data }) => setEatBackCalories(data?.eat_back_calories ?? false));
+  }, [userId]);
+
+  // Today's calories burned — use completed_at + local midnight (fixes timezone + missing created_at)
+  useEffect(() => {
+    if (!userId) return;
+    const _d = new Date();
+    const localMidnight         = new Date(_d.getFullYear(), _d.getMonth(), _d.getDate());
+    const localMidnightTomorrow = new Date(_d.getFullYear(), _d.getMonth(), _d.getDate() + 1);
     supabase
       .from('workouts')
       .select('calories_burned')
       .eq('user_id', userId)
-      .gte('created_at', today)
-      .lt('created_at', tomorrow)
       .not('completed_at', 'is', null)
-      .order('created_at', { ascending: false })
+      .gte('completed_at', localMidnight.toISOString())
+      .lt('completed_at', localMidnightTomorrow.toISOString())
+      .order('completed_at', { ascending: false })
       .limit(1)
       .maybeSingle()
       .then(({ data }) => {
