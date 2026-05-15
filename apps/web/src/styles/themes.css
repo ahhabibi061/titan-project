@@ -75,7 +75,7 @@
   — !important is invalid on CSS custom property declarations per spec
 */
 
-/* All orange/amber gradients → sky-blue to deep-blue */
+/* All orange/amber gradients → sky-blue to deep-blue (default) */
 [data-theme="neutral"] [class*="from-orange-"] {
   --tw-gradient-from: #0ea5e9;
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(14, 165, 233, 0));
@@ -90,8 +90,31 @@
 }
 
 /*
-  Vault title exception — must come AFTER the blue gradient rules above
-  Uses .vault-gradient-title class (added to BiometricsPage JSX) for specificity (0,3,0)
+  Greeting username — orange (specificity 0,3,0 beats blue default at 0,2,0)
+  Hook: .dash-greeting-name added to greeting span in DashboardPage
+*/
+[data-theme="neutral"] .dash-greeting-name[class*="from-orange-"] {
+  --tw-gradient-from: #f97316;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(249, 115, 22, 0));
+}
+[data-theme="neutral"] .dash-greeting-name[class*="to-orange-"] {
+  --tw-gradient-to: #c2410c;
+}
+
+/*
+  Module card names — orange (specificity 0,3,0)
+  Hook: .module-card-name added to module name div in DashboardPage
+  Overrides all accent combos including from-stone-* (Codex)
+*/
+[data-theme="neutral"] .module-card-name {
+  --tw-gradient-from: #f97316;
+  --tw-gradient-stops: var(--tw-gradient-from), #c2410c;
+  --tw-gradient-to: #c2410c;
+}
+
+/*
+  Vault title — red (specificity 0,3,0)
+  Hook: .vault-gradient-title added to BiometricsPage JSX
 */
 [data-theme="neutral"] [class*="from-orange-"].vault-gradient-title {
   --tw-gradient-from: #ef4444;
@@ -108,23 +131,37 @@
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(14, 165, 233, 0));
 }
 
+/* Exercise card header text → blue (not near-black) */
+[data-theme="neutral"] [class*="from-stone-950"] .text-stone-100 { color: #1e3a8a !important; }
+[data-theme="neutral"] [class*="from-stone-950"] .text-stone-600 { color: #3b82f6 !important; }
+
 /*
   ── WEEKLY ADHERENCE GRID (neutral) ─────────────────────────
-  .weekly-done / .weekly-rest hooks added to WeeklyGrid in DashboardPage JSX
-  Specificity (0,2,0) beats base class rules
 */
-[data-theme="neutral"] .weekly-done { background-color: #34d399 !important; } /* emerald-400 */
-[data-theme="neutral"] .weekly-rest { background-color: #bfdbfe !important; border-color: #93c5fd !important; } /* blue-200 */
+[data-theme="neutral"] .weekly-done { background-color: #34d399 !important; }
+[data-theme="neutral"] .weekly-rest { background-color: #bfdbfe !important; border-color: #93c5fd !important; }
+
+/* This Week stats numbers → orange */
+[data-theme="neutral"] .weekly-stats-grid .text-stone-100 { color: #f97316 !important; }
 
 /*
   ── FORGE STAT BOX COLORS (neutral) ─────────────────────────
-  Hooks: forge-stat-volume, forge-stat-sets, forge-stat-reps, forge-stat-muscles
-  Specificity (0,3,0) — beats global .text-stone-100 / .text-orange-300 overrides at (0,2,0)
 */
-[data-theme="neutral"] .forge-stat-volume .text-orange-300 { color: #0ea5e9 !important; } /* blue */
-[data-theme="neutral"] .forge-stat-sets   .text-stone-100 { color: #0ea5e9 !important; } /* blue */
-[data-theme="neutral"] .forge-stat-reps   .text-stone-100 { color: #34d399 !important; } /* green */
-[data-theme="neutral"] .forge-stat-muscles .text-stone-100 { color: #94a3b8 !important; } /* slate-400 */
+[data-theme="neutral"] .forge-stat-volume .text-orange-300 { color: #0ea5e9 !important; }
+[data-theme="neutral"] .forge-stat-sets   .text-stone-100 { color: #0ea5e9 !important; }
+[data-theme="neutral"] .forge-stat-reps   .text-stone-100 { color: #34d399 !important; }
+[data-theme="neutral"] .forge-stat-muscles .text-stone-100 { color: #94a3b8 !important; }
+
+/*
+  ── FORGE MUSCLE CHIPS (neutral) ────────────────────────────
+  Hook: .muscle-chip on primary + secondary muscle tag spans in LoggerPage
+*/
+[data-theme="neutral"] .muscle-chip {
+  background-color: rgba(251, 146, 60, 0.12) !important;
+  background-image: linear-gradient(to right, rgba(251, 146, 60, 0.20), rgba(249, 115, 22, 0.06)) !important;
+  border-color: rgba(249, 115, 22, 0.30) !important;
+  color: #c2410c !important;
+}
 
 
 /* ── ROSE (light — soft pink / white / violet) ─────────────── */

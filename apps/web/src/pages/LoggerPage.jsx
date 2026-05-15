@@ -346,12 +346,12 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, weigh
           <h3 className="font-anton text-2xl tracking-tight text-stone-100 uppercase">{exercise.name}</h3>
           <div className="flex gap-1.5 flex-wrap">
             {exercise.primary.map(m => (
-              <span key={m} className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25 font-mono">
+              <span key={m} className="muscle-chip text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25 font-mono">
                 {MUSCLES[m]}
               </span>
             ))}
             {exercise.secondary.map(m => (
-              <span key={m} className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-stone-800/60 text-stone-400 border border-stone-700/60 font-mono">
+              <span key={m} className="muscle-chip text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-stone-800/60 text-stone-400 border border-stone-700/60 font-mono">
                 {MUSCLES[m]}
               </span>
             ))}

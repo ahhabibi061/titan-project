@@ -646,7 +646,7 @@ export default function Dashboard() {
                 {greeting()},{' '}
                 {loading
                   ? <Sk className="inline-block w-32 h-10 align-bottom" />
-                  : <span className="bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">{displayName}</span>
+                  : <span className="dash-greeting-name bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">{displayName}</span>
                 }.
               </h1>
             </div>
@@ -1095,7 +1095,7 @@ export default function Dashboard() {
                 <WeeklyGrid days={weeklyAdherence} />
               )}
 
-              <div className="mt-5 pt-5 border-t border-stone-800/60 grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="weekly-stats-grid mt-5 pt-5 border-t border-stone-800/60 grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>
                   <div className="text-[9px] uppercase tracking-wider text-stone-600 font-mono">Total Sets</div>
                   {loading
@@ -1203,7 +1203,7 @@ export default function Dashboard() {
                   <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1">
                     {m.sub}
                   </div>
-                  <div className={`font-anton text-2xl uppercase tracking-tight bg-gradient-to-br ${m.accent} bg-clip-text text-transparent`}>
+                  <div className={`module-card-name font-anton text-2xl uppercase tracking-tight bg-gradient-to-br ${m.accent} bg-clip-text text-transparent`}>
                     {m.name}
                   </div>
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" className="absolute top-3 right-3 text-stone-700 group-hover:text-orange-400 transition-colors">
