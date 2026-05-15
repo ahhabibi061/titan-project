@@ -57,7 +57,7 @@ export function useDashboard(userId) {
   }, []);
 
   useEffect(() => {
-    if (!userId || !storeProfile) return;
+    if (!userId) return;
     let cancelled = false;
 
     async function fetchAll() {
@@ -103,7 +103,7 @@ export function useDashboard(userId) {
 
           // 2. Today's workout — query by scheduled_date (avoids needing created_at column)
           supabase.from('workouts')
-            .select('id, name, completed_at, calories_burned, workout_exercises(id, exercises(name), sets(id, reps))')
+            .select('id, name, completed_at, workout_exercises(id, exercises(name), sets(id, reps))')
             .eq('user_id', userId)
             .eq('scheduled_date', todayStr)
             .order('completed_at', { ascending: false, nullsFirst: false })
@@ -184,12 +184,16 @@ export function useDashboard(userId) {
 
         if (cancelled) return;
 
-        const firstErr = [
-          nutritionTodayRes, workoutTodayRes, coachRes,
-          biometricsRes, nutritionWeekRes, workoutsWeekRes, workoutsStreakRes,
-          biometricsWeekRes, recentWorkoutsRes,
-        ].find(r => r.error)?.error;
-        if (firstErr) throw new Error(firstErr.message);
+        // Log individual query errors but never let one kill all panels
+        [
+          ['nutritionToday', nutritionTodayRes], ['workoutToday', workoutTodayRes],
+          ['coach', coachRes], ['biometrics', biometricsRes],
+          ['nutritionWeek', nutritionWeekRes], ['workoutsWeek', workoutsWeekRes],
+          ['workoutsStreak', workoutsStreakRes], ['biometricsWeek', biometricsWeekRes],
+          ['recentWorkouts', recentWorkoutsRes],
+        ].forEach(([name, res]) => {
+          if (res.error) console.error(`[useDashboard] ${name} query error:`, res.error.message);
+        });
 
         // ── Profile (from Zustand store, fetched once at app boot) ──
         const profile = storeProfile;

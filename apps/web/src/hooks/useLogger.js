@@ -169,7 +169,7 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
 
     const { data: w, error: err } = await supabase
       .from('workouts')
-      .select('id, name, completed_at, calories_burned')
+      .select('id, name, completed_at')
       .eq('user_id', userId)
       .eq('scheduled_date', today)
       .is('completed_at', null)
@@ -189,7 +189,7 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
   async function loadWorkoutById(id) {
     const { data: w, error: err } = await supabase
       .from('workouts')
-      .select('id, name, completed_at, calories_burned')
+      .select('id, name, completed_at')
       .eq('id', id)
       .eq('user_id', userId)
       .single();
@@ -269,7 +269,7 @@ export function useLogger(userId, workoutId = null, userWeightKg = 80) {
     const { data, error: err } = await supabase
       .from('workouts')
       .insert({ user_id: uid, name, scheduled_date: new Date().toISOString().split('T')[0] })
-      .select('id, name, completed_at, calories_burned')
+      .select('id, name, completed_at')
       .single();
 
     if (err) { console.error('[useLogger] workouts insert error:', err); setError('Failed to start workout.'); return; }
