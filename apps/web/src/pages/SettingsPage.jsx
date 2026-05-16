@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useSession } from '../hooks/useSession';
 import { useProfileStore } from '../store/useProfileStore';
 import { useTheme, THEME_OPTIONS } from '../hooks/useTheme';
+import { PENDING_TIER_KEY } from '../hooks/useProfile';
 
 // -------------------- DOMAIN --------------------
 const ACTIVITY_LEVELS = [
@@ -547,6 +548,10 @@ export default function SettingsPage() {
       );
       const data = await res.json();
       if (!res.ok || !data.url) throw new Error(data.error ?? 'Failed to start checkout');
+      // Mark the expected tier in localStorage BEFORE the Stripe redirect.
+      // After the redirect (full page reload), useProfile reads this and polls
+      // until the webhook has updated the DB, then syncs the store.
+      localStorage.setItem(PENDING_TIER_KEY, tierName);
       window.location.href = data.url;
     } catch (err) {
       setUpgradeError(err.message);
