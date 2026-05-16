@@ -1111,6 +1111,7 @@ export default function SettingsPage() {
                   )}
 
                   {/* Elite */}
+                  {tier !== 'elite' && (
                   <button
                     type="button"
                     disabled={!!upgradeLoading}
@@ -1128,6 +1129,7 @@ export default function SettingsPage() {
                     </div>
                     <div className="text-[10px] font-mono text-stone-500 uppercase tracking-wider">/ month · Real-time coach · Form check · Custom programming</div>
                   </button>
+                  )}
 
                 </div>
 
