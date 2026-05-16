@@ -1081,8 +1081,8 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* Upgrade — only shown when not already on Elite */}
-            {tier !== 'elite' && (
+            {/* Upgrade — only shown when profile is loaded AND user is not already on Elite */}
+            {storeProfile && tier !== 'elite' && (
               <div className="mb-8">
                 <div className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono mb-4">
                   Upgrade Plan
