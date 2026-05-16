@@ -300,11 +300,12 @@ export default function SettingsPage() {
   }, [session, sessionLoading, navigate]);
 
   // Re-check subscription_tier from DB every time Settings mounts.
-  // The store is seeded at boot; after a Stripe upgrade the webhook may have updated
-  // the DB but the store still holds the old tier. This single lightweight query
-  // keeps the tier badge and upgrade buttons accurate without a full page reload.
+  // Only upgrades the store — never downgrades (DB may be momentarily stale while
+  // the Stripe webhook is in-flight or the client-side DB write is still pending).
   useEffect(() => {
     if (!user?.id) return;
+    // If an upgrade is still being confirmed, trust the optimistic store value.
+    if (localStorage.getItem(PENDING_TIER_KEY)) return;
     supabase
       .from('profiles')
       .select('subscription_tier')
@@ -312,7 +313,11 @@ export default function SettingsPage() {
       .single()
       .then(({ data }) => {
         if (!data) return;
-        if (data.subscription_tier !== storeProfile?.subscription_tier) {
+        const RANK = { basic: 0, pro: 1, elite: 2 };
+        const dbRank    = RANK[data.subscription_tier]              ?? 0;
+        const storeRank = RANK[storeProfile?.subscription_tier]     ?? 0;
+        // Only write to store if DB has a HIGHER tier — never downgrade via re-fetch.
+        if (dbRank > storeRank) {
           updateProfile({ subscription_tier: data.subscription_tier });
         }
       });
