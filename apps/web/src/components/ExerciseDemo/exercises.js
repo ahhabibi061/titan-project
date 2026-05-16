@@ -677,6 +677,405 @@ export const EXERCISE_DEMOS = {
     ],
   },
 
+  // ── CABLE ──────────────────────────────────────────────────────────────────
+  cable_curl: {
+    name: 'Cable Curl',
+    primaryMuscles:   ['biceps'],
+    secondaryMuscles: ['forearm'],
+    lottieFile: 'cable_curl',
+    mechanics: 'Elbow Flexion (Cable)',
+    joints: ['Elbow'],
+    cues: [
+      'Elbows pinned to your sides — constant tension unlike free weights',
+      'Cable keeps load on the bicep at the bottom — use it',
+      'Full supination at the top',
+      'Slow the eccentric — 2–3 seconds down',
+    ],
+  },
+
+  cable_lateral: {
+    name: 'Cable Lateral Raise',
+    primaryMuscles:   ['front-deltoids'],
+    secondaryMuscles: [],
+    lottieFile: 'cable_lateral',
+    mechanics: 'Shoulder Abduction (Cable)',
+    joints: ['Shoulder'],
+    cues: [
+      'Cable from the low pulley on the opposite side of the working arm',
+      'Slight bend in elbow — fixed throughout',
+      'Stop at shoulder height — above that is trap',
+      'Cable provides load at the bottom that dumbbells don\'t',
+    ],
+  },
+
+  cable_machine_pullover: {
+    name: 'Cable Pullover',
+    primaryMuscles:   ['upper-back'],
+    secondaryMuscles: ['triceps', 'chest'],
+    lottieFile: 'cable_machine_pullover',
+    mechanics: 'Shoulder Extension (Cable)',
+    joints: ['Shoulder'],
+    cues: [
+      'Arms stay mostly straight — slight bend only',
+      'Pull from overhead down to your hips in an arc',
+      'Feel the lat stretch fully at the top',
+      'Squeeze lats hard at the bottom of the arc',
+    ],
+  },
+
+  cable_pull_through: {
+    name: 'Cable Pull-Through',
+    primaryMuscles:   ['gluteal'],
+    secondaryMuscles: ['hamstring', 'lower-back'],
+    lottieFile: 'cable_pull_through',
+    mechanics: 'Hip Hinge (Cable)',
+    joints: ['Hip'],
+    cues: [
+      'Cable between your legs from the low pulley',
+      'Hinge at the hip — not a squat',
+      'Drive hips forward explosively at the top',
+      'Squeeze glutes hard at full extension',
+      'Let the cable pull you back into the hinge on the eccentric',
+    ],
+  },
+
+  cable_row: {
+    name: 'Seated Cable Row',
+    primaryMuscles:   ['upper-back'],
+    secondaryMuscles: ['biceps', 'back-deltoids'],
+    lottieFile: 'cable_row',
+    mechanics: 'Horizontal Pull (Cable)',
+    joints: ['Shoulder', 'Elbow'],
+    cues: [
+      'Sit upright — no excessive torso lean at any point',
+      'Pull to your lower abdomen — elbows stay tight',
+      'Squeeze shoulder blades together hard at the finish',
+      'Control the return — don\'t let the stack pull you forward',
+      'Full stretch at the front — let scapulae protract',
+    ],
+  },
+
+  cable_woodchop: {
+    name: 'Cable Woodchop',
+    primaryMuscles:   ['obliques'],
+    secondaryMuscles: ['abs'],
+    lottieFile: 'cable_woodchop',
+    mechanics: 'Rotational Pull',
+    joints: ['Spine', 'Shoulder'],
+    cues: [
+      'Rotate from the torso — not just the arms',
+      'Arms stay nearly straight throughout',
+      'Hips stay square — rotation is spinal, not hip',
+      'Control both directions — the return is the exercise too',
+    ],
+  },
+
+  chest_press: {
+    name: 'Machine Chest Press',
+    primaryMuscles:   ['chest'],
+    secondaryMuscles: ['front-deltoids', 'triceps'],
+    lottieFile: 'chest_press',
+    mechanics: 'Horizontal Push (Machine)',
+    joints: ['Shoulder', 'Elbow'],
+    cues: [
+      'Adjust seat so handles are at mid-chest height',
+      'Retract scapulae before pressing — stay retracted',
+      'Full lockout at top, controlled return',
+      'Great for progressive overload without a spotter',
+    ],
+  },
+
+  // ── CORE (ADVANCED) ────────────────────────────────────────────────────────
+  dead_bug: {
+    name: 'Dead Bug',
+    primaryMuscles:   ['abs'],
+    secondaryMuscles: ['lower-back'],
+    lottieFile: 'dead_bug',
+    mechanics: 'Anti-Extension (Contralateral)',
+    joints: ['Spine'],
+    cues: [
+      'Lower back pressed flat into the floor — never arch',
+      'Opposite arm and leg extend simultaneously',
+      'Breathe out as you extend — exhale = brace',
+      'Move slowly — this is a control drill, not a rep race',
+    ],
+  },
+
+  dragon_flag: {
+    name: 'Dragon Flag',
+    primaryMuscles:   ['abs'],
+    secondaryMuscles: ['obliques', 'lower-back'],
+    lottieFile: 'dragon_flag',
+    mechanics: 'Spinal Flexion (Advanced)',
+    joints: ['Spine'],
+    cues: [
+      'Grip a fixed object behind your head for stability',
+      'Lower as one rigid unit — no hip pike or sag',
+      'The eccentric is where the work happens — go slow',
+      'Beginners: bend knees to reduce lever arm',
+    ],
+  },
+
+  pallof_press: {
+    name: 'Pallof Press',
+    primaryMuscles:   ['obliques'],
+    secondaryMuscles: ['abs'],
+    lottieFile: 'pallof_press',
+    mechanics: 'Anti-Rotation Isometric',
+    joints: ['Spine', 'Shoulder'],
+    cues: [
+      'Stand perpendicular to the cable — that\'s the whole point',
+      'Resist the rotation — do not let your torso turn',
+      'Press out fully, hold 1–2 seconds, return',
+      'Wider stance = more stable. Narrower = harder.',
+    ],
+  },
+
+  russian_twist: {
+    name: 'Russian Twist',
+    primaryMuscles:   ['obliques'],
+    secondaryMuscles: ['abs'],
+    lottieFile: 'russian_twist',
+    mechanics: 'Rotational Flexion',
+    joints: ['Spine'],
+    cues: [
+      'Lean back to ~45° and stay there',
+      'Rotate from the torso — hands follow, not lead',
+      'Feet elevated increases the challenge significantly',
+      'Touch the floor either side for full rotation',
+    ],
+  },
+
+  // ── LEGS (ADDITIONAL) ──────────────────────────────────────────────────────
+  hack_squat: {
+    name: 'Hack Squat',
+    primaryMuscles:   ['quadriceps'],
+    secondaryMuscles: ['gluteal', 'hamstring'],
+    lottieFile: 'hack_squat',
+    mechanics: 'Bilateral Squat (Machine)',
+    joints: ['Hip', 'Knee'],
+    cues: [
+      'Feet low on the platform = more quad emphasis',
+      'Lower until hips are below parallel — full depth',
+      'Keep lower back against the pad throughout',
+      'Drive through heels and mid-foot equally',
+    ],
+  },
+
+  adductor_machine: {
+    name: 'Adductor Machine',
+    primaryMuscles:   ['adductor'],
+    secondaryMuscles: [],
+    lottieFile: 'adductor_machine',
+    mechanics: 'Hip Adduction (Machine)',
+    joints: ['Hip'],
+    cues: [
+      'Adjust the range so you feel a full inner-thigh stretch',
+      'Control the eccentric — don\'t let it snap open',
+      'Squeeze hard at the close position',
+      'Often undertrained — don\'t skip it',
+    ],
+  },
+
+  seated_calf: {
+    name: 'Seated Calf Raise',
+    primaryMuscles:   ['calves'],
+    secondaryMuscles: [],
+    lottieFile: 'seated_calf',
+    mechanics: 'Plantar Flexion (Knee Bent)',
+    joints: ['Ankle'],
+    cues: [
+      'Knee bent isolates the soleus — a different muscle to standing',
+      'Full stretch at the bottom — don\'t bounce',
+      'Slow, deliberate reps — calves need TUT to grow',
+      'Pair with standing calf raises for complete development',
+    ],
+  },
+
+  // ── CARRIES & LOCOMOTION ───────────────────────────────────────────────────
+  farmers_carry: {
+    name: 'Farmer\'s Carry',
+    primaryMuscles:   ['trapezius', 'forearm'],
+    secondaryMuscles: ['abs', 'gluteal'],
+    lottieFile: 'farmers_carry',
+    mechanics: 'Loaded Carry',
+    joints: ['Shoulder Girdle', 'Wrist'],
+    cues: [
+      'Stand tall — don\'t let the weight pull your shoulders down',
+      'Short, controlled steps — don\'t rush',
+      'Brace your core hard throughout the entire carry',
+      'Grip as hard as possible — that\'s the point',
+    ],
+  },
+
+  sled_push: {
+    name: 'Sled Push',
+    primaryMuscles:   ['quadriceps', 'gluteal'],
+    secondaryMuscles: ['hamstring', 'front-deltoids'],
+    lottieFile: 'sled_push',
+    mechanics: 'Locomotion / Power',
+    joints: ['Hip', 'Knee', 'Shoulder'],
+    cues: [
+      'Lean forward into the sled — don\'t stand upright',
+      'Drive through the whole foot — not just the toes',
+      'Arms stay straight and drive the sled, not pull you',
+      'Short powerful strides — not long lunging steps',
+    ],
+  },
+
+  // ── CARDIO MACHINES ────────────────────────────────────────────────────────
+  assault_bike: {
+    name: 'Assault Bike',
+    primaryMuscles:   ['quadriceps'],
+    secondaryMuscles: ['gluteal', 'hamstring', 'front-deltoids'],
+    lottieFile: 'assault_bike',
+    mechanics: 'Full-Body Cardio',
+    joints: ['Hip', 'Knee', 'Shoulder', 'Elbow'],
+    cues: [
+      'Push and pull the handles equally — use your arms',
+      'Drive through the whole pedal stroke — not just the downstroke',
+      'Stay seated for aerobic work; stand for max-effort sprints',
+      'The harder you go, the harder the resistance gets',
+    ],
+  },
+
+  rowing_machine: {
+    name: 'Rowing Machine',
+    primaryMuscles:   ['upper-back'],
+    secondaryMuscles: ['hamstring', 'gluteal', 'biceps'],
+    lottieFile: 'rowing_machine',
+    mechanics: 'Full-Body Pull (Cardio)',
+    joints: ['Hip', 'Knee', 'Shoulder', 'Elbow'],
+    cues: [
+      'Drive sequence: legs → hips → arms. Return: arms → hips → legs',
+      'Legs do 60% of the work — don\'t arm-row',
+      'At the finish: lean back slightly, elbows past torso',
+      'Catch position: shins vertical, arms straight, body forward',
+    ],
+  },
+
+  // ── KETTLEBELL (ADDITIONAL) ────────────────────────────────────────────────
+  kb_clean: {
+    name: 'Kettlebell Clean',
+    primaryMuscles:   ['gluteal', 'upper-back'],
+    secondaryMuscles: ['hamstring', 'trapezius', 'front-deltoids'],
+    lottieFile: 'kb_clean',
+    mechanics: 'Ballistic Pull',
+    joints: ['Hip', 'Shoulder', 'Elbow'],
+    cues: [
+      'Hike the bell back like a swing, then drive the hips',
+      'The bell should float — guide it, don\'t muscle it',
+      'Catch in the rack position — bell rests on forearm, elbow at hip',
+      'Wrist stays neutral throughout — no flipping',
+    ],
+  },
+
+  kb_deadlift: {
+    name: 'Kettlebell Deadlift',
+    primaryMuscles:   ['gluteal', 'hamstring'],
+    secondaryMuscles: ['lower-back', 'upper-back'],
+    lottieFile: 'kb_deadlift',
+    mechanics: 'Hip Hinge',
+    joints: ['Hip', 'Knee'],
+    cues: [
+      'Bell centred between feet — mid-foot position',
+      'Hinge, grip, brace — then push the floor away',
+      'Neutral spine from setup through lockout',
+      'Lockout by squeezing glutes — not by leaning back',
+    ],
+  },
+
+  kb_goblet_squat: {
+    name: 'Kettlebell Goblet Squat',
+    primaryMuscles:   ['quadriceps'],
+    secondaryMuscles: ['gluteal', 'abs'],
+    lottieFile: 'kb_goblet_squat',
+    mechanics: 'Bilateral Squat (Anterior Load)',
+    joints: ['Hip', 'Knee', 'Ankle'],
+    cues: [
+      'Hold the bell at chest height — elbows inside knees at depth',
+      'The anterior load forces an upright torso — use it',
+      'Full depth — elbows push knees out at the bottom',
+      'Great squat teaching tool — groove the pattern',
+    ],
+  },
+
+  kb_lunge: {
+    name: 'Kettlebell Lunge',
+    primaryMuscles:   ['quadriceps'],
+    secondaryMuscles: ['gluteal', 'hamstring'],
+    lottieFile: 'kb_lunge',
+    mechanics: 'Unilateral Squat (Split)',
+    joints: ['Hip', 'Knee'],
+    cues: [
+      'Step length determines emphasis — long = glute, short = quad',
+      'Back knee drops straight down — not forward',
+      'Torso stays upright throughout',
+      'Front shin stays vertical at the bottom',
+    ],
+  },
+
+  kb_press: {
+    name: 'Kettlebell Press',
+    primaryMuscles:   ['front-deltoids'],
+    secondaryMuscles: ['triceps', 'trapezius'],
+    lottieFile: 'kb_press',
+    mechanics: 'Vertical Push (Unilateral)',
+    joints: ['Shoulder', 'Elbow'],
+    cues: [
+      'Start from rack position — bell rests on forearm',
+      'Press straight up — bicep beside your ear at lockout',
+      'Brace core hard — unilateral load challenges stability',
+      'Wrist stays straight — pack the shoulder throughout',
+    ],
+  },
+
+  kb_row: {
+    name: 'Kettlebell Row',
+    primaryMuscles:   ['upper-back'],
+    secondaryMuscles: ['biceps', 'back-deltoids'],
+    lottieFile: 'kb_row',
+    mechanics: 'Horizontal Pull (Unilateral)',
+    joints: ['Shoulder', 'Elbow'],
+    cues: [
+      'Support yourself on a bench — same-side hand and knee',
+      'Let the bell hang — full stretch at the bottom',
+      'Pull elbow back and up — lead with the elbow',
+      'Don\'t rotate — keep hips and shoulders square',
+    ],
+  },
+
+  kb_turkish_getup: {
+    name: 'Turkish Get-Up',
+    primaryMuscles:   ['abs', 'front-deltoids'],
+    secondaryMuscles: ['gluteal', 'upper-back', 'obliques'],
+    lottieFile: 'kb_turkish_getup',
+    mechanics: 'Multi-Pattern Stability',
+    joints: ['Shoulder', 'Hip', 'Spine'],
+    cues: [
+      'Eyes on the bell at every stage — never look away',
+      'Move slowly and with intention — this is not a speed drill',
+      'Lock the shoulder in its socket before any movement',
+      'Each position is a pause — own each step',
+      'Learn the movement with no weight before loading',
+    ],
+  },
+
+  smith_ohp: {
+    name: 'Smith Machine OHP',
+    primaryMuscles:   ['front-deltoids'],
+    secondaryMuscles: ['triceps', 'trapezius'],
+    lottieFile: 'smith_ohp',
+    mechanics: 'Vertical Push (Smith Machine)',
+    joints: ['Shoulder', 'Elbow'],
+    cues: [
+      'Set the bar at upper chest height in the rack',
+      'Sit slightly in front of the bar — not directly under it',
+      'Press to full lockout — bar travels in a fixed path',
+      'Controlled descent — don\'t drop it',
+    ],
+  },
+
   // ── KETTLEBELL ─────────────────────────────────────────────────────────────
   kb_swing: {
     name: 'Kettlebell Swing',
