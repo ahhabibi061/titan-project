@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import AppNav from '../components/AppNav';
+import { useProfileStore } from '../store/useProfileStore';
 
 /* =========================================================================
  * EXERCISE LIBRARY — Module 2 Proof-of-Concept
@@ -735,7 +736,8 @@ export default function ExerciseLibrary() {
   const [activeEquipment, setActiveEquipment] = useState(new Set());
   const [sortBy, setSortBy] = useState('popular');
   const [selected, setSelected] = useState(null);
-  const [isPro] = useState(false); // demo: free tier
+  const tier  = useProfileStore(s => s.profile?.subscription_tier ?? 'basic');
+  const isPro = tier === 'pro' || tier === 'elite';
 
   const toggleSet = (set, id) => {
     const next = new Set(set);
