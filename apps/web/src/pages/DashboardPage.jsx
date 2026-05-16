@@ -463,13 +463,21 @@ export default function Dashboard() {
   }, []);
 
   // Stripe only fires success_url after payment is confirmed — trust the URL param.
-  // Update the store immediately so every page sees the new tier right away.
-  // The webhook handles DB persistence separately; this keeps the UI instant.
-  const setProfile = useProfileStore(s => s.setProfile);
+  // Write the new tier to both the Zustand store and the DB immediately.
+  // This is the client-side fallback for when the webhook hasn't fired yet.
   useEffect(() => {
-    if (!showUpgradeBanner || !upgradedTier) return;
+    if (!showUpgradeBanner || !upgradedTier || !user?.id) return;
+    const validTiers = ['pro', 'elite'];
+    if (!validTiers.includes(upgradedTier)) return;
     updateProfile({ subscription_tier: upgradedTier });
-  }, [showUpgradeBanner, upgradedTier]); // eslint-disable-line react-hooks/exhaustive-deps
+    supabase
+      .from('profiles')
+      .update({ subscription_tier: upgradedTier })
+      .eq('id', user.id)
+      .then(({ error }) => {
+        if (error) console.error('[Dashboard] tier DB write failed:', error);
+      });
+  }, [showUpgradeBanner, upgradedTier, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load plateau alerts from recent workouts (last 7 days)
   useEffect(() => {
