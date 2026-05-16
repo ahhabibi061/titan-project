@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${Deno.env.get('SITE_URL') ?? 'http://localhost:5173'}/dashboard?upgraded=true`,
+      success_url: `${Deno.env.get('SITE_URL') ?? 'http://localhost:5173'}/dashboard?upgraded=true&tier=${tier}`,
       cancel_url: `${Deno.env.get('SITE_URL') ?? 'http://localhost:5173'}/settings`,
       customer_email: user.email,
       metadata: { userId: user.id, tier },

@@ -427,10 +427,12 @@ function getCheckinBannerVisible() {
 export default function Dashboard() {
   const { user } = useSession();
   const { data, loading, refetch } = useDashboard(user?.id);
-  const zustandProfile = useProfileStore(s => s.profile);
+  const zustandProfile  = useProfileStore(s => s.profile);
+  const updateProfile   = useProfileStore(s => s.updateProfile);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [showUpgradeBanner, setShowUpgradeBanner] = useState(searchParams.get('upgraded') === 'true');
+  const [upgradedTier] = useState(searchParams.get('tier')); // captured before URL is cleared
   const [showCheckinBanner, setShowCheckinBanner] = useState(getCheckinBannerVisible);
   const [showCheckinModal, setShowCheckinModal]   = useState(false);
   const [showBreakdown, setShowBreakdown]         = useState(false);
@@ -459,6 +461,33 @@ export default function Dashboard() {
   useEffect(() => {
     if (showUpgradeBanner) setSearchParams({}, { replace: true });
   }, []);
+
+  // Poll Supabase until the webhook has written the new tier, then update the store
+  useEffect(() => {
+    if (!showUpgradeBanner || !upgradedTier || !user?.id) return;
+    if (zustandProfile?.subscription_tier === upgradedTier) return;
+
+    let attempts = 0;
+    let timer;
+
+    const poll = async () => {
+      attempts++;
+      const { data: fresh } = await supabase
+        .from('profiles')
+        .select('subscription_tier')
+        .eq('id', user.id)
+        .single();
+
+      if (fresh?.subscription_tier === upgradedTier) {
+        updateProfile({ subscription_tier: upgradedTier });
+      } else if (attempts < 8) {
+        timer = setTimeout(poll, 2000);
+      }
+    };
+
+    timer = setTimeout(poll, 1500); // give webhook ~1.5 s head-start
+    return () => clearTimeout(timer);
+  }, [showUpgradeBanner, upgradedTier, user?.id]);
 
   // Load plateau alerts from recent workouts (last 7 days)
   useEffect(() => {
@@ -521,7 +550,7 @@ export default function Dashboard() {
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     return parts[0].slice(0, 2).toUpperCase();
   })();
-  const tier          = profile?.subscription_tier ?? 'basic';
+  const tier          = zustandProfile?.subscription_tier ?? profile?.subscription_tier ?? 'basic';
   const tierLabel     = tier.toUpperCase();
   const goalLabel     = profile?.goal ? `goal: ${profile.goal}` : 'loading';
   // Use Zustand profile for real-time streak updates (set by useBiometricVault after each log)
@@ -596,10 +625,10 @@ export default function Dashboard() {
             <div className="relative mb-8 border border-orange-500/40 bg-orange-500/10 px-6 py-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-4">
                 <span style={{ fontFamily: 'Anton, sans-serif', fontSize: 20, letterSpacing: 2, color: '#ed7a2a' }}>
-                  WELCOME TO THE NEXT LEVEL
+                  WELCOME TO {upgradedTier ? upgradedTier.toUpperCase() : 'THE NEXT LEVEL'}
                 </span>
                 <span className="text-sm text-stone-300" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                  Your subscription is now active. All Pro features are unlocked.
+                  Your subscription is now active. All {upgradedTier ? upgradedTier.charAt(0).toUpperCase() + upgradedTier.slice(1) : ''} features are unlocked.
                 </span>
               </div>
               <button
