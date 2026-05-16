@@ -1208,11 +1208,11 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
-                { name: 'FORGE',    sub: 'Workout',   accent: 'from-orange-300 to-orange-600', to: '/logger' },
-                { name: 'Sentinel', sub: 'Nutrition', accent: 'from-amber-300 to-orange-500',  to: '/nutrition' },
-                { name: 'Vault',    sub: 'Biometric', accent: 'from-orange-300 to-red-500',    to: '/biometrics' },
-                { name: 'Codex',    sub: 'Exercises', accent: 'from-stone-300 to-stone-500',   to: '/exercises' },
-                { name: 'Oracle',   sub: 'Engine',    accent: 'from-orange-400 to-orange-700', to: '/coach' },
+                { name: 'FORGE',    sub: 'Workout',   accent: 'from-orange-400 to-orange-600',  to: '/logger' },
+                { name: 'Sentinel', sub: 'Nutrition', accent: 'from-emerald-400 to-green-600', to: '/nutrition' },
+                { name: 'Vault',    sub: 'Biometric', accent: 'from-cyan-300 to-blue-500',     to: '/biometrics' },
+                { name: 'Codex',    sub: 'Exercises', accent: 'from-violet-400 to-purple-600', to: '/exercises' },
+                { name: 'Oracle',   sub: 'Engine',    accent: 'from-amber-300 to-yellow-500',  to: '/coach' },
               ].map(m => (
                 <Link
                   key={m.name}
