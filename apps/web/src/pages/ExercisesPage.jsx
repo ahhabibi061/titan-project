@@ -240,6 +240,245 @@ function MotionIcon({ pattern, className = '' }) {
   }
 }
 
+// -------------------- MISTAKES --------------------
+const MISTAKES = {
+  bench:              ['Elbows flared to 90° strains the anterior shoulder capsule — tuck to ~45°', 'Excessive lumbar arch shortens pectoral ROM and reduces stretch stimulus', 'Bouncing the bar off the chest bypasses the hardest portion of the lift'],
+  incline_db:         ['Bench angle above 45° shifts load from upper chest to front delts', 'Not lowering to full stretch — the lengthened position drives the most hypertrophy', 'Pressing straight up rather than arcing inward reduces pectoral activation'],
+  cable_fly:          ['Bending the elbows and turning the fly into a press — maintain a constant soft elbow', 'Not crossing hands at the midline — the crossover finishes the pec\'s adduction function', 'Overloading beyond control — cable flies are a finisher, not a strength lift'],
+  dips:               ['Torso too upright shifts load to triceps — a 30° forward lean is required for chest emphasis', 'Not reaching full depth — shoulder must reach elbow level at the bottom for maximum stretch', 'Shrugging the shoulders at the top reduces shoulder stability and traps control'],
+  ohp:                ['Pressing in front of the face rather than directly overhead — bar must end over the ears', 'Hyperextending the lower back instead of bracing the core under load', 'Insufficient thoracic extension limits overhead lockout and forces lumbar compensation'],
+  lateral_raise:      ['Using momentum to swing the weights up rather than controlled deltoid abduction', 'Raising above shoulder height — the supraspinatus takes over above parallel', 'Internal rotation at the top (pinkies below thumbs) reduces middle delt activation'],
+  rear_delt_fly:      ['Too much weight causing trap shrugging that removes rear delt isolation', 'Not pausing at peak contraction — the rear delt needs a deliberate squeeze', 'Driving with arm momentum rather than initiating from the posterior shoulder'],
+  face_pull:          ['Cable set too low — the attachment should be at face height or above', 'Pulling to the neck rather than the forehead, which reduces external rotation range', 'Excessive weight replacing the critical external rotation at end range with a partial pull'],
+  pullup:             ['Kipping or swinging to reduce difficulty — removes the intended strength adaptation', 'Chin not clearing the bar, which misses the peak lat contraction', 'No full dead hang at the bottom — partial range removes lat stretch stimulus'],
+  row:                ['Rounding the lower back under load — the hip hinge must be maintained throughout', 'Pulling to the upper chest instead of the lower abdomen reduces lat involvement', 'Jerking with momentum rather than controlled lat drive'],
+  lat_pulldown:       ['Pulling the bar behind the neck — this is a cervical spine injury risk with no benefit', 'Leaning back excessively and turning the exercise into a partial row', 'Very wide grip reduces ROM — shoulder-width to slightly wider is optimal'],
+  tbar_row:           ['Hips rising during the pull, converting the row into a near-deadlift', 'Partial range — bar must travel to the sternum, not just mid-air', 'Jerking the weight off the floor without engaging the lats first'],
+  shrug:              ['Rolling the shoulders in a circular motion — only vertical elevation trains the traps; rolling risks the AC joint', 'Not achieving full elevation through a straight vertical path', 'Not pausing at the top — the trap contracts maximally at peak elevation'],
+  curl:               ['Swinging the torso back to initiate the curl removes bicep loading at the bottom', 'Elbows drifting forward at the top — they should stay pinned to the sides throughout', 'Partial ROM — not fully supinating the wrist at the top reduces peak bicep activation'],
+  hammer_curl:        ['Rotating the wrist at the top defeats the neutral grip purpose — maintain neutral throughout', 'Using momentum to speed through reps — the brachialis requires slow, deliberate loading', 'Not lowering under control — the eccentric phase is where significant adaptation occurs'],
+  preacher_curl:      ['Hyperextending the elbow at the bottom stresses the joint, not the bicep', 'Not achieving full supination at the top — the bicep\'s supination function is undertrained', 'Armpits not seated at the top of the pad — sliding down loses the isolation purpose'],
+  tricep_pushdown:    ['Elbows drifting forward and away from the body — they must stay pinned throughout', 'Not achieving full elbow extension at the bottom — this is where the triceps are maximally activated', 'Leaning forward excessively and converting the movement into a chest-assisted press'],
+  skullcrusher:       ['Elbows flaring outward during the movement — they should remain fixed and parallel', 'Not lowering toward the forehead — stopping high removes the stretch on the long triceps head', 'Crashing the bar down using uncontrolled speed — control the eccentric or switch to dumbbells'],
+  squat:              ['Knee valgus (caving inward) under load — signals glute weakness and risks knee injury', 'Not reaching hip-below-knee depth — parallel squats underload the glutes through the bottom range', 'Forward torso lean converting the squat into a good morning — caused by ankle mobility deficit'],
+  front_squat:        ['Elbows dropping during the set loses the rack position and pitches the bar forward', 'Excessive forward lean of the torso — the front squat demands more upright posture than the back squat', 'Insufficient wrist mobility forcing the elbows down — use a cross-arm grip as regression'],
+  leg_press:          ['Locking out the knees at the top shifts load from quads onto the joint', 'Feet too low on the platform overloads the knee rather than the quads and glutes', 'Lower back rounding off the pad at the bottom — keep it flat against the seat throughout'],
+  rdl:                ['Squatting the weight down rather than hinging — knees should remain nearly straight', 'Bar drifting away from the body — it must remain in contact with the legs throughout', 'Not feeling hamstring stretch at the bottom indicates insufficient hip hinge depth'],
+  deadlift:           ['Bar starting over the toes rather than mid-foot — lengthens lever arm and strains lower back', 'Jerking the bar off the floor — force should be applied progressively through the pull', 'Hyperextending at lockout instead of simply extending hips and glutes to neutral'],
+  leg_curl:           ['Lifting the hips off the pad to increase ROM — uses hip extension to cheat the movement', 'Not achieving full knee flexion at the top — the hamstrings contract maximally at short length', 'Fast, bouncy reps that use momentum through the concentric phase'],
+  hip_thrust:         ['Chin not tucked — looking forward creates cervical extension and alters spinal position', 'Not achieving full hip extension at the top — the glutes are loaded most at maximum extension', 'Bar positioned too high on the abdomen rather than over the hip crease'],
+  bulgarian:          ['Front foot too close to the bench, forcing the torso to pitch too far forward', 'Rear foot actively pushing — the back leg should be passive; all drive comes from the front', 'Allowing the front knee to drift inward under the unilateral load'],
+  calf_raise:         ['Bouncing at the bottom to use Achilles tendon recoil — this bypasses muscle work', 'Partial ROM at the top — must reach full plantarflexion for maximum activation', 'Too fast a rep speed — calves respond better to slow tempo with a full bottom-stretch pause'],
+  crunch:             ['Pulling the neck forward with the hands rather than curling the thoracic spine', 'Hinging at the hips rather than curling the spine — the movement is spinal flexion, not a hip hinge', 'Using momentum to swing through reps rather than controlled rectus abdominis contraction'],
+  plank:              ['Hips sagging below spine level — this places compressive load on the lumbar spine', 'Hips elevated above spine level — this significantly reduces core activation', 'Holding breath rather than breathing through the brace — leads to premature fatigue'],
+  leg_raise:          ['Swinging the legs up with momentum — posterior pelvic tilt must initiate the movement', 'Hyperextending the lower back at the bottom of the descent', 'Legs not returning to full hang between reps — the bottom stretch position increases abs ROM'],
+  pushup:             ['Hips sagging below a neutral spine — core must remain braced throughout', 'Elbows flaring to 90° from the torso increases anterior shoulder stress', 'Partial range of motion — chest should contact the floor on every repetition'],
+  pike_pushup:        ['Hips not elevated high enough — the inverted V must be maintained throughout', 'Head not travelling between the hands on descent — must go through to simulate an overhead press', 'Elbows flaring wide rather than pointing back reduces shoulder press specificity'],
+  diamond_pushup:     ['Elbows tracking outward rather than back along the torso', 'Hips rising to reduce difficulty — maintain a rigid plank throughout', 'Wrists forced into painful extension — use fists or handles if wrist extension is uncomfortable'],
+  inverted_row:       ['Hips breaking from the plank position — the body must remain rigid like a board', 'Pulling only with the arms rather than initiating from the shoulder blades', 'Foot placement too easy — elevate feet or add a vest to maintain progressive overload'],
+  bodyweight_squat:   ['Heels rising off the floor — signals ankle mobility deficit', 'Knee valgus (caving inward) during descent or ascent', 'Hip crease not reaching knee height — the movement should reach full depth'],
+  pistol_squat:       ['Stance leg knee collapsing inward under single-leg load', 'Excessive arm swing compensating for hip mobility limitations rather than addressing them', 'Descending too quickly — the eccentric must be deliberate and controlled'],
+  glute_bridge:       ['Extending through the lumbar spine rather than the hips at the top', 'Feet too far from the hips, converting the bridge to a lower-back dominant movement', 'Not achieving full hip extension — glutes must be maximally contracted at the top'],
+  nordic_curl:        ['Relying on the arms to push up from the bottom rather than the hamstrings', 'Lowering too quickly without resisting — the eccentric is the entire training stimulus', 'Ankles not secured firmly, allowing movement that defeats the exercise purpose'],
+  dip_bw:             ['Shrugging the shoulders rather than depressing them — creates neck strain and reduces stability', 'Only a partial dip — upper arms must reach parallel to the floor at minimum', 'Not controlling the descent — the eccentric phase provides the greatest tricep loading'],
+  chin_up:            ['Kipping or using momentum to reduce difficulty', 'No full dead hang at the bottom — partial range removes bicep and lat stretch stimulus', 'Chin only reaching bar level rather than clearing it — the rep is incomplete'],
+  situp:              ['Pulling the neck forward with the hands, creating cervical flexion under load', 'Rising too quickly using momentum rather than rectus abdominis contraction', 'Not lowering under control — the eccentric trains the abs under lengthening'],
+  ab_wheel:           ['Hips rising during the rollout — the spine must maintain extension throughout', 'Rolling too far without sufficient core strength — the lower back will flex and can be injured', 'Not pulling back with the lats — the return is a lat-dominant movement, not a crunch'],
+  kb_swing:           ['Squatting the bell down rather than hiking it back — the swing is a hinge, not a squat', 'Arm-dominant swing where the arms pull the bell up rather than hip drive propelling it', 'Losing neutral spine at the bottom of the hike — the lower back must remain braced'],
+  kb_goblet_squat:    ['Elbows not staying inside knees at depth — typically signals hip mobility deficit', 'Chest falling forward at the bottom — the goblet position should maintain upright torso', 'Rising on the toes at depth — keep heels planted and drive through mid-foot'],
+  kb_press:           ['Bell resting on the wrist rather than seated on the forearm in rack position — leads to wrist pain', 'Not bracing the core against the rotational demand created by the unilateral load', 'Pressing on an arc rather than straight up — the path must be vertical to protect the shoulder'],
+  kb_row:             ['Rotating the torso during the pull — the hips must remain square to the bench', 'Not pulling the elbow far enough back — the shoulder blade must fully retract', 'Initiating with the biceps rather than the lat — the movement starts from the shoulder blade'],
+  kb_deadlift:        ['Squatting the bell up rather than hinging — the knees should not drop significantly', 'Rounding the upper back at the top of the lift', 'Not engaging the lats before the pull — leaves the lower back unsupported'],
+  kb_lunge:           ['Striding too short, preventing 90° angles at both knees', 'Front knee tracking inward under the unilateral load', 'Not keeping the rear knee controlled on descent — it should hover just above the floor'],
+  kb_clean:           ['Letting the bell flip over the top of the hand and impact the wrist — the hand must punch through', 'Pulling with the arm rather than driving with the hips — the clean is powered by hip drive', 'Not absorbing the catch by bending at the knees — leads to a hard impact on the forearm'],
+  kb_turkish_getup:   ['Bending the pressed arm at any point during the movement — this is the primary safety rule', 'Moving too quickly between checkpoints — each position requires deliberate stability hold', 'Not keeping eyes on the bell throughout — visual tracking is critical for overhead safety'],
+  cable_row:          ['Leaning far back at the finish using spinal extension as momentum', 'Not allowing shoulder blades to protract at the start — the stretch must be achieved before pulling', 'Pulling too high — the handle should come to the lower sternum, not the upper chest'],
+  cable_curl:         ['Rocking the torso back to assist the biceps at the top of the range', 'Not returning to full extension at the bottom — this eliminates the lengthened loading position', 'Elbows drifting away from the sides during the curl'],
+  cable_lateral:      ['Raising above shoulder height — the supraspinatus dominates above parallel, not the middle delt', 'Cable not crossing under the body to the opposite side — reduces the stretch at the bottom', 'Excessive weight causing torso lean and a cheat raise to compensate'],
+  cable_pull_through: ['Using the arms to pull rather than driving with the hips — must be a pure hip hinge', 'Not hinging sufficiently backward — the cable should pass between the legs', 'Overextending the lower back at the top instead of simply achieving hip lockout'],
+  cable_woodchop:     ['Rotating only through the arms and shoulders without engaging the thoracic spine', 'Rear foot remaining flat rather than pivoting to allow full rotation', 'Excessive speed losing control of the cable at end range'],
+  pallof_press:       ['Standing too close to the cable, reducing rotational resistance significantly', 'Not bracing before pressing — the core must be engaged before the arms move', 'Allowing the torso to rotate toward the cable — the anti-rotation challenge must be resisted'],
+  chest_press:        ['Seat too high or low, causing shoulder misalignment with the handles', 'Locking out elbows aggressively on every rep — keep constant pec tension throughout', 'Shallow ROM to move more weight — the stretched start position is where pec growth occurs'],
+  hack_squat:         ['Lower back peeling off the pad at the bottom — maintain contact throughout', 'Locking out the knees at the top shifts load off quads and onto the joint', 'Foot position too low on the sled — higher placement increases glute and hamstring contribution'],
+  smith_ohp:          ['Pressing in front of the face rather than directly overhead — bar should end over the ears', 'Not bracing the core — the lower back overextends without tension under the load', 'Partial ROM — the bar must start at upper chest level on each rep'],
+  cable_machine_pullover: ['Seat misalignment — the shoulder joint must align with the machine\'s pivot axis', 'Bending the elbows and turning it into a pulldown — keep elbows fixed in a slightly bent position', 'Not reaching full stretch overhead — the lengthened position is where maximum lat stimulus occurs'],
+  seated_calf:        ['Bouncing at the bottom using tendon recoil rather than muscle work', 'Not achieving full plantarflexion at the top — the soleus requires full ROM', 'Knee pad too far up the thigh, altering the joint angle and reducing soleus isolation'],
+  adductor_machine:   ['Using momentum to drive the movement rather than controlled adduction', 'Not allowing full abduction on the return — the stretched position increases adductor stimulus', 'Sitting asymmetrically, loading one adductor more than the other'],
+  rowing_machine:     ['Pulling with the arms before the legs have fully driven — sequence must be legs → hips → arms', 'Leaning back beyond 30° at the finish — excessive backward lean increases lumbar strain', 'Short, choppy strokes — a long, powerful stroke produces more work per stroke than high cadence'],
+  assault_bike:       ['Pushing the handles without pulling back — both arms must work the full push-pull cycle', 'Sitting upright rather than leaning slightly forward — forward lean enables more leg drive', 'Sandbagging on intervals — the air resistance self-regulates, requiring committed full effort'],
+  sled_push:          ['Standing too upright, reducing force transfer from legs to the sled', 'Short, high strides rather than low, powerful ground contact', 'Arms absorbing resistance rather than serving only to maintain body angle'],
+  farmers_carry:      ['Lateral lean to one side strains the QL and reduces trap engagement', 'Short, shuffling steps — measured stride length maintains spinal position better', 'Gripping at the top of the handle only — full-hand grip maximises forearm and trap activation'],
+  dead_bug:           ['Lower back lifting off the floor as limbs extend — this is the defining error of the movement', 'Extending too far before adequate core stability — only go as far as the back stays neutral', 'Holding breath throughout — continuous breathing through the brace is the training goal'],
+  russian_twist:      ['Rounding the thoracic spine forward rather than rotating — the rotation must come from the thorax', 'Moving through the arms rather than the trunk — the arms should stay fixed to the chest', 'Moving too fast using momentum — slow, deliberate rotation is necessary for oblique activation'],
+  dragon_flag:        ['Hips breaking and flexing when the core fatigues — the entire body must remain as one rigid plank', 'Descending too quickly before building sufficient eccentric strength — elevate feet as regression', 'Grip not secure enough on the fixed object behind the head — instability defeats the movement'],
+};
+
+// -------------------- REP RANGES --------------------
+const COMPOUND   = { strength: '1–5',    hypertrophy: '6–12',   endurance: '15–30' };
+const ISOLATION  = { strength: '4–8',    hypertrophy: '10–20',  endurance: '20–40' };
+const ADVANCED   = { strength: '3–5',    hypertrophy: '6–10',   endurance: '12–20' };
+const BALLISTIC  = { strength: '3–5',    hypertrophy: '8–15',   endurance: '20–30' };
+const CARRY      = { strength: '20–30m', hypertrophy: '40–60m', endurance: '80m+' };
+const CARDIO_RNG = { strength: '10–20s', hypertrophy: '30–60s', endurance: '5min+' };
+
+const REP_RANGES = {
+  bench: COMPOUND, incline_db: COMPOUND, dips: COMPOUND, ohp: COMPOUND,
+  pullup: COMPOUND, row: COMPOUND, lat_pulldown: COMPOUND, tbar_row: COMPOUND,
+  squat: COMPOUND, front_squat: COMPOUND, leg_press: COMPOUND, rdl: COMPOUND,
+  deadlift: COMPOUND, hip_thrust: COMPOUND, bulgarian: COMPOUND,
+  inverted_row: COMPOUND, chin_up: COMPOUND, dip_bw: COMPOUND,
+  kb_goblet_squat: COMPOUND, kb_press: COMPOUND, kb_row: COMPOUND,
+  kb_deadlift: COMPOUND, kb_lunge: COMPOUND, cable_row: COMPOUND,
+  chest_press: COMPOUND, hack_squat: COMPOUND, smith_ohp: COMPOUND,
+  cable_fly: ISOLATION, lateral_raise: ISOLATION, rear_delt_fly: ISOLATION,
+  face_pull: ISOLATION, shrug: ISOLATION, curl: ISOLATION, hammer_curl: ISOLATION,
+  preacher_curl: ISOLATION, tricep_pushdown: ISOLATION, skullcrusher: ISOLATION,
+  leg_curl: ISOLATION, calf_raise: ISOLATION, crunch: ISOLATION, plank: ISOLATION,
+  leg_raise: ISOLATION, pushup: ISOLATION, pike_pushup: ISOLATION,
+  diamond_pushup: ISOLATION, bodyweight_squat: ISOLATION, glute_bridge: ISOLATION,
+  situp: ISOLATION, ab_wheel: ISOLATION, cable_curl: ISOLATION, cable_lateral: ISOLATION,
+  cable_pull_through: ISOLATION, cable_woodchop: ISOLATION, pallof_press: ISOLATION,
+  cable_machine_pullover: ISOLATION, seated_calf: ISOLATION, adductor_machine: ISOLATION,
+  dead_bug: ISOLATION, russian_twist: ISOLATION,
+  pistol_squat: ADVANCED, nordic_curl: ADVANCED, dragon_flag: ADVANCED, kb_turkish_getup: ADVANCED,
+  kb_swing: BALLISTIC, kb_clean: BALLISTIC,
+  farmers_carry: CARRY, sled_push: CARRY,
+  rowing_machine: CARDIO_RNG, assault_bike: CARDIO_RNG,
+};
+
+// -------------------- EXERCISE DEMO --------------------
+function ExerciseDemo({ ex, onClose }) {
+  const accent = PATTERN_ACCENTS[ex.pattern];
+  const TMPL_OVERRIDE = {
+    curl: 'E', hammer_curl: 'E', preacher_curl: 'E', cable_curl: 'E',
+    lateral_raise: 'F', rear_delt_fly: 'F', face_pull: 'F', shrug: 'F', cable_lateral: 'F', cable_fly: 'F',
+    kb_swing: 'G', kb_clean: 'G',
+    farmers_carry: 'H', kb_turkish_getup: 'H',
+    assault_bike: 'I', rowing_machine: 'I',
+  };
+  const PATTERN_TMPL = { push: 'C', pull: 'D', squat: 'A', hinge: 'B', isolation: 'J', cardio: 'I', carry: 'H' };
+  const tmpl = TMPL_OVERRIDE[ex.id] || PATTERN_TMPL[ex.pattern] || 'J';
+
+  const a = (name, dur = '1.8s', delay = '0s') => ({
+    animation: `${name} ${dur} ease-in-out infinite ${delay}`,
+    transformOrigin: 'center',
+  });
+
+  return (
+    <div className="relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${accent.from}22, ${accent.to}aa, #0a0908)`, aspectRatio: '16/9' }}>
+      <div className="absolute inset-0 opacity-30" style={{
+        backgroundImage: 'repeating-linear-gradient(0deg,transparent 0,transparent 18px,rgba(255,255,255,.04) 18px,rgba(255,255,255,.04) 19px),repeating-linear-gradient(90deg,transparent 0,transparent 18px,rgba(255,255,255,.04) 18px,rgba(255,255,255,.04) 19px)'
+      }} />
+      <div className="absolute inset-0 flex items-center justify-center">
+        <svg viewBox="0 0 200 200" width="150" height="150" fill="none" stroke="rgba(255,255,255,0.82)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="100" cy="26" r="9" fill="rgba(255,255,255,0.12)" strokeWidth="2" />
+          {tmpl === 'A' && (
+            <g style={a('squat-down')}>
+              <line x1="100" y1="35" x2="100" y2="92" />
+              <line x1="76" y1="52" x2="124" y2="52" />
+              <line x1="76" y1="52" x2="62" y2="78" />
+              <line x1="124" y1="52" x2="138" y2="78" />
+              <line x1="82" y1="92" x2="68" y2="130" />
+              <line x1="118" y1="92" x2="132" y2="130" />
+              <line x1="68" y1="130" x2="55" y2="160" />
+              <line x1="132" y1="130" x2="145" y2="160" />
+            </g>
+          )}
+          {tmpl === 'B' && (<>
+            <line x1="82" y1="98" x2="70" y2="160" />
+            <line x1="118" y1="98" x2="130" y2="160" />
+            <g style={{ animation: 'hinge-fold 1.8s ease-in-out infinite', transformOrigin: '100px 98px' }}>
+              <line x1="100" y1="35" x2="100" y2="98" />
+              <line x1="76" y1="54" x2="124" y2="54" />
+              <line x1="76" y1="54" x2="55" y2="75" />
+              <line x1="124" y1="54" x2="145" y2="75" />
+            </g>
+          </>)}
+          {tmpl === 'C' && (<>
+            <line x1="100" y1="35" x2="100" y2="118" />
+            <line x1="80" y1="118" x2="120" y2="118" />
+            <line x1="80" y1="118" x2="72" y2="158" />
+            <line x1="120" y1="118" x2="128" y2="158" />
+            <line x1="76" y1="55" x2="124" y2="55" />
+            <line x1="76" y1="55" x2="50" y2="68" style={a('press-out')} />
+            <line x1="124" y1="55" x2="150" y2="68" style={a('press-out')} />
+          </>)}
+          {tmpl === 'D' && (<>
+            <line x1="100" y1="35" x2="100" y2="118" />
+            <line x1="80" y1="118" x2="120" y2="118" />
+            <line x1="80" y1="118" x2="72" y2="158" />
+            <line x1="120" y1="118" x2="128" y2="158" />
+            <line x1="76" y1="55" x2="124" y2="55" />
+            <line x1="76" y1="55" x2="50" y2="42" style={a('pull-in')} />
+            <line x1="124" y1="55" x2="150" y2="42" style={a('pull-in')} />
+          </>)}
+          {tmpl === 'E' && (<>
+            <line x1="100" y1="35" x2="100" y2="118" />
+            <line x1="80" y1="118" x2="120" y2="118" />
+            <line x1="80" y1="118" x2="72" y2="158" />
+            <line x1="120" y1="118" x2="128" y2="158" />
+            <line x1="76" y1="55" x2="124" y2="55" />
+            <line x1="76" y1="55" x2="60" y2="85" />
+            <line x1="124" y1="55" x2="140" y2="85" />
+            <line x1="60" y1="85" x2="46" y2="70" style={a('curl-up')} />
+            <line x1="140" y1="85" x2="154" y2="70" style={a('curl-up')} />
+          </>)}
+          {tmpl === 'F' && (<>
+            <line x1="100" y1="35" x2="100" y2="118" />
+            <line x1="80" y1="118" x2="120" y2="118" />
+            <line x1="80" y1="118" x2="72" y2="158" />
+            <line x1="120" y1="118" x2="128" y2="158" />
+            <line x1="76" y1="55" x2="124" y2="55" />
+            <line x1="76" y1="55" x2="52" y2="72" style={a('raise-up')} />
+            <line x1="124" y1="55" x2="148" y2="72" style={a('raise-up')} />
+          </>)}
+          {tmpl === 'G' && (<>
+            <line x1="100" y1="35" x2="100" y2="95" />
+            <line x1="80" y1="95" x2="78" y2="158" />
+            <line x1="120" y1="95" x2="122" y2="158" />
+            <line x1="76" y1="55" x2="124" y2="55" />
+            <line x1="100" y1="55" x2="100" y2="90" style={a('swing-arc', '1.2s')} />
+          </>)}
+          {tmpl === 'H' && (
+            <g style={a('carry-walk')}>
+              <line x1="100" y1="35" x2="100" y2="108" />
+              <line x1="76" y1="55" x2="124" y2="55" />
+              <line x1="76" y1="55" x2="60" y2="88" />
+              <line x1="124" y1="55" x2="140" y2="88" />
+              <line x1="84" y1="108" x2="72" y2="155" />
+              <line x1="116" y1="108" x2="128" y2="148" />
+            </g>
+          )}
+          {tmpl === 'I' && (<>
+            <line x1="100" y1="35" x2="100" y2="95" />
+            <line x1="80" y1="95" x2="78" y2="158" />
+            <line x1="120" y1="95" x2="122" y2="158" />
+            <line x1="76" y1="55" x2="60" y2="82" style={a('swing-arc', '0.9s')} />
+            <line x1="124" y1="55" x2="140" y2="82" style={{ animation: `swing-arc 0.9s ease-in-out infinite -0.45s`, transformOrigin: 'center' }} />
+            <circle cx="100" cy="130" r="20" stroke={`${accent.from}90`} strokeWidth="1.5" style={a('cardio-spin', '2s')} />
+          </>)}
+          {tmpl === 'J' && (<>
+            <line x1="100" y1="35" x2="100" y2="118" />
+            <line x1="80" y1="118" x2="120" y2="118" />
+            <line x1="80" y1="118" x2="72" y2="158" />
+            <line x1="120" y1="118" x2="128" y2="158" />
+            <line x1="76" y1="55" x2="60" y2="82" />
+            <line x1="124" y1="55" x2="140" y2="82" />
+            <circle cx="100" cy="80" r="20" stroke={accent.from} strokeWidth="1.5" strokeDasharray="4 4" style={a('pulse-ring')} />
+          </>)}
+        </svg>
+      </div>
+      <div className="absolute top-4 left-4 text-[9px] uppercase tracking-[0.2em] text-stone-300 font-mono px-2 py-1 bg-stone-950/80 border border-stone-700">
+        {ex.pattern} · demo loop
+      </div>
+      <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 bg-stone-950/80 border border-stone-700 hover:border-orange-500/60 flex items-center justify-center text-stone-400 hover:text-stone-100 transition-colors">✕</button>
+      <div className="absolute bottom-4 right-4 w-14 h-14 rounded-full bg-orange-500 flex items-center justify-center hover:bg-orange-400 transition-colors cursor-pointer">
+        <svg width="20" height="20" viewBox="0 0 14 14" fill="none"><path d="M3 2L11 7L3 12V2Z" fill="#0a0908" /></svg>
+      </div>
+    </div>
+  );
+}
+
 // -------------------- CARD --------------------
 function ExerciseCard({ ex, onOpen }) {
   const accent = PATTERN_ACCENTS[ex.pattern];
@@ -326,7 +565,8 @@ function ExerciseCard({ ex, onOpen }) {
 // -------------------- DETAIL MODAL --------------------
 function ExerciseDetail({ ex, onClose, isPro }) {
   if (!ex) return null;
-  const accent = PATTERN_ACCENTS[ex.pattern];
+  const rr = REP_RANGES[ex.id] || { strength: '—', hypertrophy: '—', endurance: '—' };
+  const mistakes = MISTAKES[ex.id] || [];
 
   return (
     <div
@@ -337,32 +577,8 @@ function ExerciseDetail({ ex, onClose, isPro }) {
         className="bg-[#0d0c0a] border border-stone-800 max-w-3xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header video placeholder */}
-        <div
-          className="relative aspect-video overflow-hidden"
-          style={{ background: `linear-gradient(135deg, ${accent.from}22, ${accent.to}aa, #0a0908)` }}
-        >
-          <div className="absolute inset-0 opacity-30" style={{
-            backgroundImage: 'repeating-linear-gradient(0deg, transparent 0, transparent 18px, rgba(255,255,255,0.04) 18px, rgba(255,255,255,0.04) 19px), repeating-linear-gradient(90deg, transparent 0, transparent 18px, rgba(255,255,255,0.04) 18px, rgba(255,255,255,0.04) 19px)'
-          }} />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <MotionIcon pattern={ex.pattern} className="w-32 h-32 text-stone-100/70" />
-          </div>
-          <div className="absolute bottom-4 right-4 w-14 h-14 rounded-full bg-orange-500 flex items-center justify-center hover:bg-orange-400 transition-colors cursor-pointer">
-            <svg width="20" height="20" viewBox="0 0 14 14" fill="none">
-              <path d="M3 2L11 7L3 12V2Z" fill="#0a0908" />
-            </svg>
-          </div>
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 w-8 h-8 bg-stone-950/80 border border-stone-700 hover:border-orange-500/60 flex items-center justify-center text-stone-400 hover:text-stone-100 transition-colors"
-          >
-            ✕
-          </button>
-          <div className="absolute top-4 left-4 text-[9px] uppercase tracking-[0.2em] text-stone-300 font-mono px-2 py-1 bg-stone-950/80 border border-stone-700">
-            {ex.pattern} · demo loop
-          </div>
-        </div>
+        {/* Animated demo header */}
+        <ExerciseDemo ex={ex} onClose={onClose} />
 
         {/* Body */}
         <div className="p-6">
@@ -398,17 +614,50 @@ function ExerciseDetail({ ex, onClose, isPro }) {
             </p>
           )}
 
-          {/* Cues */}
+          {/* Cues + Mistakes — 2-column */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+            <div>
+              <h3 className="font-anton text-lg uppercase tracking-tight text-stone-100 mb-2">Form Cues</h3>
+              <ul className="space-y-2">
+                {ex.cues.map((c, i) => (
+                  <li key={i} className="flex gap-3 text-sm text-stone-300">
+                    <span className="font-mono text-[10px] tabular-nums text-orange-500/60 shrink-0 mt-0.5">{String(i + 1).padStart(2, '0')}</span>
+                    <span>{c}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {mistakes.length > 0 && (
+              <div>
+                <h3 className="font-anton text-lg uppercase tracking-tight text-stone-100 mb-2">Common Mistakes</h3>
+                <ul className="space-y-2">
+                  {mistakes.map((m, i) => (
+                    <li key={i} className="flex gap-3 text-sm text-stone-400">
+                      <span className="font-mono text-[10px] tabular-nums text-red-500/50 shrink-0 mt-0.5">✕{String(i + 1).padStart(2, '0')}</span>
+                      <span>{m}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          {/* Rep Ranges table */}
           <div className="mb-5">
-            <h3 className="font-anton text-lg uppercase tracking-tight text-stone-100 mb-2">Form Cues</h3>
-            <ul className="space-y-2">
-              {ex.cues.map((c, i) => (
-                <li key={i} className="flex gap-3 text-sm text-stone-300">
-                  <span className="font-mono text-[10px] tabular-nums text-orange-500/60 shrink-0 mt-1">{String(i + 1).padStart(2, '0')}</span>
-                  <span>{c}</span>
-                </li>
+            <h3 className="font-anton text-lg uppercase tracking-tight text-stone-100 mb-2">Rep Ranges</h3>
+            <div className="grid grid-cols-3 border border-stone-800/60 overflow-hidden">
+              {[
+                { label: 'Strength', val: rr.strength, sub: 'max force' },
+                { label: 'Hypertrophy', val: rr.hypertrophy, sub: 'muscle growth' },
+                { label: 'Endurance', val: rr.endurance, sub: 'capacity' },
+              ].map((col, i) => (
+                <div key={i} className={`p-3 text-center ${i < 2 ? 'border-r border-stone-800/60' : ''} bg-stone-950/40`}>
+                  <div className="text-[9px] uppercase tracking-wider text-stone-500 font-mono mb-1">{col.label}</div>
+                  <div className="font-anton text-xl text-stone-100 tabular-nums">{col.val}</div>
+                  <div className="text-[9px] text-stone-600 font-mono mt-0.5">{col.sub}</div>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
 
           {/* Pro-gated section */}
@@ -536,6 +785,18 @@ export default function ExerciseLibrary() {
         .font-mono  { font-family: 'JetBrains Mono', ui-monospace, monospace; }
         .font-anton { font-family: 'Anton', sans-serif; letter-spacing: 0.01em; }
         body { background: #0a0908; }
+        @keyframes squat-down  { 0%,100%{transform:translateY(0)}    50%{transform:translateY(14px)} }
+        @keyframes hinge-fold  { 0%,100%{transform:rotate(0deg)}     50%{transform:rotate(55deg)} }
+        @keyframes press-out   { 0%,100%{transform:translateX(0)}    50%{transform:translateX(16px)} }
+        @keyframes pull-in     { 0%,100%{transform:translateX(0)}    50%{transform:translateX(-16px)} }
+        @keyframes curl-up     { 0%,100%{transform:rotate(0deg)}     50%{transform:rotate(-80deg)} }
+        @keyframes raise-up    { 0%,100%{transform:rotate(0deg)}     50%{transform:rotate(-70deg)} }
+        @keyframes swing-arc   { 0%,100%{transform:rotate(30deg)}    50%{transform:rotate(-30deg)} }
+        @keyframes carry-walk  { 0%,100%{transform:translateX(-8px)} 50%{transform:translateX(8px)} }
+        @keyframes cardio-spin { 0%{transform:rotate(0deg)}          100%{transform:rotate(360deg)} }
+        @keyframes pulse-ring  { 0%,100%{opacity:0.3}                50%{opacity:1} }
+        @keyframes float-up    { 0%,100%{transform:translateY(0)}    50%{transform:translateY(-8px)} }
+        @keyframes twist-rot   { 0%,100%{transform:rotate(-25deg)}   50%{transform:rotate(25deg)} }
       `}</style>
 
       <AppNav />
