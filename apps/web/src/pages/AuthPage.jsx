@@ -14,10 +14,37 @@ export default function AuthPage() {
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
-  // Detect Supabase RECOVERY event (user clicked password-reset email link)
   useEffect(() => {
+    // ── 1. Hash-based (implicit flow): #access_token=...&type=recovery
+    //    detectSessionInUrl may fire BEFORE React mounts, so check the URL directly.
+    const hash = new URLSearchParams(window.location.hash.replace('#', ''));
+    if (hash.get('type') === 'recovery') {
+      setMode('recover');
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+
+    // ── 2. PKCE code flow: ?code=... (fallback if PKCE is still active on this project)
+    const code = new URLSearchParams(window.location.search).get('code');
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code)
+        .then(({ data, error }) => {
+          if (error) {
+            setError('This reset link has expired or was already used. Please request a new one.');
+          } else if (data?.session) {
+            setMode('recover');
+          }
+          window.history.replaceState({}, '', window.location.pathname);
+        });
+      return;
+    }
+
+    // ── 3. Event listener: catches RECOVERY if the exchange fires after mount
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'RECOVERY') setMode('recover');
+      if (event === 'RECOVERY') {
+        setMode('recover');
+        window.history.replaceState({}, '', window.location.pathname);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
