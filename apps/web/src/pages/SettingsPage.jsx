@@ -280,7 +280,8 @@ export default function SettingsPage() {
   const [unitSaved,  setUnitSaved]  = useState(false);
 
   // ---- Account section ----
-  const [tier,         setTier]         = useState('basic');
+  // Derived directly from the store — always in sync, no local state needed.
+  const tier = storeProfile?.subscription_tier ?? 'basic';
   const [createdAt,    setCreatedAt]    = useState(null);
   const [signOutLoading, setSignOutLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -314,7 +315,6 @@ export default function SettingsPage() {
         if (data.subscription_tier !== storeProfile?.subscription_tier) {
           updateProfile({ subscription_tier: data.subscription_tier });
         }
-        setTier(data.subscription_tier ?? 'basic');
       });
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -330,7 +330,7 @@ export default function SettingsPage() {
     setSex(storeProfile.sex ?? 'male');
     setActivity(storeProfile.activity_level ?? 'moderate');
     setGoal(storeProfile.goal ?? 'cut');
-    setTier(storeProfile.subscription_tier ?? 'basic');
+
     setCreatedAt(storeProfile.created_at ? new Date(storeProfile.created_at) : null);
     const merged = { ...DEFAULT_SETTINGS, ...(storeProfile.settings ?? {}) };
     setPrefs(merged);
