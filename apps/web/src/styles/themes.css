@@ -203,8 +203,8 @@
 /* Exercise card header text → blue (not near-black) */
 [data-theme="neutral"] [class*="from-stone-950"] .text-stone-100 { color: #1e3a8a !important; }
 [data-theme="neutral"] [class*="from-stone-950"] .text-stone-600 { color: #3b82f6 !important; }
-/* Exercise name specifically → vivid navy blue */
-[data-theme="neutral"] .forge-exercise-name { color: #1d4ed8 !important; }
+/* Exercise name specifically → green */
+[data-theme="neutral"] .forge-exercise-name { color: #16a34a !important; }
 
 /*
   ── WEEKLY ADHERENCE GRID (neutral) ─────────────────────────
@@ -229,9 +229,9 @@
   Hook: .muscle-chip on primary + secondary muscle tag spans in LoggerPage
 */
 [data-theme="neutral"] .muscle-chip {
-  background-color: rgba(251, 146, 60, 0.12) !important;
-  background-image: linear-gradient(to right, rgba(251, 146, 60, 0.20), rgba(249, 115, 22, 0.06)) !important;
-  border-color: rgba(249, 115, 22, 0.30) !important;
+  background-color: rgba(249, 115, 22, 0.18) !important;
+  background-image: none !important;
+  border-color: rgba(249, 115, 22, 0.55) !important;
   color: #c2410c !important;
 }
 

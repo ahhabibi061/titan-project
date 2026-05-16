@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import AppNav from '../components/AppNav';
 import { useProfileStore } from '../store/useProfileStore';
+import { supabase } from '../lib/supabase';
 
 /* =========================================================================
  * EXERCISE LIBRARY — Module 2 Proof-of-Concept
@@ -564,7 +566,32 @@ function ExerciseCard({ ex, onOpen }) {
 }
 
 // -------------------- DETAIL MODAL --------------------
-function ExerciseDetail({ ex, onClose, isPro }) {
+function ExerciseDetail({ ex, onClose, isPro, userId }) {
+  const navigate = useNavigate();
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyData, setHistoryData] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  async function loadHistory() {
+    if (!userId) return;
+    setHistoryLoading(true);
+    const { data } = await supabase
+      .from('workouts')
+      .select('id, name, completed_at, workout_exercises!inner(id, sets(reps, weight_kg))')
+      .eq('user_id', userId)
+      .eq('workout_exercises.exercise_id', ex.id)
+      .not('completed_at', 'is', null)
+      .order('completed_at', { ascending: false })
+      .limit(10);
+    setHistoryData(data ?? []);
+    setHistoryLoading(false);
+  }
+
+  function handleViewHistory() {
+    setShowHistory(true);
+    if (historyData.length === 0) loadHistory();
+  }
+
   if (!ex) return null;
   const rr = REP_RANGES[ex.id] || { strength: '—', hypertrophy: '—', endurance: '—' };
   const mistakes = MISTAKES[ex.id] || [];
@@ -575,7 +602,7 @@ function ExerciseDetail({ ex, onClose, isPro }) {
       onClick={onClose}
     >
       <div
-        className="bg-[#0d0c0a] border border-stone-800 max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-stone-900 border border-stone-800 max-w-3xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Animated demo header */}
@@ -610,7 +637,7 @@ function ExerciseDetail({ ex, onClose, isPro }) {
 
           {/* Description */}
           {ex.description && (
-            <p className="text-sm text-stone-400 leading-relaxed mb-5" style={{ fontFamily: 'Manrope, sans-serif' }}>
+            <p className="text-sm text-stone-300 leading-relaxed mb-5" style={{ fontFamily: 'Manrope, sans-serif' }}>
               {ex.description}
             </p>
           )}
@@ -696,12 +723,55 @@ function ExerciseDetail({ ex, onClose, isPro }) {
             </div>
           </div>
 
+          {/* History panel */}
+          {showHistory && (
+            <div className="mb-5 border border-stone-800/60 bg-stone-950/40">
+              <div className="flex items-center justify-between px-4 py-2 border-b border-stone-800/60">
+                <span className="font-anton text-sm uppercase tracking-wider text-stone-100">Past Sessions</span>
+                <button onClick={() => setShowHistory(false)} className="text-stone-600 hover:text-stone-400 text-xs">✕</button>
+              </div>
+              {historyLoading ? (
+                <div className="px-4 py-4 text-[11px] font-mono text-stone-500">Loading...</div>
+              ) : historyData.length === 0 ? (
+                <div className="px-4 py-4 text-[11px] font-mono text-stone-500">No logged sessions found for this exercise.</div>
+              ) : (
+                <ul className="divide-y divide-stone-800/40">
+                  {historyData.map(w => {
+                    const allSets = w.workout_exercises?.flatMap(we => we.sets ?? []) ?? [];
+                    const date = new Date(w.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    return (
+                      <li key={w.id} className="px-4 py-3">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="font-mono text-[10px] text-stone-400 uppercase tracking-wider">{date}</span>
+                          <span className="font-mono text-[10px] text-stone-600">{allSets.length} sets</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {allSets.map((s, i) => (
+                            <span key={i} className="font-mono text-[10px] px-2 py-0.5 bg-stone-900/60 border border-stone-800 text-stone-300">
+                              {s.reps} × {s.weight_kg}kg
+                            </span>
+                          ))}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex gap-2 pt-5 border-t border-stone-800/60">
-            <button className="flex-1 px-4 py-2.5 border border-stone-700 text-stone-400 font-anton text-sm uppercase tracking-wider hover:bg-stone-800 hover:text-stone-200 transition-colors">
-              View History
+            <button
+              onClick={handleViewHistory}
+              className="flex-1 px-4 py-2.5 border border-stone-700 text-stone-400 font-anton text-sm uppercase tracking-wider hover:bg-stone-800 hover:text-stone-200 transition-colors"
+            >
+              {showHistory ? 'Hide History' : 'View History'}
             </button>
-            <button className="flex-1 px-4 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors">
+            <button
+              onClick={() => { onClose(); navigate(`/logger?add=${ex.id}`); }}
+              className="flex-1 px-4 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors"
+            >
               + Add to Today's Workout
             </button>
           </div>
@@ -736,8 +806,9 @@ export default function ExerciseLibrary() {
   const [activeEquipment, setActiveEquipment] = useState(new Set());
   const [sortBy, setSortBy] = useState('popular');
   const [selected, setSelected] = useState(null);
-  const tier  = useProfileStore(s => s.profile?.subscription_tier ?? 'basic');
-  const isPro = tier === 'pro' || tier === 'elite';
+  const tier   = useProfileStore(s => s.profile?.subscription_tier ?? 'basic');
+  const userId = useProfileStore(s => s.profile?.id ?? null);
+  const isPro  = tier === 'pro' || tier === 'elite';
 
   const toggleSet = (set, id) => {
     const next = new Set(set);
@@ -951,7 +1022,7 @@ export default function ExerciseLibrary() {
       </div>
 
       {/* DETAIL MODAL */}
-      <ExerciseDetail ex={selected} onClose={() => setSelected(null)} isPro={isPro} />
+      <ExerciseDetail ex={selected} onClose={() => setSelected(null)} isPro={isPro} userId={userId} />
     </div>
   );
 }

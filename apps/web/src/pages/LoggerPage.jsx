@@ -1378,6 +1378,18 @@ export default function IronLabLogger() {
   // Diff-based updateExercise — routes changes to hook mutation functions
   const { logSet, removeSetFromExercise, removeExercise: hookRemove, addSetToExercise, addExercise: hookAdd } = logger;
 
+  // Auto-add exercise when navigated from Codex with ?add=<exerciseId>
+  const addParamId = searchParams.get('add');
+  const autoAddedRef = useRef(false);
+  useEffect(() => {
+    if (!addParamId || !logger.workout || autoAddedRef.current) return;
+    const ex = library.find(e => e.id === addParamId);
+    if (ex) {
+      autoAddedRef.current = true;
+      hookAdd(ex);
+    }
+  }, [logger.workout?.id, addParamId]); // eslint-disable-line
+
   const updateExercise = useCallback((weId, updater) => {
     const oldWe = logger.exercises.find(e => e.id === weId);
     if (!oldWe) return;
