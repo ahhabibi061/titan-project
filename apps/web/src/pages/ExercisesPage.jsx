@@ -542,11 +542,11 @@ function ExerciseCard({ ex, onOpen }) {
           {ex.name}
         </h3>
         <div className="flex flex-wrap gap-1 mb-3">
-          <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25 font-mono">
+          <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-green-500/15 text-green-400 border border-green-500/25 font-mono">
             {MUSCLES[ex.primary]}
           </span>
           {ex.secondary.slice(0, 2).map(m => (
-            <span key={m} className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-stone-800/60 text-stone-500 border border-stone-700/50 font-mono">
+            <span key={m} className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25 font-mono">
               {MUSCLES[m]}
             </span>
           ))}
@@ -614,11 +614,11 @@ function ExerciseDetail({ ex, onClose, isPro, userId }) {
             <div>
               <h2 className="font-anton text-3xl uppercase tracking-tight text-stone-100 leading-tight">{ex.name}</h2>
               <div className="flex flex-wrap gap-1.5 mt-2">
-                <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/30 font-mono">
+                <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 bg-green-500/15 text-green-400 border border-green-500/30 font-mono">
                   {MUSCLES[ex.primary]} · primary
                 </span>
                 {ex.secondary.map(m => (
-                  <span key={m} className="text-[10px] uppercase tracking-wider px-2 py-0.5 bg-stone-800/60 text-stone-400 border border-stone-700/50 font-mono">
+                  <span key={m} className="text-[10px] uppercase tracking-wider px-2 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25 font-mono">
                     {MUSCLES[m]}
                   </span>
                 ))}
