@@ -1,16 +1,26 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
-// mode: 'signin' | 'signup' | 'forgot'
+// mode: 'signin' | 'signup' | 'forgot' | 'recover'
 export default function AuthPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+
+  // Detect Supabase RECOVERY event (user clicked password-reset email link)
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'RECOVERY') setMode('recover');
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleSignIn = async () => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -52,6 +62,14 @@ export default function AuthPage() {
     setSuccessMsg('Password reset email sent. Check your inbox.');
   };
 
+  const handleResetPassword = async () => {
+    if (newPassword.length < 6) throw new Error('Password must be at least 6 characters.');
+    if (newPassword !== confirmPassword) throw new Error('Passwords do not match.');
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw error;
+    navigate('/dashboard', { replace: true });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -62,6 +80,7 @@ export default function AuthPage() {
       if (mode === 'signin') await handleSignIn();
       else if (mode === 'signup') await handleSignUp();
       else if (mode === 'forgot') await handleForgotPassword();
+      else if (mode === 'recover') await handleResetPassword();
     } catch (err) {
       setError(err.message ?? 'Something went wrong. Try again.');
     } finally {
@@ -107,7 +126,7 @@ export default function AuthPage() {
           style={{ background: 'rgba(12,11,10,0.6)', borderColor: 'rgba(68,64,60,0.6)', backdropFilter: 'blur(12px)' }}
         >
           {/* Tab toggle — only shown for signin / signup */}
-          {mode !== 'forgot' && (
+          {mode !== 'forgot' && mode !== 'recover' && (
             <div className="flex mb-6 rounded-lg overflow-hidden border" style={{ borderColor: 'rgba(68,64,60,0.6)' }}>
               {['signin', 'signup'].map((m) => (
                 <button
@@ -144,29 +163,44 @@ export default function AuthPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
-            <div>
-              <label className="block mb-1.5" style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#78716c', letterSpacing: 1.5 }}>
-                EMAIL
-              </label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full rounded-lg px-4 py-3 text-sm outline-none"
-                style={{
-                  background: 'rgba(28,25,23,0.8)',
-                  border: '1px solid rgba(68,64,60,0.6)',
-                  color: '#e7e5e4',
-                  fontFamily: 'Manrope, sans-serif',
-                }}
-              />
+          {mode === 'recover' && (
+            <div className="mb-6">
+              <p
+                style={{ fontFamily: 'Anton, sans-serif', fontSize: 18, letterSpacing: 2, color: '#e7e5e4' }}
+              >
+                SET NEW PASSWORD
+              </p>
+              <p className="mt-1 text-sm" style={{ color: '#a8a29e' }}>
+                Choose a new password for your account.
+              </p>
             </div>
+          )}
 
-            {/* Password — hidden in forgot mode */}
-            {mode !== 'forgot' && (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Email — hidden in recover mode (user is already auth'd via reset token) */}
+            {mode !== 'recover' && (
+              <div>
+                <label className="block mb-1.5" style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#78716c', letterSpacing: 1.5 }}>
+                  EMAIL
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full rounded-lg px-4 py-3 text-sm outline-none"
+                  style={{
+                    background: 'rgba(28,25,23,0.8)',
+                    border: '1px solid rgba(68,64,60,0.6)',
+                    color: '#e7e5e4',
+                    fontFamily: 'Manrope, sans-serif',
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Password — hidden in forgot mode; replaced by two fields in recover mode */}
+            {mode !== 'forgot' && mode !== 'recover' && (
               <div>
                 <label className="block mb-1.5" style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#78716c', letterSpacing: 1.5 }}>
                   PASSWORD
@@ -185,6 +219,47 @@ export default function AuthPage() {
                   }}
                 />
               </div>
+            )}
+
+            {mode === 'recover' && (
+              <>
+                <div>
+                  <label className="block mb-1.5" style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#78716c', letterSpacing: 1.5 }}>
+                    NEW PASSWORD
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full rounded-lg px-4 py-3 text-sm outline-none"
+                    style={{
+                      background: 'rgba(28,25,23,0.8)',
+                      border: '1px solid rgba(68,64,60,0.6)',
+                      color: '#e7e5e4',
+                      fontFamily: 'Manrope, sans-serif',
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1.5" style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: '#78716c', letterSpacing: 1.5 }}>
+                    CONFIRM PASSWORD
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full rounded-lg px-4 py-3 text-sm outline-none"
+                    style={{
+                      background: 'rgba(28,25,23,0.8)',
+                      border: '1px solid rgba(68,64,60,0.6)',
+                      color: '#e7e5e4',
+                      fontFamily: 'Manrope, sans-serif',
+                    }}
+                  />
+                </div>
+              </>
             )}
 
             {/* Error */}
@@ -220,12 +295,14 @@ export default function AuthPage() {
                 ? 'SIGN IN'
                 : mode === 'signup'
                 ? 'CREATE ACCOUNT'
+                : mode === 'recover'
+                ? 'SET NEW PASSWORD'
                 : 'SEND RESET LINK'}
             </button>
           </form>
 
           {/* Forgot password link — only in signin mode */}
-          {mode === 'signin' && !successMsg && (
+          {mode === 'signin' && !successMsg && !loading && (
             <button
               type="button"
               onClick={() => switchMode('forgot')}
