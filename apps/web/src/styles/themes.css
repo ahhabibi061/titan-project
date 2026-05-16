@@ -198,14 +198,14 @@
   --tw-gradient-to: #2563eb;
 }
 [data-theme="neutral"] .module-card-name.module-codex {
-  --tw-gradient-from: #818cf8;
-  --tw-gradient-stops: var(--tw-gradient-from), #4f46e5;
-  --tw-gradient-to: #4f46e5;
+  --tw-gradient-from: #2563eb;
+  --tw-gradient-stops: var(--tw-gradient-from), #1d4ed8;
+  --tw-gradient-to: #1d4ed8;
 }
 [data-theme="neutral"] .module-card-name.module-oracle {
-  --tw-gradient-from: #c4b5fd;
-  --tw-gradient-stops: var(--tw-gradient-from), #7c3aed;
-  --tw-gradient-to: #7c3aed;
+  --tw-gradient-from: #1d4ed8;
+  --tw-gradient-stops: var(--tw-gradient-from), #1e40af;
+  --tw-gradient-to: #1e40af;
 }
 
 /*
