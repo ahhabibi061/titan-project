@@ -57,9 +57,21 @@ export function useProfile() {
         if (error) { console.error('[useProfile] fetch error:', error); return; }
         if (data) {
           console.log('[useProfile] profile loaded for', userId);
-          setProfile(data);
-          // If there's a pending tier upgrade (set before Stripe redirect),
-          // poll until the webhook has updated the DB, then sync the store.
+
+          // If there's a pending tier upgrade (set in localStorage before the
+          // Stripe redirect), apply it now so this setProfile call doesn't
+          // overwrite the tier the user just paid for. The webhook may not have
+          // written to the DB yet, so data.subscription_tier is still the old tier.
+          const pendingTier = localStorage.getItem(PENDING_TIER_KEY);
+          const validTiers = ['pro', 'elite'];
+          const profileToStore = (pendingTier && validTiers.includes(pendingTier))
+            ? { ...data, subscription_tier: pendingTier }
+            : data;
+
+          setProfile(profileToStore);
+
+          // Poll until the webhook confirms the DB matches, then do a final
+          // full refresh and clear the localStorage sentinel.
           watchPendingUpgrade(userId, data.subscription_tier, setProfile);
         }
       });
