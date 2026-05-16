@@ -297,6 +297,26 @@ export default function SettingsPage() {
     }
   }, [session, sessionLoading, navigate]);
 
+  // Re-check subscription_tier from DB every time Settings mounts.
+  // The store is seeded at boot; after a Stripe upgrade the webhook may have updated
+  // the DB but the store still holds the old tier. This single lightweight query
+  // keeps the tier badge and upgrade buttons accurate without a full page reload.
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from('profiles')
+      .select('subscription_tier')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (!data) return;
+        if (data.subscription_tier !== storeProfile?.subscription_tier) {
+          updateProfile({ subscription_tier: data.subscription_tier });
+        }
+        setTier(data.subscription_tier ?? 'basic');
+      });
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Populate form fields from the global profile store (fetched once at app boot)
   useEffect(() => {
     if (!storeProfile) return;

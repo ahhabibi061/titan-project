@@ -462,32 +462,41 @@ export default function Dashboard() {
     if (showUpgradeBanner) setSearchParams({}, { replace: true });
   }, []);
 
-  // Poll Supabase until the webhook has written the new tier, then update the store
+  // Poll Supabase until the webhook has written the new tier, then update the store.
+  // Fetches the full profile row so the store is always consistent after upgrade.
+  const setProfile = useProfileStore(s => s.setProfile);
   useEffect(() => {
     if (!showUpgradeBanner || !upgradedTier || !user?.id) return;
-    if (zustandProfile?.subscription_tier === upgradedTier) return;
 
     let attempts = 0;
+    const MAX_ATTEMPTS = 20; // ~60 s total — covers slow webhook delivery
     let timer;
+    let cancelled = false;
 
     const poll = async () => {
+      if (cancelled) return;
       attempts++;
       const { data: fresh } = await supabase
         .from('profiles')
-        .select('subscription_tier')
+        .select('*')
         .eq('id', user.id)
         .single();
 
+      if (cancelled) return;
+
       if (fresh?.subscription_tier === upgradedTier) {
-        updateProfile({ subscription_tier: upgradedTier });
-      } else if (attempts < 8) {
-        timer = setTimeout(poll, 2000);
+        setProfile(fresh); // full refresh — all fields in sync
+      } else if (attempts < MAX_ATTEMPTS) {
+        timer = setTimeout(poll, 3000);
       }
     };
 
-    timer = setTimeout(poll, 1500); // give webhook ~1.5 s head-start
-    return () => clearTimeout(timer);
-  }, [showUpgradeBanner, upgradedTier, user?.id]);
+    timer = setTimeout(poll, 800); // short initial delay — webhook is usually fast
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [showUpgradeBanner, upgradedTier, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load plateau alerts from recent workouts (last 7 days)
   useEffect(() => {
