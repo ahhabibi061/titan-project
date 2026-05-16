@@ -14,11 +14,12 @@ export const NO_ANIMATION_IDS = new Set([
   // Bodyweight
   'pushup', 'pike_pushup', 'diamond_pushup', 'inverted_row', 'bodyweight_squat',
   'pistol_squat', 'glute_bridge', 'nordic_curl', 'dip_bw', 'chin_up',
-  'situp', 'ab_wheel', 'plank', 'leg_raise', 'dead_bug', 'russian_twist', 'dragon_flag',
+  'situp', 'ab_wheel', 'plank', 'leg_raise', 'dead_bug',
   // Cardio / Carries
   'rowing_machine', 'assault_bike', 'sled_push', 'farmers_carry',
-  // Cable / KB
-  'pallof_press', 'kb_row', 'kb_lunge',
+  // Cable / KB / Machine — shares bench animation or self-evident
+  'pallof_press', 'kb_row', 'kb_lunge', 'kb_deadlift',
+  'seated_leg_curl',
 ]);
 
 export const EXERCISE_DEMOS = {
