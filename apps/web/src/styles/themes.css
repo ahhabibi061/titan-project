@@ -207,25 +207,25 @@
 [data-theme="neutral"] [class*="from-stone-950"] .text-stone-600 { color: #3b82f6 !important; }
 /* Exercise name → light blue (compound selector beats from-stone-950 container rule) */
 [data-theme="neutral"] .forge-exercise-name,
-[data-theme="neutral"] [class*="from-stone-950"] .forge-exercise-name { color: #38bdf8 !important; }
+[data-theme="neutral"] [class*="from-stone-950"] .forge-exercise-name { color: #00355C !important; }
 
-/* Forge page title → sky-blue matching module-forge card */
+/* Forge page title → blue gradient matching Sentinel "Nutrition" */
 [data-theme="neutral"] .forge-page-title {
-  --tw-gradient-from: #38bdf8 !important;
-  --tw-gradient-stops: var(--tw-gradient-from), #0ea5e9 !important;
-  --tw-gradient-to: #0ea5e9 !important;
+  --tw-gradient-from: #0ea5e9 !important;
+  --tw-gradient-stops: var(--tw-gradient-from), #1d4ed8 !important;
+  --tw-gradient-to: #1d4ed8 !important;
 }
 
 /* Forge session timer → orange */
 [data-theme="neutral"] .forge-session-timer { color: #f97316 !important; }
 
 /* Forge finish button → orange */
-[data-theme="neutral"] .forge-finish-btn { background-color: #f97316 !important; }
-[data-theme="neutral"] .forge-finish-btn:hover { background-color: #fb923c !important; }
+[data-theme="neutral"] .forge-finish-btn { background-color: #16a34a !important; }
+[data-theme="neutral"] .forge-finish-btn:hover { background-color: #15803d !important; }
 
 /* Sentinel calories consumed + remaining → orange */
 [data-theme="neutral"] .sentinel-calories-consumed { color: #f97316 !important; }
-[data-theme="neutral"] .sentinel-calories-remaining { color: #c2410c !important; }
+[data-theme="neutral"] .sentinel-calories-remaining { color: #64748b !important; }
 
 /* Vault projection highlight (weight / date) → orange */
 [data-theme="neutral"] .vault-projection-highlight { color: #f97316 !important; }
