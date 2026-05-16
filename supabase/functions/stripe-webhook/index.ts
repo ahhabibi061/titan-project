@@ -44,17 +44,23 @@ Deno.serve(async (req: Request) => {
       return new Response('Missing userId in metadata', { status: 400 });
     }
 
-    // Retrieve the subscription to get the priceId
+    // Primary: read tier stored in session metadata by create-checkout-session
     let tier: 'pro' | 'elite' | null = null;
-    if (session.subscription) {
+    const tierFromMeta = session.metadata?.tier;
+    if (tierFromMeta === 'pro' || tierFromMeta === 'elite') {
+      tier = tierFromMeta;
+    }
+
+    // Fallback: look up subscription price ID (handles older sessions without metadata.tier)
+    if (!tier && session.subscription) {
       const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
       const priceId = subscription.items.data[0]?.price.id ?? '';
       tier = PRICE_TIER_MAP[priceId] ?? null;
     }
 
     if (!tier) {
-      console.error('checkout.session.completed: could not resolve tier from priceId');
-      return new Response('Unknown priceId', { status: 400 });
+      console.error('checkout.session.completed: could not resolve tier from metadata or priceId');
+      return new Response('Unknown tier', { status: 400 });
     }
 
     const { error } = await supabase

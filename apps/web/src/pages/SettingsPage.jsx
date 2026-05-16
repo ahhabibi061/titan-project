@@ -509,7 +509,7 @@ export default function SettingsPage() {
     navigate('/auth', { replace: true });
   };
 
-  const handleUpgrade = async (priceId) => {
+  const handleUpgrade = async (priceId, tierName) => {
     setUpgradeLoading(priceId);
     setUpgradeError(null);
     try {
@@ -522,7 +522,7 @@ export default function SettingsPage() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${authSession.access_token}`,
           },
-          body: JSON.stringify({ priceId }),
+          body: JSON.stringify({ priceId, tier: tierName }),
         }
       );
       const data = await res.json();
@@ -1069,7 +1069,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       disabled={!!upgradeLoading}
-                      onClick={() => handleUpgrade(import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY)}
+                      onClick={() => handleUpgrade(import.meta.env.VITE_STRIPE_PRICE_PRO_MONTHLY, 'pro')}
                       className="relative group flex flex-col gap-2 p-5 border transition-all disabled:opacity-60 text-left"
                       style={{ borderColor: '#ed7a2a40', background: 'rgba(237,122,42,0.06)' }}
                       onMouseEnter={e => e.currentTarget.style.borderColor = '#ed7a2a80'}
@@ -1089,7 +1089,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     disabled={!!upgradeLoading}
-                    onClick={() => handleUpgrade(import.meta.env.VITE_STRIPE_PRICE_ELITE_MONTHLY)}
+                    onClick={() => handleUpgrade(import.meta.env.VITE_STRIPE_PRICE_ELITE_MONTHLY, 'elite')}
                     className="relative group flex flex-col gap-2 p-5 border transition-all disabled:opacity-60 text-left"
                     style={{ borderColor: '#fbbf2440', background: 'rgba(251,191,36,0.06)' }}
                     onMouseEnter={e => e.currentTarget.style.borderColor = '#fbbf2480'}

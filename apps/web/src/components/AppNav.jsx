@@ -26,6 +26,7 @@ export default function AppNav() {
   const { session }  = useSession();
   const profile      = useProfileStore(s => s.profile);
   const initials     = getInitials(profile?.display_name, session?.user?.email);
+  const tier         = (profile?.subscription_tier ?? 'basic').toUpperCase();
 
   return (
     <nav className="border-b border-stone-800/60 bg-stone-950/40 backdrop-blur-sm sticky top-0 z-20">
@@ -54,14 +55,19 @@ export default function AppNav() {
             ))}
           </div>
         </div>
-        <Link
-          to="/settings"
-          title="Settings"
-          className="w-7 h-7 rounded-full flex items-center justify-center font-anton text-xs text-stone-950 shrink-0 hover:opacity-90 transition-opacity"
-          style={{ background: 'linear-gradient(135deg, #fbbf24, #ff5a2a)' }}
-        >
-          {initials}
-        </Link>
+        <div className="flex items-center gap-3">
+          <span className="text-[10px] uppercase tracking-wider px-2 py-1 bg-orange-500/15 text-orange-300 border border-orange-500/30 font-mono">
+            {profile ? tier : '…'}
+          </span>
+          <Link
+            to="/settings"
+            title="Settings"
+            className="w-7 h-7 rounded-full flex items-center justify-center font-anton text-xs text-stone-950 shrink-0 hover:opacity-90 transition-opacity"
+            style={{ background: 'linear-gradient(135deg, #fbbf24, #ff5a2a)' }}
+          >
+            {initials}
+          </Link>
+        </div>
       </div>
     </nav>
   );

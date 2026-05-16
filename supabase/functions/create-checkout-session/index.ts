@@ -29,9 +29,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { priceId } = await req.json();
-    if (!priceId) {
-      return new Response(JSON.stringify({ error: 'Missing priceId' }), {
+    const { priceId, tier } = await req.json();
+    if (!priceId || !tier || !['pro', 'elite'].includes(tier)) {
+      return new Response(JSON.stringify({ error: 'Missing or invalid priceId / tier' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -47,8 +47,8 @@ Deno.serve(async (req: Request) => {
       success_url: `${Deno.env.get('SITE_URL') ?? 'http://localhost:5173'}/dashboard?upgraded=true`,
       cancel_url: `${Deno.env.get('SITE_URL') ?? 'http://localhost:5173'}/settings`,
       customer_email: user.email,
-      metadata: { userId: user.id },
-      subscription_data: { metadata: { userId: user.id } },
+      metadata: { userId: user.id, tier },
+      subscription_data: { metadata: { userId: user.id, tier } },
     });
 
     return new Response(JSON.stringify({ url: session.url }), {
