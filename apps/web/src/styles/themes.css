@@ -236,65 +236,215 @@
 }
 
 
-/* ── ROSE (light — soft pink / white / violet) ─────────────── */
+/* ── ROSE (light — soft blush / lavender / white) ──────────── */
 
 [data-theme="rose"] body,
 [data-theme="rose"] .bg-\[\#0a0908\] {
-  background-color: #fdf2f8 !important;
+  background-color: #fefcff !important;
 }
 
-[data-theme="rose"] .bg-stone-950    { background-color: #fce7f3 !important; }
-[data-theme="rose"] .bg-stone-950\/40 { background-color: rgba(255, 245, 251, 0.85) !important; }
-[data-theme="rose"] .bg-stone-950\/60 { background-color: rgba(252, 231, 243, 0.90) !important; }
-[data-theme="rose"] .bg-stone-950\/80 { background-color: rgba(253, 242, 248, 0.93) !important; }
-[data-theme="rose"] .bg-stone-950\/90 { background-color: rgba(253, 242, 248, 0.95) !important; }
-[data-theme="rose"] .bg-stone-950\/95 { background-color: rgba(253, 242, 248, 0.97) !important; }
-[data-theme="rose"] .bg-stone-950\/96 { background-color: rgba(253, 242, 248, 0.97) !important; }
-[data-theme="rose"] .bg-stone-900    { background-color: #fce7f3 !important; }
-[data-theme="rose"] .bg-stone-900\/20 { background-color: rgba(252, 231, 243, 0.20) !important; }
-[data-theme="rose"] .bg-stone-900\/40 { background-color: rgba(252, 231, 243, 0.40) !important; }
-[data-theme="rose"] .bg-stone-900\/60 { background-color: rgba(252, 231, 243, 0.60) !important; }
-[data-theme="rose"] .bg-stone-900\/95 { background-color: rgba(252, 231, 243, 0.95) !important; }
+[data-theme="rose"] .bg-stone-950     { background-color: #faf5fd !important; }
+[data-theme="rose"] .bg-stone-950\/40 { background-color: rgba(250, 245, 253, 0.85) !important; }
+[data-theme="rose"] .bg-stone-950\/60 { background-color: rgba(250, 245, 253, 0.90) !important; }
+[data-theme="rose"] .bg-stone-950\/80 { background-color: rgba(254, 252, 255, 0.93) !important; }
+[data-theme="rose"] .bg-stone-950\/90 { background-color: rgba(254, 252, 255, 0.95) !important; }
+[data-theme="rose"] .bg-stone-950\/95 { background-color: rgba(254, 252, 255, 0.97) !important; }
+[data-theme="rose"] .bg-stone-950\/96 { background-color: rgba(254, 252, 255, 0.97) !important; }
+[data-theme="rose"] .bg-stone-900     { background-color: #f2e6f5 !important; }
+[data-theme="rose"] .bg-stone-900\/20 { background-color: rgba(242, 230, 245, 0.20) !important; }
+[data-theme="rose"] .bg-stone-900\/40 { background-color: rgba(242, 230, 245, 0.40) !important; }
+[data-theme="rose"] .bg-stone-900\/60 { background-color: rgba(242, 230, 245, 0.60) !important; }
+[data-theme="rose"] .bg-stone-900\/95 { background-color: rgba(242, 230, 245, 0.95) !important; }
 
 [data-theme="rose"] .border-stone-800,
-[data-theme="rose"] .divide-stone-800\/60 > * { border-color: #fbcfe8 !important; }
-[data-theme="rose"] .border-stone-800\/40     { border-color: rgba(251, 207, 232, 0.4) !important; }
-[data-theme="rose"] .border-stone-800\/60     { border-color: rgba(251, 207, 232, 0.6) !important; }
-[data-theme="rose"] .border-stone-700         { border-color: #f9a8d4 !important; }
-[data-theme="rose"] .border-stone-700\/60     { border-color: rgba(249, 168, 212, 0.6) !important; }
-[data-theme="rose"] .border-stone-600         { border-color: #f472b6 !important; }
+[data-theme="rose"] .divide-stone-800\/60 > * { border-color: #e2c8dc !important; }
+[data-theme="rose"] .border-stone-800\/40     { border-color: rgba(226, 200, 220, 0.40) !important; }
+[data-theme="rose"] .border-stone-800\/60     { border-color: rgba(226, 200, 220, 0.60) !important; }
+[data-theme="rose"] .border-stone-700         { border-color: #ccaac2 !important; }
+[data-theme="rose"] .border-stone-700\/60     { border-color: rgba(204, 170, 194, 0.60) !important; }
+[data-theme="rose"] .border-stone-600         { border-color: #b088a4 !important; }
 
-/* Text — dark rose/plum on light pink bg */
-[data-theme="rose"] .text-stone-100 { color: #500724 !important; }
-[data-theme="rose"] .text-stone-200 { color: #881337 !important; }
-[data-theme="rose"] .text-stone-300 { color: #9d174d !important; }
-[data-theme="rose"] .text-stone-400 { color: #be185d !important; }
-[data-theme="rose"] .text-stone-500 { color: #db2777 !important; }
-[data-theme="rose"] .text-stone-600 { color: #ec4899 !important; }
-[data-theme="rose"] .text-stone-700 { color: #fbcfe8 !important; }
+/* Text — dark muted plum on light bg */
+[data-theme="rose"] .text-stone-100 { color: #1a1020 !important; }
+[data-theme="rose"] .text-stone-200 { color: #2e1a38 !important; }
+[data-theme="rose"] .text-stone-300 { color: #4a2e5c !important; }
+[data-theme="rose"] .text-stone-400 { color: #6b4878 !important; }
+[data-theme="rose"] .text-stone-500 { color: #9a72a8 !important; }
+[data-theme="rose"] .text-stone-600 { color: #bea0c8 !important; }
+[data-theme="rose"] .text-stone-700 { color: #ddc8e8 !important; }
 [data-theme="rose"] .text-stone-950 { color: #ffffff  !important; }
 
-/* Accent: pink-500 / violet */
-[data-theme="rose"] .text-orange-300 { color: #c084fc !important; }
-[data-theme="rose"] .text-orange-400 { color: #ec4899 !important; }
-[data-theme="rose"] .text-orange-500 { color: #db2777 !important; }
-[data-theme="rose"] .bg-orange-500         { background-color: #ec4899 !important; }
-[data-theme="rose"] .bg-orange-400         { background-color: #f472b6 !important; }
-[data-theme="rose"] .bg-orange-500\/5      { background-color: rgba(236, 72, 153, 0.05)  !important; }
-[data-theme="rose"] .bg-orange-500\/10     { background-color: rgba(236, 72, 153, 0.10)  !important; }
-[data-theme="rose"] .bg-orange-500\/15     { background-color: rgba(236, 72, 153, 0.15)  !important; }
-[data-theme="rose"] .border-orange-500\/30 { border-color: rgba(236, 72, 153, 0.30) !important; }
-[data-theme="rose"] .border-orange-500\/40 { border-color: rgba(236, 72, 153, 0.40) !important; }
-[data-theme="rose"] .border-orange-500\/60 { border-color: rgba(236, 72, 153, 0.60) !important; }
-[data-theme="rose"] .hover\:bg-orange-400:hover         { background-color: #f472b6 !important; }
-[data-theme="rose"] .hover\:text-orange-300:hover       { color: #c084fc !important; }
-[data-theme="rose"] .hover\:text-orange-400:hover       { color: #ec4899 !important; }
-[data-theme="rose"] .hover\:border-orange-500\/40:hover { border-color: rgba(236, 72, 153, 0.4) !important; }
-[data-theme="rose"] .from-orange-300 { --tw-gradient-from: #f9a8d4 var(--tw-gradient-from-position) !important; }
-[data-theme="rose"] .to-orange-600   { --tw-gradient-to:   #7c3aed var(--tw-gradient-to-position)   !important; }
+/*
+  ── SETTINGS PAGE — Identical to Dark Theme in rose theme too ──
+  Specificity (0,3,0) beats all global rose rules (0,2,0).
+*/
 
-[data-theme="rose"] .hover\:bg-stone-900\/40:hover  { background-color: rgba(252, 231, 243, 0.4) !important; }
-[data-theme="rose"] .hover\:bg-stone-900\/20:hover  { background-color: rgba(252, 231, 243, 0.2) !important; }
-[data-theme="rose"] .hover\:border-stone-700:hover  { border-color: #f9a8d4 !important; }
-[data-theme="rose"] .hover\:border-stone-500:hover  { border-color: #f472b6 !important; }
-[data-theme="rose"] .hover\:border-stone-600:hover  { border-color: #f472b6 !important; }
+/* Backgrounds */
+[data-theme="rose"] .settings-page .bg-stone-950       { background-color: #0c0a09 !important; }
+[data-theme="rose"] .settings-page .bg-stone-950\/40   { background-color: rgba(12,10,9,0.40) !important; }
+[data-theme="rose"] .settings-page .bg-stone-950\/60   { background-color: rgba(12,10,9,0.60) !important; }
+[data-theme="rose"] .settings-page .bg-stone-950\/80   { background-color: rgba(12,10,9,0.80) !important; }
+[data-theme="rose"] .settings-page .bg-stone-950\/90   { background-color: rgba(12,10,9,0.90) !important; }
+[data-theme="rose"] .settings-page .bg-stone-950\/95   { background-color: rgba(12,10,9,0.95) !important; }
+[data-theme="rose"] .settings-page .bg-stone-950\/96   { background-color: rgba(12,10,9,0.97) !important; }
+[data-theme="rose"] .settings-page .bg-stone-900       { background-color: #1c1917 !important; }
+[data-theme="rose"] .settings-page .bg-stone-900\/20   { background-color: rgba(28,25,23,0.20) !important; }
+[data-theme="rose"] .settings-page .bg-stone-900\/30   { background-color: rgba(28,25,23,0.30) !important; }
+[data-theme="rose"] .settings-page .bg-stone-900\/40   { background-color: rgba(28,25,23,0.40) !important; }
+[data-theme="rose"] .settings-page .bg-stone-900\/60   { background-color: rgba(28,25,23,0.60) !important; }
+[data-theme="rose"] .settings-page .bg-stone-900\/95   { background-color: rgba(28,25,23,0.95) !important; }
+
+/* Borders */
+[data-theme="rose"] .settings-page .border-stone-800         { border-color: #292524 !important; }
+[data-theme="rose"] .settings-page .border-stone-800\/40     { border-color: rgba(41,37,36,0.40) !important; }
+[data-theme="rose"] .settings-page .border-stone-800\/60     { border-color: rgba(41,37,36,0.60) !important; }
+[data-theme="rose"] .settings-page .border-stone-700         { border-color: #44403c !important; }
+[data-theme="rose"] .settings-page .border-stone-700\/40     { border-color: rgba(68,64,60,0.40) !important; }
+[data-theme="rose"] .settings-page .border-stone-700\/60     { border-color: rgba(68,64,60,0.60) !important; }
+[data-theme="rose"] .settings-page .border-stone-600         { border-color: #57534e !important; }
+[data-theme="rose"] .settings-page .divide-stone-800\/60 > * { border-color: rgba(41,37,36,0.60) !important; }
+
+/* Text */
+[data-theme="rose"] .settings-page .text-stone-100 { color: #f5f5f4 !important; }
+[data-theme="rose"] .settings-page .text-stone-200 { color: #e7e5e4 !important; }
+[data-theme="rose"] .settings-page .text-stone-300 { color: #d6d3d1 !important; }
+[data-theme="rose"] .settings-page .text-stone-400 { color: #a8a29e !important; }
+[data-theme="rose"] .settings-page .text-stone-500 { color: #78716c !important; }
+[data-theme="rose"] .settings-page .text-stone-600 { color: #57534e !important; }
+[data-theme="rose"] .settings-page .text-stone-700 { color: #44403c !important; }
+
+/* Orange accent — restored to original in settings */
+[data-theme="rose"] .settings-page .text-orange-300       { color: #fdba74 !important; }
+[data-theme="rose"] .settings-page .text-orange-400       { color: #fb923c !important; }
+[data-theme="rose"] .settings-page .text-orange-500       { color: #f97316 !important; }
+[data-theme="rose"] .settings-page .bg-orange-500         { background-color: #f97316 !important; }
+[data-theme="rose"] .settings-page .bg-orange-400         { background-color: #fb923c !important; }
+[data-theme="rose"] .settings-page .bg-orange-500\/5      { background-color: rgba(249,115,22,0.05) !important; }
+[data-theme="rose"] .settings-page .bg-orange-500\/10     { background-color: rgba(249,115,22,0.10) !important; }
+[data-theme="rose"] .settings-page .bg-orange-500\/15     { background-color: rgba(249,115,22,0.15) !important; }
+[data-theme="rose"] .settings-page .border-orange-500\/30 { border-color: rgba(249,115,22,0.30) !important; }
+[data-theme="rose"] .settings-page .border-orange-500\/40 { border-color: rgba(249,115,22,0.40) !important; }
+[data-theme="rose"] .settings-page .border-orange-500\/60 { border-color: rgba(249,115,22,0.60) !important; }
+
+/* Hover states in settings */
+[data-theme="rose"] .settings-page .hover\:bg-orange-400:hover         { background-color: #fb923c !important; }
+[data-theme="rose"] .settings-page .hover\:text-orange-300:hover        { color: #fdba74 !important; }
+[data-theme="rose"] .settings-page .hover\:text-orange-400:hover        { color: #fb923c !important; }
+[data-theme="rose"] .settings-page .hover\:border-orange-500\/40:hover  { border-color: rgba(249,115,22,0.40) !important; }
+[data-theme="rose"] .settings-page .hover\:bg-stone-900\/40:hover       { background-color: rgba(28,25,23,0.40) !important; }
+[data-theme="rose"] .settings-page .hover\:bg-stone-900\/20:hover       { background-color: rgba(28,25,23,0.20) !important; }
+[data-theme="rose"] .settings-page .hover\:border-stone-700:hover       { border-color: #44403c !important; }
+[data-theme="rose"] .settings-page .hover\:border-stone-500:hover       { border-color: #78716c !important; }
+[data-theme="rose"] .settings-page .hover\:border-stone-600:hover       { border-color: #57534e !important; }
+[data-theme="rose"] .settings-page .hover\:text-stone-100:hover         { color: #f5f5f4 !important; }
+[data-theme="rose"] .settings-page .hover\:text-stone-200:hover         { color: #e7e5e4 !important; }
+[data-theme="rose"] .settings-page .hover\:text-stone-300:hover         { color: #d6d3d1 !important; }
+
+/* Accent: dusty rose / soft mauve */
+[data-theme="rose"] .text-orange-300 { color: #c890a8 !important; }
+[data-theme="rose"] .text-orange-400 { color: #b87094 !important; }
+[data-theme="rose"] .text-orange-500 { color: #9a5078 !important; }
+[data-theme="rose"] .bg-orange-500         { background-color: #b87094 !important; }
+[data-theme="rose"] .bg-orange-400         { background-color: #c890a8 !important; }
+[data-theme="rose"] .bg-orange-500\/5      { background-color: rgba(184, 112, 148, 0.05)  !important; }
+[data-theme="rose"] .bg-orange-500\/10     { background-color: rgba(184, 112, 148, 0.10)  !important; }
+[data-theme="rose"] .bg-orange-500\/15     { background-color: rgba(184, 112, 148, 0.15)  !important; }
+[data-theme="rose"] .border-orange-500\/30 { border-color: rgba(184, 112, 148, 0.30) !important; }
+[data-theme="rose"] .border-orange-500\/40 { border-color: rgba(184, 112, 148, 0.40) !important; }
+[data-theme="rose"] .border-orange-500\/60 { border-color: rgba(184, 112, 148, 0.60) !important; }
+[data-theme="rose"] .hover\:bg-orange-400:hover         { background-color: #c890a8 !important; }
+[data-theme="rose"] .hover\:text-orange-300:hover       { color: #c890a8 !important; }
+[data-theme="rose"] .hover\:text-orange-400:hover       { color: #b87094 !important; }
+[data-theme="rose"] .hover\:border-orange-500\/40:hover { border-color: rgba(184, 112, 148, 0.40) !important; }
+
+[data-theme="rose"] .hover\:bg-stone-900\/40:hover  { background-color: rgba(242, 230, 245, 0.40) !important; }
+[data-theme="rose"] .hover\:bg-stone-900\/20:hover  { background-color: rgba(242, 230, 245, 0.20) !important; }
+[data-theme="rose"] .hover\:border-stone-700:hover  { border-color: #ccaac2 !important; }
+[data-theme="rose"] .hover\:border-stone-500:hover  { border-color: #b088a4 !important; }
+[data-theme="rose"] .hover\:border-stone-600:hover  { border-color: #b088a4 !important; }
+[data-theme="rose"] .hover\:text-stone-200:hover    { color: #2e1a38 !important; }
+[data-theme="rose"] .hover\:text-stone-300:hover    { color: #4a2e5c !important; }
+
+/*
+  ── GRADIENTS (rose) ─────────────────────────────────────────
+*/
+
+/* All orange/amber gradients → dusty rose to deep mauve */
+[data-theme="rose"] [class*="from-orange-"] {
+  --tw-gradient-from: #c890a8;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(200, 144, 168, 0));
+}
+[data-theme="rose"] [class*="from-amber-"] {
+  --tw-gradient-from: #c890a8;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(200, 144, 168, 0));
+}
+[data-theme="rose"] [class*="to-orange-"],
+[data-theme="rose"] [class*="to-red-"] {
+  --tw-gradient-to: #7c4a6e;
+}
+
+/* Greeting username — dusty rose (specificity 0,3,0) */
+[data-theme="rose"] .dash-greeting-name[class*="from-orange-"] {
+  --tw-gradient-from: #c890a8;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(200, 144, 168, 0));
+}
+[data-theme="rose"] .dash-greeting-name[class*="to-orange-"] {
+  --tw-gradient-to: #9a5078;
+}
+
+/* Module card names — mauve (specificity 0,3,0) */
+[data-theme="rose"] .module-card-name {
+  --tw-gradient-from: #c890a8;
+  --tw-gradient-stops: var(--tw-gradient-from), #9a5078;
+  --tw-gradient-to: #9a5078;
+}
+
+/* Vault title — mauve (specificity 0,3,0) */
+[data-theme="rose"] [class*="from-orange-"].vault-gradient-title {
+  --tw-gradient-from: #c890a8;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(200, 144, 168, 0));
+}
+[data-theme="rose"] [class*="to-orange-"].vault-gradient-title,
+[data-theme="rose"] [class*="to-red-"].vault-gradient-title {
+  --tw-gradient-to: #7c4a6e;
+}
+
+/* Exercise card header: stone-950 gradient → subtle blush tint */
+[data-theme="rose"] [class*="from-stone-950"] {
+  --tw-gradient-from: rgba(200, 144, 168, 0.10);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(200, 144, 168, 0));
+}
+
+/* Exercise card header text */
+[data-theme="rose"] [class*="from-stone-950"] .text-stone-100 { color: #4a2e5c !important; }
+[data-theme="rose"] [class*="from-stone-950"] .text-stone-600 { color: #9a72a8 !important; }
+/* Exercise name → deep mauve */
+[data-theme="rose"] .forge-exercise-name { color: #7c4a6e !important; }
+
+/*
+  ── WEEKLY ADHERENCE GRID (rose) ─────────────────────────────
+*/
+[data-theme="rose"] .weekly-done { background-color: #c890a8 !important; }
+[data-theme="rose"] .weekly-rest { background-color: #f0d8e8 !important; border-color: #e0b8d0 !important; }
+
+/* This Week stats numbers → dusty rose */
+[data-theme="rose"] .weekly-stats-grid .text-stone-100  { color: #b87094 !important; }
+[data-theme="rose"] .weekly-stats-grid .text-orange-300 { color: #b87094 !important; }
+
+/*
+  ── FORGE STAT BOX COLORS (rose) ─────────────────────────────
+*/
+[data-theme="rose"] .forge-stat-volume  .text-orange-300 { color: #b87094 !important; }
+[data-theme="rose"] .forge-stat-sets    .text-stone-100  { color: #b87094 !important; }
+[data-theme="rose"] .forge-stat-reps    .text-stone-100  { color: #9a72a8 !important; }
+[data-theme="rose"] .forge-stat-muscles .text-stone-100  { color: #bea0c8 !important; }
+
+/*
+  ── FORGE MUSCLE CHIPS (rose) ────────────────────────────────
+*/
+[data-theme="rose"] .muscle-chip {
+  background-color: rgba(184, 112, 148, 0.10) !important;
+  background-image: linear-gradient(to right, rgba(184, 112, 148, 0.18), rgba(154, 80, 120, 0.06)) !important;
+  border-color: rgba(184, 112, 148, 0.28) !important;
+  color: #9a5078 !important;
+}
