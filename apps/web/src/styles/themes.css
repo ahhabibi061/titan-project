@@ -235,6 +235,17 @@
   color: #c2410c !important;
 }
 
+/*
+  ── CODEX SECONDARY CHIPS (neutral) ─────────────────────────
+  Hook: .codex-secondary-chip on secondary muscle spans in ExercisesPage
+  Pins to orange — overrides the global text-orange-300 → green remap.
+*/
+[data-theme="neutral"] .codex-secondary-chip {
+  background-color: rgba(249, 115, 22, 0.18) !important;
+  border-color: rgba(249, 115, 22, 0.45) !important;
+  color: #c2410c !important;
+}
+
 
 /* ── ROSE (light — soft blush / lavender / white) ──────────── */
 

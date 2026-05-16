@@ -546,7 +546,7 @@ function ExerciseCard({ ex, onOpen }) {
             {MUSCLES[ex.primary]}
           </span>
           {ex.secondary.slice(0, 2).map(m => (
-            <span key={m} className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25 font-mono">
+            <span key={m} className="codex-secondary-chip text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25 font-mono">
               {MUSCLES[m]}
             </span>
           ))}
@@ -618,7 +618,7 @@ function ExerciseDetail({ ex, onClose, isPro, userId }) {
                   {MUSCLES[ex.primary]} · primary
                 </span>
                 {ex.secondary.map(m => (
-                  <span key={m} className="text-[10px] uppercase tracking-wider px-2 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25 font-mono">
+                  <span key={m} className="codex-secondary-chip text-[10px] uppercase tracking-wider px-2 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25 font-mono">
                     {MUSCLES[m]}
                   </span>
                 ))}
