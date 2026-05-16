@@ -462,41 +462,14 @@ export default function Dashboard() {
     if (showUpgradeBanner) setSearchParams({}, { replace: true });
   }, []);
 
-  // Poll Supabase until the webhook has written the new tier, then update the store.
-  // Fetches the full profile row so the store is always consistent after upgrade.
+  // Stripe only fires success_url after payment is confirmed — trust the URL param.
+  // Update the store immediately so every page sees the new tier right away.
+  // The webhook handles DB persistence separately; this keeps the UI instant.
   const setProfile = useProfileStore(s => s.setProfile);
   useEffect(() => {
-    if (!showUpgradeBanner || !upgradedTier || !user?.id) return;
-
-    let attempts = 0;
-    const MAX_ATTEMPTS = 20; // ~60 s total — covers slow webhook delivery
-    let timer;
-    let cancelled = false;
-
-    const poll = async () => {
-      if (cancelled) return;
-      attempts++;
-      const { data: fresh } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (cancelled) return;
-
-      if (fresh?.subscription_tier === upgradedTier) {
-        setProfile(fresh); // full refresh — all fields in sync
-      } else if (attempts < MAX_ATTEMPTS) {
-        timer = setTimeout(poll, 3000);
-      }
-    };
-
-    timer = setTimeout(poll, 800); // short initial delay — webhook is usually fast
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [showUpgradeBanner, upgradedTier, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!showUpgradeBanner || !upgradedTier) return;
+    updateProfile({ subscription_tier: upgradedTier });
+  }, [showUpgradeBanner, upgradedTier]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load plateau alerts from recent workouts (last 7 days)
   useEffect(() => {
