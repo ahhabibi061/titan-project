@@ -9,6 +9,18 @@
 // joints: primary working joints
 // cues: 4–6 coaching cues
 
+// Exercises that intentionally have no animation — muscle map + cues only
+export const NO_ANIMATION_IDS = new Set([
+  // Bodyweight
+  'pushup', 'pike_pushup', 'diamond_pushup', 'inverted_row', 'bodyweight_squat',
+  'pistol_squat', 'glute_bridge', 'nordic_curl', 'dip_bw', 'chin_up',
+  'situp', 'ab_wheel', 'plank', 'leg_raise', 'dead_bug', 'russian_twist', 'dragon_flag',
+  // Cardio / Carries
+  'rowing_machine', 'assault_bike', 'sled_push', 'farmers_carry',
+  // Cable / KB
+  'pallof_press', 'kb_row', 'kb_lunge',
+]);
+
 export const EXERCISE_DEMOS = {
 
   // ── CHEST ──────────────────────────────────────────────────────────────────
@@ -1045,22 +1057,6 @@ export const EXERCISE_DEMOS = {
     ],
   },
 
-  kb_turkish_getup: {
-    name: 'Turkish Get-Up',
-    primaryMuscles:   ['abs', 'front-deltoids'],
-    secondaryMuscles: ['gluteal', 'upper-back', 'obliques'],
-    lottieFile: 'kb_turkish_getup',
-    mechanics: 'Multi-Pattern Stability',
-    joints: ['Shoulder', 'Hip', 'Spine'],
-    cues: [
-      'Eyes on the bell at every stage — never look away',
-      'Move slowly and with intention — this is not a speed drill',
-      'Lock the shoulder in its socket before any movement',
-      'Each position is a pause — own each step',
-      'Learn the movement with no weight before loading',
-    ],
-  },
-
   smith_ohp: {
     name: 'Smith Machine OHP',
     primaryMuscles:   ['front-deltoids'],
@@ -1073,6 +1069,261 @@ export const EXERCISE_DEMOS = {
       'Sit slightly in front of the bar — not directly under it',
       'Press to full lockout — bar travels in a fixed path',
       'Controlled descent — don\'t drop it',
+    ],
+  },
+
+  // ── NEW EXERCISES ──────────────────────────────────────────────────────────
+  leg_extension: {
+    name: 'Leg Extension',
+    primaryMuscles:   ['quadriceps'],
+    secondaryMuscles: [],
+    lottieFile: 'leg_extension',
+    mechanics: 'Knee Extension (Machine)',
+    joints: ['Knee'],
+    cues: [
+      'Adjust seat so knee aligns with the machine pivot',
+      'Extend fully — hold peak contraction for 1 second',
+      'Slow 3-second eccentric on every rep',
+      'No momentum — controlled throughout',
+      'Don\'t drop the weight — resist all the way down',
+    ],
+  },
+
+  db_bench: {
+    name: 'DB Bench Press',
+    primaryMuscles:   ['chest'],
+    secondaryMuscles: ['front-deltoids', 'triceps'],
+    lottieFile: 'db_bench',
+    mechanics: 'Horizontal Push',
+    joints: ['Shoulder', 'Elbow'],
+    cues: [
+      'Lower until elbows break the plane of the bench',
+      'Press in a slight arc — dumbbells close or touching at top',
+      'Scapulae retracted and depressed throughout',
+      'Wrists stacked over elbows',
+      'Full range every rep — depth drives pec hypertrophy',
+    ],
+  },
+
+  db_fly: {
+    name: 'DB Fly',
+    primaryMuscles:   ['chest'],
+    secondaryMuscles: ['front-deltoids'],
+    lottieFile: 'db_fly',
+    mechanics: 'Horizontal Adduction',
+    joints: ['Shoulder'],
+    cues: [
+      'Soft elbow bend — lock that angle for the whole set',
+      'Arc the arms wide and down until you feel a deep pec stretch',
+      'Think: hugging a barrel on the way up',
+      'Squeeze pecs at the top — hold 1 second',
+      '3-second eccentric — gravity is pulling hard here',
+    ],
+  },
+
+  db_shoulder_press: {
+    name: 'DB Shoulder Press',
+    primaryMuscles:   ['front-deltoids'],
+    secondaryMuscles: ['triceps'],
+    lottieFile: 'db_shoulder_press',
+    mechanics: 'Vertical Push',
+    joints: ['Shoulder', 'Elbow'],
+    cues: [
+      'Start at ear height, palms facing forward',
+      'Press in a slight arc overhead',
+      'Keep tension — don\'t fully lock out',
+      'Lower to full stretch each rep',
+      'Core braced — no lower back arch',
+    ],
+  },
+
+  overhead_tricep_ext: {
+    name: 'Overhead Tricep Extension',
+    primaryMuscles:   ['triceps'],
+    secondaryMuscles: [],
+    lottieFile: 'overhead_tricep_ext',
+    mechanics: 'Elbow Extension (Overhead)',
+    joints: ['Elbow', 'Shoulder'],
+    cues: [
+      'Upper arms fixed beside ears — they do not move',
+      'Lower until forearms are below parallel — full stretch',
+      'Elbows stay narrow — don\'t flare them out',
+      'Drive to full extension — squeeze the long head',
+      'The stretch at the bottom is the entire point',
+    ],
+  },
+
+  back_extension: {
+    name: 'Back Extension',
+    primaryMuscles:   ['lower-back'],
+    secondaryMuscles: ['gluteal', 'hamstring'],
+    lottieFile: 'back_extension',
+    mechanics: 'Hip Hinge (Erector Focus)',
+    joints: ['Hip', 'Spine'],
+    cues: [
+      'Hips at the pad edge — full hip hinge ROM',
+      'Rise to neutral spine — not into hyperextension',
+      'Squeeze glutes hard at the top',
+      'Hold a plate to the chest to progress',
+      'Slow eccentric — erectors work on the way down too',
+    ],
+  },
+
+  lunge: {
+    name: 'Dumbbell Lunge',
+    primaryMuscles:   ['quadriceps'],
+    secondaryMuscles: ['gluteal', 'hamstring'],
+    lottieFile: 'lunge',
+    mechanics: 'Unilateral Squat (Split)',
+    joints: ['Hip', 'Knee'],
+    cues: [
+      'Long stride — 90° at both knees at depth',
+      'Front knee tracks over second toe',
+      'Torso stays upright throughout',
+      'Drive through front heel to rise',
+      'Reverse lunge is easier on the knee than forward',
+    ],
+  },
+
+  sumo_deadlift: {
+    name: 'Sumo Deadlift',
+    primaryMuscles:   ['hamstring', 'gluteal'],
+    secondaryMuscles: ['adductor', 'lower-back'],
+    lottieFile: 'sumo_deadlift',
+    mechanics: 'Hip Hinge — Wide Stance',
+    joints: ['Hip', 'Knee'],
+    cues: [
+      'Stance wide, toes turned out 30–45°',
+      'Drop hips lower — more upright torso than conventional',
+      'Drive knees out over toes throughout the pull',
+      'Bar stays over mid-foot at all times',
+      'Lock out with hip drive — not by arching the back',
+    ],
+  },
+
+  incline_bench: {
+    name: 'Incline Barbell Press',
+    primaryMuscles:   ['chest'],
+    secondaryMuscles: ['front-deltoids', 'triceps'],
+    lottieFile: 'incline_bench',
+    mechanics: 'Incline Push',
+    joints: ['Shoulder', 'Elbow'],
+    cues: [
+      'Set bench to 30–45° — no steeper',
+      'Bar travels to the upper chest — not the clavicle',
+      'Retract scapulae firmly before unracking',
+      'Same ~45° elbow tuck as flat bench',
+      'Full lockout at top — maintain lat tension',
+    ],
+  },
+
+  upright_row: {
+    name: 'Upright Row',
+    primaryMuscles:   ['front-deltoids', 'trapezius'],
+    secondaryMuscles: ['biceps'],
+    lottieFile: 'upright_row',
+    mechanics: 'Vertical Pull',
+    joints: ['Shoulder', 'Elbow'],
+    cues: [
+      'Wide grip — shoulder width or beyond',
+      'Lead with elbows, not wrists',
+      'Stop when elbows reach shoulder height',
+      'Traps depressed — don\'t shrug into it',
+    ],
+  },
+
+  seated_leg_curl: {
+    name: 'Seated Leg Curl',
+    primaryMuscles:   ['hamstring'],
+    secondaryMuscles: [],
+    lottieFile: 'seated_leg_curl',
+    mechanics: 'Knee Flexion (Seated)',
+    joints: ['Knee', 'Hip'],
+    cues: [
+      'Sit fully upright — hips pushed back in the seat',
+      'Full ROM — heels as far back as the machine allows',
+      'Pause at full contraction for 1 second',
+      'Slow 3-second eccentric every rep',
+      'Hip flexion pre-stretches the hamstrings beyond the lying curl',
+    ],
+  },
+
+  hip_abduction: {
+    name: 'Hip Abduction Machine',
+    primaryMuscles:   ['abductors'],
+    secondaryMuscles: [],
+    lottieFile: 'hip_abduction',
+    mechanics: 'Hip Abduction (Machine)',
+    joints: ['Hip'],
+    cues: [
+      'Full ROM — resist the return with control',
+      'Pause at maximum abduction',
+      'Torso upright — don\'t lean to cheat the ROM',
+      'Both sides need equal attention',
+    ],
+  },
+
+  close_grip_bench: {
+    name: 'Close-Grip Bench Press',
+    primaryMuscles:   ['triceps'],
+    secondaryMuscles: ['chest', 'front-deltoids'],
+    lottieFile: 'close_grip_bench',
+    mechanics: 'Horizontal Push (Tricep Focus)',
+    joints: ['Elbow', 'Shoulder'],
+    cues: [
+      'Shoulder-width grip — not too narrow',
+      'Elbows tucked tight to torso throughout',
+      'Bar to lower chest',
+      'Full lockout — squeeze triceps hard at top',
+      'Same scapular setup as standard bench press',
+    ],
+  },
+
+  bent_over_lateral: {
+    name: 'Bent-Over Lateral Raise',
+    primaryMuscles:   ['back-deltoids'],
+    secondaryMuscles: ['trapezius', 'upper-back'],
+    lottieFile: 'bent_over_lateral',
+    mechanics: 'Horizontal Abduction',
+    joints: ['Shoulder'],
+    cues: [
+      'Hinge forward 70–90° — torso nearly parallel to floor',
+      'Soft elbow — fixed throughout',
+      'Lead with elbows, arc upward',
+      'Pause at the top — feel the rear delt contract',
+      'Control the descent — don\'t let it drop',
+    ],
+  },
+
+  arnold_press: {
+    name: 'Arnold Press',
+    primaryMuscles:   ['front-deltoids'],
+    secondaryMuscles: ['triceps'],
+    lottieFile: 'arnold_press',
+    mechanics: 'Vertical Push + Rotation',
+    joints: ['Shoulder', 'Elbow'],
+    cues: [
+      'Start: dumbbells at chin, palms facing you',
+      'Rotate outward as you press upward',
+      'End: palms facing forward at lockout',
+      'Fully reverse the rotation on the descent',
+      'The rotation at the bottom is what makes this unique',
+    ],
+  },
+
+  good_morning: {
+    name: 'Good Morning',
+    primaryMuscles:   ['hamstring', 'lower-back'],
+    secondaryMuscles: ['gluteal'],
+    lottieFile: 'good_morning',
+    mechanics: 'Hip Hinge (Bar on Back)',
+    joints: ['Hip', 'Spine'],
+    cues: [
+      'Soft knee bend — this is a hinge, not a squat',
+      'Hinge until torso approaches parallel to floor',
+      'Spine absolutely neutral — no rounding at any point',
+      'Drive hips through to standing — lock glutes at top',
+      'Light weight with perfect form — bar amplifies errors',
     ],
   },
 

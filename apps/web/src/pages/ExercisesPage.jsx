@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import AppNav from '../components/AppNav';
 import { useProfileStore } from '../store/useProfileStore';
 import { supabase } from '../lib/supabase';
+import ExerciseDemo from '../components/ExerciseDemo';
 
 /* =========================================================================
  * EXERCISE LIBRARY — Module 2 Proof-of-Concept
@@ -104,7 +105,6 @@ const EXERCISES = [
   { id: 'kb_deadlift',      name: 'Kettlebell Deadlift',      primary: 'hamstrings',  secondary: ['glutes','lower_back','traps'],        equipment: 'kettlebell', pattern: 'hinge',     difficulty: 2, splits: ['pull','lower','bro_legs'],                     premium: false, popular: 65, description: 'The kettlebell deadlift teaches the hip hinge pattern with a lower centre of mass than a barbell, making it an excellent teaching tool and warm-up movement for the conventional deadlift. The close foot stance and neutral handle grip differ from barbell mechanics.', videoUrl: 'https://titan-cdn.app/demos/kb_deadlift.mp4',     cues: ['Bell between feet','Hip hinge — not a squat','Lats engaged — protect the lower back','Drive hips through to lockout'] },
   { id: 'kb_lunge',         name: 'Kettlebell Lunge',         primary: 'quads',       secondary: ['glutes','hamstrings'],               equipment: 'kettlebell', pattern: 'squat',     difficulty: 2, splits: ['legs','lower','bro_legs'],                    premium: false, popular: 60, description: 'The kettlebell lunge is a unilateral lower-body exercise that trains quad and glute strength while challenging single-leg balance and stability. Holding the bells at the sides or in a rack position alters the stability demand and shifts the emphasis between muscle groups.', videoUrl: 'https://titan-cdn.app/demos/kb_lunge.mp4',        cues: ['Step long enough for 90° at both knees','Front knee tracks over toes','Rear knee hovers above floor','Torso remains upright'] },
   { id: 'kb_clean',         name: 'Kettlebell Clean',         primary: 'glutes',      secondary: ['traps','hamstrings','forearms'],      equipment: 'kettlebell', pattern: 'hinge',     difficulty: 3, splits: ['legs','lower'],                               premium: true,  popular: 58, description: 'The kettlebell clean is a technical movement that transitions the bell from a swing into the rack position using a ballistic hip drive. It develops posterior chain power, full-body coordination, and is the foundational skill required before learning the kettlebell press or snatch.', videoUrl: 'https://titan-cdn.app/demos/kb_clean.mp4',        cues: ['Initiate with hip hinge — not the arm','Guide the bell close to the body','Punch hand through at the top — bell lands on forearm, not wrist','Absorb in the rack by bending slightly at knees'] },
-  { id: 'kb_turkish_getup', name: 'Turkish Get-Up',           primary: 'abs',         secondary: ['front_delts','glutes','traps'],       equipment: 'kettlebell', pattern: 'carry',     difficulty: 5, splits: ['upper','lower'],                              premium: true,  popular: 55, description: 'The Turkish get-up is a full-body movement that takes the lifter from lying to standing with a weight pressed overhead. It trains shoulder stability, hip mobility, core anti-rotation, and total-body coordination in a single movement and is widely considered the most complete exercise in existence.', videoUrl: 'https://titan-cdn.app/demos/kb_turkish_getup.mp4', cues: ['Keep eyes on the bell throughout','Never let the pressed arm bend','Work through each checkpoint slowly','Lower with the same controlled sequence'] },
 
   // ── CABLES ──
   { id: 'cable_row',         name: 'Seated Cable Row',         primary: 'lats',        secondary: ['biceps','rear_delts','traps'],        equipment: 'cable',      pattern: 'pull',      difficulty: 1, splits: ['pull','upper','bro_back'],                     premium: false, popular: 84, description: 'The seated cable row provides constant tension on the lats and mid-back through the full range of motion, unlike free-weight rows where tension drops at the bottom. The cable angle and handle type significantly influence which back muscles are emphasised.', videoUrl: 'https://titan-cdn.app/demos/cable_row.mp4',       cues: ['Brace core — don\'t lean back with momentum','Pull handle to lower sternum','Squeeze shoulder blades together at end range','Slow return — don\'t let the stack crash'] },
@@ -127,6 +127,24 @@ const EXERCISES = [
   { id: 'assault_bike',   name: 'Assault Bike',               primary: 'quads',       secondary: ['glutes','hamstrings','chest','lats'],  equipment: 'cardio',     pattern: 'cardio',    difficulty: 3, splits: ['legs','upper'],                               premium: false, popular: 72, description: 'The assault bike (fan bike) provides full-body cardiovascular conditioning through simultaneous push-pull arm action and leg cycling. The air resistance mechanism self-regulates to effort level — harder effort creates proportionally more resistance, making it impossible to sandbag.', videoUrl: 'https://titan-cdn.app/demos/assault_bike.mp4',    cues: ['Push AND pull the handles — don\'t just pedal','Slight forward lean — drive through the handles','For intervals: all-out effort — this machine punishes pacing','For steady-state: find a sustainable RPM and hold it'] },
   { id: 'sled_push',      name: 'Sled Push',                  primary: 'quads',       secondary: ['glutes','hamstrings','calves','abs'],  equipment: 'cardio',     pattern: 'carry',     difficulty: 3, splits: ['legs','lower'],                               premium: true,  popular: 65, description: 'The sled push is a concentric-only lower body conditioning movement that eliminates the eccentric phase, significantly reducing DOMS and recovery cost. It develops quad-dominant strength and conditioning and is ideal for high-frequency training due to its low recovery demand.', videoUrl: 'https://titan-cdn.app/demos/sled_push.mp4',       cues: ['Hands at hip height on the upright posts','Low forward body angle — power comes from leg drive, not upper body','Short, powerful strides — stay on the balls of your feet','Keep pushing even when it slows — that\'s the point'] },
   { id: 'farmers_carry',  name: 'Farmer\'s Carry',            primary: 'traps',       secondary: ['forearms','abs','glutes','calves'],   equipment: 'kettlebell', pattern: 'carry',     difficulty: 2, splits: ['pull','upper','lower'],                       premium: false, popular: 68, description: 'The farmer\'s carry develops grip strength, trapezius hypertrophy, core stability, and cardiovascular conditioning simultaneously. It has the highest carry-over to real-world functional strength of any loaded carry variation and exposes grip and core weaknesses rapidly.', videoUrl: 'https://titan-cdn.app/demos/farmers_carry.mp4',   cues: ['Load is heavy — you should feel it within 20 metres','Stand tall — don\'t let the weight pull you sideways','Short, controlled steps','Squeeze the handles as hard as possible throughout'] },
+
+  // ── ADDITIONAL EXERCISES ──
+  { id: 'leg_extension',      name: 'Leg Extension',             primary: 'quads',       secondary: [],                                    equipment: 'machine',    pattern: 'isolation', difficulty: 1, splits: ['legs','lower','bro_legs'],                    premium: false, popular: 82, description: 'The leg extension is the primary isolation exercise for the quadriceps, training all four quad heads through pure knee extension. It uniquely loads the rectus femoris at shortened muscle lengths — a position poorly stimulated by compound squatting — making it an essential complement to squats and leg press for complete quad development.', videoUrl: 'https://titan-cdn.app/demos/leg_extension.mp4',    cues: ['Seat adjusted so knees align with pivot','Full extension at top — hold 1s','3-second eccentric every rep','Don\'t let the weight crash down'] },
+  { id: 'db_bench',           name: 'DB Bench Press',            primary: 'chest',       secondary: ['front_delts','triceps'],              equipment: 'dumbbell',   pattern: 'push',      difficulty: 2, splits: ['push','upper','bro_chest'],                    premium: false, popular: 87, description: 'The dumbbell bench press offers greater range of motion and independent arm movement compared to the barbell, enabling a deeper pectoral stretch and full contraction. It exposes and corrects left-to-right strength imbalances and is often preferred by shoulder-health-conscious lifters.', videoUrl: 'https://titan-cdn.app/demos/db_bench.mp4',         cues: ['Lower until elbows break plane of bench','Press in slight arc — dumbbells touch at top','Wrists stacked over elbows','Scapulae retracted throughout'] },
+  { id: 'db_fly',             name: 'DB Fly',                    primary: 'chest',       secondary: ['front_delts'],                        equipment: 'dumbbell',   pattern: 'isolation', difficulty: 2, splits: ['push','upper','bro_chest'],                    premium: false, popular: 72, description: 'The dumbbell fly trains the pectoralis through the full arc of shoulder horizontal adduction without the pressing demand of a bench press. The deep stretched position with a soft elbow loads the chest at long muscle lengths, producing significant hypertrophic stimulus.', videoUrl: 'https://titan-cdn.app/demos/db_fly.mp4',           cues: ['Wide arc — not a press','Soft elbow fixed throughout','Lower to full pec stretch','Squeeze hard at the top'] },
+  { id: 'db_shoulder_press',  name: 'DB Shoulder Press',         primary: 'front_delts', secondary: ['side_delts','triceps'],               equipment: 'dumbbell',   pattern: 'push',      difficulty: 2, splits: ['push','upper','bro_shoulders'],                premium: false, popular: 83, description: 'The seated dumbbell shoulder press is the most widely performed overhead movement, training the full deltoid with independent arm freedom. Natural rotation through the arc reduces shoulder impingement risk compared to a barbell and exposes left-to-right strength asymmetries.', videoUrl: 'https://titan-cdn.app/demos/db_shoulder_press.mp4', cues: ['Start at ear height, elbows at 90°','Press in slight arc overhead','Don\'t lock out — keep tension on delts','Full stretch at the bottom each rep'] },
+  { id: 'overhead_tricep_ext',name: 'Overhead Tricep Extension', primary: 'triceps',     secondary: [],                                    equipment: 'dumbbell',   pattern: 'isolation', difficulty: 2, splits: ['push','upper','bro_arms'],                     premium: false, popular: 76, description: 'The overhead tricep extension places the long head of the triceps in a maximally stretched position by keeping the shoulder in flexion throughout. The long head — the largest triceps head — receives the greatest hypertrophic stimulus in this lengthened position, which pushdowns and dips cannot fully replicate.', videoUrl: 'https://titan-cdn.app/demos/overhead_tricep_ext.mp4', cues: ['Upper arms fixed beside ears — they don\'t move','Lower until forearms pass below parallel','Elbows stay narrow — don\'t flare','Drive to full extension at top'] },
+  { id: 'back_extension',     name: 'Back Extension',            primary: 'lower_back',  secondary: ['glutes','hamstrings'],               equipment: 'machine',    pattern: 'hinge',     difficulty: 2, splits: ['legs','lower','bro_legs','bro_back'],          premium: false, popular: 65, description: 'The back extension trains the spinal erectors and glutes through hip extension with the spine under load, building the lumbar strength essential for heavy deadlifts and squats. Holding a plate to the chest provides progressive overload; the movement ends at neutral, not beyond.', videoUrl: 'https://titan-cdn.app/demos/back_extension.mp4',   cues: ['Hips at the pad edge for full hip ROM','Rise to neutral — don\'t hyperextend','Squeeze glutes hard at the top','Plate at chest to progress'] },
+  { id: 'lunge',              name: 'Dumbbell Lunge',            primary: 'quads',       secondary: ['glutes','hamstrings'],               equipment: 'dumbbell',   pattern: 'squat',     difficulty: 2, splits: ['legs','lower','bro_legs'],                    premium: false, popular: 80, description: 'The dumbbell lunge is the foundational unilateral lower-body exercise, building single-leg strength, balance, and correcting left-to-right imbalances. The reverse lunge variant reduces knee shear compared to forward lunges and better replicates natural locomotion patterns.', videoUrl: 'https://titan-cdn.app/demos/lunge.mp4',            cues: ['Long stride for 90° at both knees','Front knee tracks over second toe','Torso stays upright throughout','Drive through front heel to rise'] },
+  { id: 'sumo_deadlift',      name: 'Sumo Deadlift',             primary: 'hamstrings',  secondary: ['glutes','adductors','lower_back'],   equipment: 'barbell',    pattern: 'hinge',     difficulty: 4, splits: ['pull','lower','bro_legs'],                     premium: false, popular: 72, description: 'The sumo deadlift uses a wide stance with toes turned out, producing a more upright torso and greater emphasis on the hip adductors, glutes, and quads. The shorter moment arm reduces lumbar stress compared to conventional and is mechanically advantageous for lifters with wider hip structure.', videoUrl: 'https://titan-cdn.app/demos/sumo_deadlift.mp4',   cues: ['Wide stance, toes out 45°','Drop hips down — torso more upright','Drive knees out over toes throughout','Lock out with hip drive, not back extension'] },
+  { id: 'incline_bench',      name: 'Incline Barbell Press',     primary: 'chest',       secondary: ['front_delts','triceps'],              equipment: 'barbell',    pattern: 'push',      difficulty: 3, splits: ['push','upper','bro_chest'],                    premium: false, popular: 84, description: 'The incline barbell press is the primary compound movement for the clavicular head of the pectoralis major. A 30–45° incline optimally targets the upper chest; steeper angles shift load progressively to the front deltoid. The barbell allows heavier loading than dumbbell incline variations.', videoUrl: 'https://titan-cdn.app/demos/incline_bench.mp4',   cues: ['Bench at 30–45° — no steeper','Bar to upper chest, not the clavicle','Retract scapulae firmly before unracking','Elbows ~45° — same tuck as flat bench'] },
+  { id: 'upright_row',        name: 'Upright Row',               primary: 'side_delts',  secondary: ['traps','front_delts','biceps'],      equipment: 'barbell',    pattern: 'pull',      difficulty: 2, splits: ['pull','upper','bro_shoulders','bro_back'],      premium: false, popular: 62, description: 'The upright row trains the middle deltoids and upper trapezius through vertical elbow pulling. A wide grip reduces the internal rotation and impingement risk of the narrow-grip version. Cable and EZ-bar variants are more shoulder-friendly than a straight bar.', videoUrl: 'https://titan-cdn.app/demos/upright_row.mp4',     cues: ['Wide grip — shoulder-width or wider','Lead with elbows, not wrists','Stop when elbows reach shoulder height','Don\'t shrug — traps depress throughout'] },
+  { id: 'seated_leg_curl',    name: 'Seated Leg Curl',           primary: 'hamstrings',  secondary: [],                                    equipment: 'machine',    pattern: 'isolation', difficulty: 1, splits: ['legs','lower','bro_legs'],                    premium: false, popular: 78, description: 'The seated leg curl trains the hamstrings in a greater hip-flexed position than lying variations, pre-stretching them beyond what the lying curl achieves. Research shows superior biceps femoris long-head hypertrophy versus lying leg curl, making it the preferred hamstring isolation choice.', videoUrl: 'https://titan-cdn.app/demos/seated_leg_curl.mp4',  cues: ['Sit upright — hips fully back in the seat','Full ROM — heels as far back as possible','Pause at peak contraction for 1s','Slow 3s eccentric'] },
+  { id: 'hip_abduction',      name: 'Hip Abduction Machine',     primary: 'glutes',      secondary: [],                                    equipment: 'machine',    pattern: 'isolation', difficulty: 1, splits: ['legs','lower'],                               premium: false, popular: 68, description: 'The hip abduction machine isolates the gluteus medius and minimus — the upper glutes responsible for hip stability and the rounder glute shelf. The glute medius is chronically undertrained by squats and deadlifts, and its weakness directly contributes to knee valgus under load.', videoUrl: 'https://titan-cdn.app/demos/hip_abduction.mp4',   cues: ['Full ROM — resist the return slowly','Pause at maximum abduction','Keep torso upright — don\'t lean','Both sides equally important'] },
+  { id: 'close_grip_bench',   name: 'Close-Grip Bench Press',    primary: 'triceps',     secondary: ['chest','front_delts'],               equipment: 'barbell',    pattern: 'push',      difficulty: 3, splits: ['push','upper','bro_arms'],                     premium: false, popular: 70, description: 'The close-grip bench press is the heaviest compound tricep exercise, allowing significantly more load than any isolation movement. A shoulder-width grip reduces the pectoral moment arm and places primary mechanical demand on the triceps while maintaining compound pressing advantages.', videoUrl: 'https://titan-cdn.app/demos/close_grip_bench.mp4', cues: ['Shoulder-width grip — not too narrow','Elbows tucked tight to torso throughout','Bar to lower chest','Full lockout — squeeze triceps hard at top'] },
+  { id: 'bent_over_lateral',  name: 'Bent-Over Lateral Raise',   primary: 'rear_delts',  secondary: ['traps'],                             equipment: 'dumbbell',   pattern: 'pull',      difficulty: 1, splits: ['pull','upper','bro_shoulders'],                premium: false, popular: 65, description: 'The bent-over lateral raise isolates the posterior deltoid through shoulder horizontal abduction without machine assistance. The 70–90° forward hinge eliminates trap momentum and produces excellent rear delt isolation — a versatile alternative when a reverse pec deck is unavailable.', videoUrl: 'https://titan-cdn.app/demos/bent_over_lateral.mp4', cues: ['Hinge forward 70–90° — torso nearly parallel','Soft elbow, fixed throughout','Lead with elbows — arc upward','Pause at top — feel the rear delt squeeze'] },
+  { id: 'arnold_press',       name: 'Arnold Press',              primary: 'front_delts', secondary: ['side_delts','triceps'],               equipment: 'dumbbell',   pattern: 'push',      difficulty: 2, splits: ['push','upper','bro_shoulders'],                premium: false, popular: 68, description: 'The Arnold press adds shoulder rotation to the dumbbell press — palms face inward at the bottom and rotate to forward at lockout. This increases total deltoid activation through the full rotational arc and adds front delt loading at the bottom position absent in a standard press.', videoUrl: 'https://titan-cdn.app/demos/arnold_press.mp4',    cues: ['Start with palms facing you at chin height','Rotate outward as you press up','Palms face forward at lockout','Fully reverse rotation on the descent'] },
+  { id: 'good_morning',       name: 'Good Morning',              primary: 'hamstrings',  secondary: ['lower_back','glutes'],               equipment: 'barbell',    pattern: 'hinge',     difficulty: 3, splits: ['legs','lower','bro_legs','bro_back'],          premium: true,  popular: 55, description: 'The good morning is a barbell hip hinge with the bar on the back, loading the hamstrings and spinal erectors through the hinge pattern. Widely used by powerlifters to strengthen the deadlift and squat bottom position, it is one of the most effective posterior chain exercises when performed with a neutral spine.', videoUrl: 'https://titan-cdn.app/demos/good_morning.mp4',    cues: ['Soft knee bend — hinge, not a squat','Hinge until torso approaches parallel','Spine absolutely neutral — no rounding','Drive hips through to standing'] },
 
   // ── CORE (additional) ──
   { id: 'dead_bug',      name: 'Dead Bug',                    primary: 'abs',         secondary: ['obliques'],                          equipment: 'bodyweight', pattern: 'isolation', difficulty: 2, splits: ['upper','lower'],                              premium: false, popular: 58, description: 'The dead bug is a supine core stability exercise that trains the ability to maintain a neutral spine while moving the limbs — a critical functional skill for all compound lifts. It is among the safest and most effective anti-extension core exercises and is recommended by sports physiotherapists universally.', videoUrl: 'https://titan-cdn.app/demos/dead_bug.mp4',        cues: ['Lower back firmly pressed to floor throughout','Move only as far as you can without the back lifting','Exhale fully as the arm and leg extend','Opposite arm and leg extend simultaneously'] },
@@ -294,7 +312,6 @@ const MISTAKES = {
   kb_deadlift:        ['Squatting the bell up rather than hinging — the knees should not drop significantly', 'Rounding the upper back at the top of the lift', 'Not engaging the lats before the pull — leaves the lower back unsupported'],
   kb_lunge:           ['Striding too short, preventing 90° angles at both knees', 'Front knee tracking inward under the unilateral load', 'Not keeping the rear knee controlled on descent — it should hover just above the floor'],
   kb_clean:           ['Letting the bell flip over the top of the hand and impact the wrist — the hand must punch through', 'Pulling with the arm rather than driving with the hips — the clean is powered by hip drive', 'Not absorbing the catch by bending at the knees — leads to a hard impact on the forearm'],
-  kb_turkish_getup:   ['Bending the pressed arm at any point during the movement — this is the primary safety rule', 'Moving too quickly between checkpoints — each position requires deliberate stability hold', 'Not keeping eyes on the bell throughout — visual tracking is critical for overhead safety'],
   cable_row:          ['Leaning far back at the finish using spinal extension as momentum', 'Not allowing shoulder blades to protract at the start — the stretch must be achieved before pulling', 'Pulling too high — the handle should come to the lower sternum, not the upper chest'],
   cable_curl:         ['Rocking the torso back to assist the biceps at the top of the range', 'Not returning to full extension at the bottom — this eliminates the lengthened loading position', 'Elbows drifting away from the sides during the curl'],
   cable_lateral:      ['Raising above shoulder height — the supraspinatus dominates above parallel, not the middle delt', 'Cable not crossing under the body to the opposite side — reduces the stretch at the bottom', 'Excessive weight causing torso lean and a cheat raise to compensate'],
@@ -314,6 +331,22 @@ const MISTAKES = {
   dead_bug:           ['Lower back lifting off the floor as limbs extend — this is the defining error of the movement', 'Extending too far before adequate core stability — only go as far as the back stays neutral', 'Holding breath throughout — continuous breathing through the brace is the training goal'],
   russian_twist:      ['Rounding the thoracic spine forward rather than rotating — the rotation must come from the thorax', 'Moving through the arms rather than the trunk — the arms should stay fixed to the chest', 'Moving too fast using momentum — slow, deliberate rotation is necessary for oblique activation'],
   dragon_flag:        ['Hips breaking and flexing when the core fatigues — the entire body must remain as one rigid plank', 'Descending too quickly before building sufficient eccentric strength — elevate feet as regression', 'Grip not secure enough on the fixed object behind the head — instability defeats the movement'],
+  leg_extension:      ['Locking out the knee aggressively increases joint shear force — stop just short or control fully through', 'Bouncing through reps with momentum bypasses the contractile range — each rep must be deliberate', 'Seat adjusted too far back shortens the working ROM before full extension is reached'],
+  db_bench:           ['Letting the dumbbells drift outward rather than pressing in a slight arc reduces peak pectoral activation', 'Not touching or bringing the dumbbells close at the top eliminates the contracted pec position', 'Excessive dumbbell rotation turning it into a neutral press removes the pectoral stretch at the bottom'],
+  db_fly:             ['Bending the elbows too much converts the fly into a press — the soft elbow stays fixed throughout', 'Not reaching a full pectoral stretch at the bottom is the most common error — the lengthened position drives hypertrophy', 'Pressing the dumbbells straight up rather than in an arc — the movement is horizontal adduction, not vertical pressing'],
+  db_shoulder_press:  ['Elbows flared too far back rather than slightly in front of the body, increasing impingement risk at the bottom', 'Not lowering to a full stretch — the deltoid must reach its lengthened position for maximum stimulus', 'Excessive lower-back arch to press more weight shifts the load from delts to the spine'],
+  overhead_tricep_ext:['Upper arms drifting forward throughout the movement — they must remain fixed in line with the ears', 'Not lowering to full stretch — the long head hypertrophies most from lengthened loading and a full bottom ROM is required', 'Elbows flaring outward, converting the long-head stretch into a more lateral tricep movement'],
+  back_extension:     ['Hyperextending the lumbar spine at the top — the movement ends at neutral, not beyond', 'Insufficient hip hinge depth, turning it into a short partial movement that misses the erectors\' full range', 'Loading too heavily before mastering the neutral-spine pattern — the lower back is the structure at risk'],
+  lunge:              ['Stride too short, forcing the front knee to travel far past the toes under load', 'Torso pitching forward at the bottom due to hip flexor tightness or insufficient stride length', 'Front knee caving inward under the unilateral load — must track over the second toe throughout'],
+  sumo_deadlift:      ['Knees caving inward during the pull — must track over the toes throughout the entire lift', 'Hips rising faster than shoulders at the initiation, effectively converting it to a conventional deadlift', 'Stance too narrow for the individual\'s hip anatomy, losing the mechanical advantage the sumo stance provides'],
+  incline_bench:      ['Bench angle set above 45°, shifting load from the upper chest entirely to the front deltoid', 'Bar path drifting toward the neck rather than the upper chest', 'Elbows flaring to 90° under the incline — the same ~45° tuck required on flat bench applies here'],
+  upright_row:        ['Grip too narrow — shoulder internal rotation at the top creates significant subacromial impingement risk', 'Wrists rising higher than elbows at any point — elbows must always be above the wrists', 'Pulling to the chin rather than stopping at shoulder height forces maximal shoulder internal rotation at end range'],
+  seated_leg_curl:    ['Not sitting fully upright, reducing hip flexion and removing the pre-stretch advantage over the lying curl', 'Partial range that does not reach full knee flexion misses the peak contraction position', 'Rising off the seat to assist the concentric — hips must stay in contact with the pad throughout'],
+  hip_abduction:      ['Using momentum to drive the legs apart removes the isolated glute medius contraction', 'Torso leaning sideways compensates for weakness and allows a larger range without the intended muscle doing the work', 'Not controlling the eccentric return — the adductor stretch on the way back is a secondary stimulus'],
+  close_grip_bench:   ['Grip too narrow — hands closer than shoulder width does not improve tricep activation and causes wrist and elbow pain', 'Elbows flaring wide converts the movement into a standard bench press, removing the tricep emphasis', 'Not achieving full elbow lockout — the triceps produce maximum force at full elbow extension'],
+  bent_over_lateral:  ['Not hinging far enough forward — a more upright torso recruits the middle delt rather than the rear delt', 'Too much weight causing trap dominance through shrugging, which removes rear delt isolation', 'Moving the arms in a straight backward direction rather than in an upward arc — the movement is horizontal abduction'],
+  arnold_press:       ['Rushing through the rotation so it becomes a partial press without completing the full arc', 'Starting with the elbows too high — dumbbells should begin at chin height with palms facing inward', 'Not reversing the rotation on the descent — the palms must return to facing inward at the bottom of every rep'],
+  good_morning:       ['Rounding the lower back under load — this is the most common and most dangerous error in this movement', 'Knees bending too much under load, converting the hinge into a squat with a bar on the back', 'Bar positioned too high on the traps or touching the neck, significantly increasing cervical injury risk'],
 };
 
 // -------------------- REP RANGES --------------------
@@ -343,141 +376,29 @@ const REP_RANGES = {
   cable_pull_through: ISOLATION, cable_woodchop: ISOLATION, pallof_press: ISOLATION,
   cable_machine_pullover: ISOLATION, seated_calf: ISOLATION, adductor_machine: ISOLATION,
   dead_bug: ISOLATION, russian_twist: ISOLATION,
-  pistol_squat: ADVANCED, nordic_curl: ADVANCED, dragon_flag: ADVANCED, kb_turkish_getup: ADVANCED,
+  db_bench: COMPOUND, db_shoulder_press: COMPOUND, lunge: COMPOUND,
+  sumo_deadlift: COMPOUND, incline_bench: COMPOUND, close_grip_bench: COMPOUND,
+  back_extension: COMPOUND, good_morning: COMPOUND, arnold_press: COMPOUND,
+  leg_extension: ISOLATION, db_fly: ISOLATION, overhead_tricep_ext: ISOLATION,
+  upright_row: ISOLATION, seated_leg_curl: ISOLATION, hip_abduction: ISOLATION,
+  bent_over_lateral: ISOLATION,
+  pistol_squat: ADVANCED, nordic_curl: ADVANCED, dragon_flag: ADVANCED,
   kb_swing: BALLISTIC, kb_clean: BALLISTIC,
   farmers_carry: CARRY, sled_push: CARRY,
   rowing_machine: CARDIO_RNG, assault_bike: CARDIO_RNG,
 };
 
-// -------------------- EXERCISE DEMO --------------------
-function ExerciseDemo({ ex, onClose }) {
-  const accent = PATTERN_ACCENTS[ex.pattern];
-  const TMPL_OVERRIDE = {
-    curl: 'E', hammer_curl: 'E', preacher_curl: 'E', cable_curl: 'E',
-    lateral_raise: 'F', rear_delt_fly: 'F', face_pull: 'F', shrug: 'F', cable_lateral: 'F', cable_fly: 'F',
-    kb_swing: 'G', kb_clean: 'G',
-    farmers_carry: 'H', kb_turkish_getup: 'H',
-    assault_bike: 'I', rowing_machine: 'I',
-  };
-  const PATTERN_TMPL = { push: 'C', pull: 'D', squat: 'A', hinge: 'B', isolation: 'J', cardio: 'I', carry: 'H' };
-  const tmpl = TMPL_OVERRIDE[ex.id] || PATTERN_TMPL[ex.pattern] || 'J';
-
-  const a = (name, dur = '1.8s', delay = '0s') => ({
-    animation: `${name} ${dur} ease-in-out infinite ${delay}`,
-    transformOrigin: 'center',
-  });
-
+// -------------------- EXERCISE DEMO PANEL --------------------
+function ExerciseDemoPanel({ ex, onClose }) {
   return (
-    <div className="relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${accent.from}22, ${accent.to}aa, #0a0908)`, aspectRatio: '16/9' }}>
-      <div className="absolute inset-0 opacity-30" style={{
-        backgroundImage: 'repeating-linear-gradient(0deg,transparent 0,transparent 18px,rgba(255,255,255,.04) 18px,rgba(255,255,255,.04) 19px),repeating-linear-gradient(90deg,transparent 0,transparent 18px,rgba(255,255,255,.04) 18px,rgba(255,255,255,.04) 19px)'
-      }} />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <svg viewBox="0 0 200 200" width="150" height="150" fill="none" stroke="rgba(255,255,255,0.82)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="100" cy="26" r="9" fill="rgba(255,255,255,0.12)" strokeWidth="2" />
-          {tmpl === 'A' && (
-            <g style={a('squat-down')}>
-              <line x1="100" y1="35" x2="100" y2="92" />
-              <line x1="76" y1="52" x2="124" y2="52" />
-              <line x1="76" y1="52" x2="62" y2="78" />
-              <line x1="124" y1="52" x2="138" y2="78" />
-              <line x1="82" y1="92" x2="68" y2="130" />
-              <line x1="118" y1="92" x2="132" y2="130" />
-              <line x1="68" y1="130" x2="55" y2="160" />
-              <line x1="132" y1="130" x2="145" y2="160" />
-            </g>
-          )}
-          {tmpl === 'B' && (<>
-            <line x1="82" y1="98" x2="70" y2="160" />
-            <line x1="118" y1="98" x2="130" y2="160" />
-            <g style={{ animation: 'hinge-fold 1.8s ease-in-out infinite', transformOrigin: '100px 98px' }}>
-              <line x1="100" y1="35" x2="100" y2="98" />
-              <line x1="76" y1="54" x2="124" y2="54" />
-              <line x1="76" y1="54" x2="55" y2="75" />
-              <line x1="124" y1="54" x2="145" y2="75" />
-            </g>
-          </>)}
-          {tmpl === 'C' && (<>
-            <line x1="100" y1="35" x2="100" y2="118" />
-            <line x1="80" y1="118" x2="120" y2="118" />
-            <line x1="80" y1="118" x2="72" y2="158" />
-            <line x1="120" y1="118" x2="128" y2="158" />
-            <line x1="76" y1="55" x2="124" y2="55" />
-            <line x1="76" y1="55" x2="50" y2="68" style={a('press-out')} />
-            <line x1="124" y1="55" x2="150" y2="68" style={a('press-out')} />
-          </>)}
-          {tmpl === 'D' && (<>
-            <line x1="100" y1="35" x2="100" y2="118" />
-            <line x1="80" y1="118" x2="120" y2="118" />
-            <line x1="80" y1="118" x2="72" y2="158" />
-            <line x1="120" y1="118" x2="128" y2="158" />
-            <line x1="76" y1="55" x2="124" y2="55" />
-            <line x1="76" y1="55" x2="50" y2="42" style={a('pull-in')} />
-            <line x1="124" y1="55" x2="150" y2="42" style={a('pull-in')} />
-          </>)}
-          {tmpl === 'E' && (<>
-            <line x1="100" y1="35" x2="100" y2="118" />
-            <line x1="80" y1="118" x2="120" y2="118" />
-            <line x1="80" y1="118" x2="72" y2="158" />
-            <line x1="120" y1="118" x2="128" y2="158" />
-            <line x1="76" y1="55" x2="124" y2="55" />
-            <line x1="76" y1="55" x2="60" y2="85" />
-            <line x1="124" y1="55" x2="140" y2="85" />
-            <line x1="60" y1="85" x2="46" y2="70" style={a('curl-up')} />
-            <line x1="140" y1="85" x2="154" y2="70" style={a('curl-up')} />
-          </>)}
-          {tmpl === 'F' && (<>
-            <line x1="100" y1="35" x2="100" y2="118" />
-            <line x1="80" y1="118" x2="120" y2="118" />
-            <line x1="80" y1="118" x2="72" y2="158" />
-            <line x1="120" y1="118" x2="128" y2="158" />
-            <line x1="76" y1="55" x2="124" y2="55" />
-            <line x1="76" y1="55" x2="52" y2="72" style={a('raise-up')} />
-            <line x1="124" y1="55" x2="148" y2="72" style={a('raise-up')} />
-          </>)}
-          {tmpl === 'G' && (<>
-            <line x1="100" y1="35" x2="100" y2="95" />
-            <line x1="80" y1="95" x2="78" y2="158" />
-            <line x1="120" y1="95" x2="122" y2="158" />
-            <line x1="76" y1="55" x2="124" y2="55" />
-            <line x1="100" y1="55" x2="100" y2="90" style={a('swing-arc', '1.2s')} />
-          </>)}
-          {tmpl === 'H' && (
-            <g style={a('carry-walk')}>
-              <line x1="100" y1="35" x2="100" y2="108" />
-              <line x1="76" y1="55" x2="124" y2="55" />
-              <line x1="76" y1="55" x2="60" y2="88" />
-              <line x1="124" y1="55" x2="140" y2="88" />
-              <line x1="84" y1="108" x2="72" y2="155" />
-              <line x1="116" y1="108" x2="128" y2="148" />
-            </g>
-          )}
-          {tmpl === 'I' && (<>
-            <line x1="100" y1="35" x2="100" y2="95" />
-            <line x1="80" y1="95" x2="78" y2="158" />
-            <line x1="120" y1="95" x2="122" y2="158" />
-            <line x1="76" y1="55" x2="60" y2="82" style={a('swing-arc', '0.9s')} />
-            <line x1="124" y1="55" x2="140" y2="82" style={{ animation: `swing-arc 0.9s ease-in-out infinite -0.45s`, transformOrigin: 'center' }} />
-            <circle cx="100" cy="130" r="20" stroke={`${accent.from}90`} strokeWidth="1.5" style={a('cardio-spin', '2s')} />
-          </>)}
-          {tmpl === 'J' && (<>
-            <line x1="100" y1="35" x2="100" y2="118" />
-            <line x1="80" y1="118" x2="120" y2="118" />
-            <line x1="80" y1="118" x2="72" y2="158" />
-            <line x1="120" y1="118" x2="128" y2="158" />
-            <line x1="76" y1="55" x2="60" y2="82" />
-            <line x1="124" y1="55" x2="140" y2="82" />
-            <circle cx="100" cy="80" r="20" stroke={accent.from} strokeWidth="1.5" strokeDasharray="4 4" style={a('pulse-ring')} />
-          </>)}
-        </svg>
-      </div>
-      <div className="absolute top-4 left-4 text-[9px] uppercase tracking-[0.2em] text-stone-300 font-mono px-2 py-1 bg-stone-950/80 border border-stone-700">
-        {ex.pattern} · demo loop
-      </div>
-      <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 bg-stone-950/80 border border-stone-700 hover:border-orange-500/60 flex items-center justify-center text-stone-400 hover:text-stone-100 transition-colors">✕</button>
-      <div className="absolute bottom-4 right-4 w-14 h-14 rounded-full bg-orange-500 flex items-center justify-center hover:bg-orange-400 transition-colors cursor-pointer">
-        <svg width="20" height="20" viewBox="0 0 14 14" fill="none"><path d="M3 2L11 7L3 12V2Z" fill="#0a0908" /></svg>
-      </div>
+    <div className="relative bg-[#0a0908] border-b border-stone-800/60" style={{ minHeight: '420px' }}>
+      <ExerciseDemo exerciseId={ex.id} />
+      <button
+        onClick={onClose}
+        className="absolute top-3 right-3 w-8 h-8 bg-stone-950/90 border border-stone-700 hover:border-orange-500/60 flex items-center justify-center text-stone-400 hover:text-stone-100 transition-colors z-10"
+      >
+        ✕
+      </button>
     </div>
   );
 }
@@ -606,7 +527,7 @@ function ExerciseDetail({ ex, onClose, isPro, userId }) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Animated demo header */}
-        <ExerciseDemo ex={ex} onClose={onClose} />
+        <ExerciseDemoPanel ex={ex} onClose={onClose} />
 
         {/* Body */}
         <div className="p-6">

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Lottie from 'lottie-react';
 import Model from 'react-body-highlighter';
 import './ExerciseDemo.css';
-import { EXERCISE_DEMOS } from './exercises';
+import { EXERCISE_DEMOS, NO_ANIMATION_IDS } from './exercises';
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function ExerciseDemo({ exerciseId }) {
@@ -10,6 +10,7 @@ export default function ExerciseDemo({ exerciseId }) {
   const [playing, setPlaying] = useState(true);
   const [speed, setSpeed] = useState(1);
   const [cueIndex, setCueIndex] = useState(0);
+  const isAnimated = !NO_ANIMATION_IDS.has(exerciseId);
 
   useEffect(() => {
     if (!playing || !demo) return;
@@ -22,9 +23,6 @@ export default function ExerciseDemo({ exerciseId }) {
 
   if (!demo) return <DemoPlaceholder exerciseId={exerciseId} />;
 
-  // Build data array for react-body-highlighter
-  // frequency 2 → highlightedColors[1] = primary orange
-  // frequency 1 → highlightedColors[0] = secondary amber
   const modelData = [
     ...(demo.primaryMuscles.length
       ? [{ name: 'Primary', muscles: demo.primaryMuscles, frequency: 2 }]
@@ -37,80 +35,72 @@ export default function ExerciseDemo({ exerciseId }) {
   return (
     <div className="flex flex-col bg-[#0a0908]">
 
-      {/* ── Main area: animation left, muscle maps right ── */}
-      <div className="flex min-h-[300px]">
+      {isAnimated ? (
+        /* ── Animated layout: Lottie left, muscle map right ── */
+        <div className="flex min-h-[300px]">
 
-        {/* Left — Lottie form animation */}
-        <div className="flex-1 relative border-r border-stone-800/60 bg-[#0d0c0b]">
-          <LottiePanel
-            exerciseId={exerciseId}
-            name={demo.name}
-            mechanics={demo.mechanics}
-            playing={playing}
-            speed={speed}
-          />
+          {/* Left — Lottie form animation */}
+          <div className="flex-1 relative border-r border-stone-800/60 bg-[#0d0c0b]">
+            <LottiePanel
+              exerciseId={exerciseId}
+              name={demo.name}
+              mechanics={demo.mechanics}
+              playing={playing}
+              speed={speed}
+            />
+          </div>
+
+          {/* Right — muscle activation maps */}
+          <div className="w-[196px] shrink-0 flex flex-col bg-[#0a0908] p-3 gap-3">
+            <p className="text-[8px] font-mono uppercase tracking-[0.18em] text-stone-600">
+              Muscles Activated
+            </p>
+            <div className="flex gap-2">
+              <div className="flex-1 flex flex-col items-center gap-1">
+                <span className="text-[7px] font-mono text-stone-700 uppercase tracking-widest">Front</span>
+                <Model
+                  data={modelData}
+                  highlightedColors={['#fbbf2499', '#ed7a2a']}
+                  bodyColor="#2a2420"
+                  type="anterior"
+                  svgStyle={{ width: '100%' }}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div className="flex-1 flex flex-col items-center gap-1">
+                <span className="text-[7px] font-mono text-stone-700 uppercase tracking-widest">Back</span>
+                <Model
+                  data={modelData}
+                  highlightedColors={['#fbbf2499', '#ed7a2a']}
+                  bodyColor="#2a2420"
+                  type="posterior"
+                  svgStyle={{ width: '100%' }}
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+            <MuscleTags demo={demo} />
+            <div className="border-t border-stone-800/60 pt-2">
+              <p className="text-[7px] font-mono uppercase tracking-[0.18em] text-stone-600 mb-1">Joints</p>
+              <div className="flex flex-wrap gap-1">
+                {demo.joints.map(j => (
+                  <span key={j} className="text-[7px] font-mono px-1.5 py-0.5 bg-stone-900 text-stone-500 border border-stone-800">
+                    {j}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Right — muscle activation maps */}
-        <div className="w-[196px] shrink-0 flex flex-col bg-[#0a0908] p-3 gap-3">
-          <p className="text-[8px] font-mono uppercase tracking-[0.18em] text-stone-600">
-            Muscles Activated
-          </p>
-
-          {/* Front + Back maps side by side */}
-          <div className="flex gap-2">
-            <div className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-[7px] font-mono text-stone-700 uppercase tracking-widest">Front</span>
-              <Model
-                data={modelData}
-                highlightedColors={['#fbbf2499', '#ed7a2a']}
-                bodyColor="#2a2420"
-                type="anterior"
-                svgStyle={{ width: '100%' }}
-                style={{ width: '100%' }}
-              />
-            </div>
-            <div className="flex-1 flex flex-col items-center gap-1">
-              <span className="text-[7px] font-mono text-stone-700 uppercase tracking-widest">Back</span>
-              <Model
-                data={modelData}
-                highlightedColors={['#fbbf2499', '#ed7a2a']}
-                bodyColor="#2a2420"
-                type="posterior"
-                svgStyle={{ width: '100%' }}
-                style={{ width: '100%' }}
-              />
-            </div>
-          </div>
-
-          {/* Legend */}
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap gap-1">
-              {[...new Set(demo.primaryMuscles)].map(fmt).map(n => (
-                <span key={n} className="text-[7px] font-mono uppercase tracking-wider px-1.5 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25">
-                  {n}
-                </span>
-              ))}
-              {[...new Set(demo.secondaryMuscles)].map(fmt).map(n => (
-                <span key={n} className="text-[7px] font-mono uppercase tracking-wider px-1.5 py-0.5 bg-stone-800 text-stone-500 border border-stone-700/50">
-                  {n}
-                </span>
-              ))}
-            </div>
-            <div className="flex items-center gap-3 text-[7px] font-mono text-stone-700 uppercase tracking-wider pt-0.5">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 bg-orange-500/70 inline-block" />Primary
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 bg-yellow-500/40 inline-block" />Secondary
-              </span>
-            </div>
-          </div>
-
-          {/* Joints */}
-          <div className="border-t border-stone-800/60 pt-2">
-            <p className="text-[7px] font-mono uppercase tracking-[0.18em] text-stone-600 mb-1">Joints</p>
-            <div className="flex flex-wrap gap-1">
+      ) : (
+        /* ── Static layout: muscle map full-width, no animation ── */
+        <div className="flex flex-col items-center gap-4 px-5 pt-5 pb-4 bg-[#0a0908]">
+          <div className="flex items-center justify-between w-full">
+            <p className="text-[8px] font-mono uppercase tracking-[0.18em] text-stone-600">
+              Muscles Activated
+            </p>
+            <div className="flex flex-wrap gap-1 justify-end">
               {demo.joints.map(j => (
                 <span key={j} className="text-[7px] font-mono px-1.5 py-0.5 bg-stone-900 text-stone-500 border border-stone-800">
                   {j}
@@ -118,8 +108,36 @@ export default function ExerciseDemo({ exerciseId }) {
               ))}
             </div>
           </div>
+
+          {/* Larger maps side by side */}
+          <div className="flex gap-8 justify-center">
+            <div className="flex flex-col items-center gap-1.5">
+              <span className="text-[7px] font-mono text-stone-700 uppercase tracking-widest">Front</span>
+              <Model
+                data={modelData}
+                highlightedColors={['#fbbf2499', '#ed7a2a']}
+                bodyColor="#2a2420"
+                type="anterior"
+                svgStyle={{ width: '100%' }}
+                style={{ width: '120px' }}
+              />
+            </div>
+            <div className="flex flex-col items-center gap-1.5">
+              <span className="text-[7px] font-mono text-stone-700 uppercase tracking-widest">Back</span>
+              <Model
+                data={modelData}
+                highlightedColors={['#fbbf2499', '#ed7a2a']}
+                bodyColor="#2a2420"
+                type="posterior"
+                svgStyle={{ width: '100%' }}
+                style={{ width: '120px' }}
+              />
+            </div>
+          </div>
+
+          <MuscleTags demo={demo} centered />
         </div>
-      </div>
+      )}
 
       {/* ── Mechanics bar ── */}
       <div className="flex items-center justify-between px-3 py-2 border-t border-stone-800/60 bg-stone-950/40">
@@ -165,29 +183,59 @@ export default function ExerciseDemo({ exerciseId }) {
         </button>
       </div>
 
-      {/* ── Playback controls ── */}
-      <div className="flex items-center justify-between px-3 pb-3 pt-1">
-        <button
-          onClick={() => setPlaying(p => !p)}
-          className="px-3 py-1.5 border border-stone-700 text-stone-400 hover:text-stone-200 hover:border-stone-500 transition-all text-[10px] font-mono uppercase tracking-wider"
-        >
-          {playing ? '⏸ Pause' : '▶ Play'}
-        </button>
-        <div className="flex items-center gap-1">
-          {[0.5, 1, 2].map(s => (
-            <button
-              key={s}
-              onClick={() => setSpeed(s)}
-              className={`px-2 py-1 text-[9px] font-mono border transition-all ${
-                speed === s
-                  ? 'border-orange-500/60 text-orange-300 bg-orange-500/10'
-                  : 'border-stone-700/60 text-stone-500 hover:text-stone-300'
-              }`}
-            >
-              {s}×
-            </button>
-          ))}
+      {/* ── Playback controls — animated exercises only ── */}
+      {isAnimated && (
+        <div className="flex items-center justify-between px-3 pb-3 pt-1">
+          <button
+            onClick={() => setPlaying(p => !p)}
+            className="px-3 py-1.5 border border-stone-700 text-stone-400 hover:text-stone-200 hover:border-stone-500 transition-all text-[10px] font-mono uppercase tracking-wider"
+          >
+            {playing ? '⏸ Pause' : '▶ Play'}
+          </button>
+          <div className="flex items-center gap-1">
+            {[0.5, 1, 2].map(s => (
+              <button
+                key={s}
+                onClick={() => setSpeed(s)}
+                className={`px-2 py-1 text-[9px] font-mono border transition-all ${
+                  speed === s
+                    ? 'border-orange-500/60 text-orange-300 bg-orange-500/10'
+                    : 'border-stone-700/60 text-stone-500 hover:text-stone-300'
+                }`}
+              >
+                {s}×
+              </button>
+            ))}
+          </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ── Muscle tag legend — shared between layouts ────────────────────────────────
+function MuscleTags({ demo, centered = false }) {
+  return (
+    <div className={`flex flex-col gap-1 ${centered ? 'items-center w-full' : ''}`}>
+      <div className={`flex flex-wrap gap-1 ${centered ? 'justify-center' : ''}`}>
+        {[...new Set(demo.primaryMuscles)].map(fmt).map(n => (
+          <span key={n} className="text-[7px] font-mono uppercase tracking-wider px-1.5 py-0.5 bg-orange-500/15 text-orange-300 border border-orange-500/25">
+            {n}
+          </span>
+        ))}
+        {[...new Set(demo.secondaryMuscles)].map(fmt).map(n => (
+          <span key={n} className="text-[7px] font-mono uppercase tracking-wider px-1.5 py-0.5 bg-stone-800 text-stone-500 border border-stone-700/50">
+            {n}
+          </span>
+        ))}
+      </div>
+      <div className={`flex items-center gap-3 text-[7px] font-mono text-stone-700 uppercase tracking-wider pt-0.5 ${centered ? 'justify-center' : ''}`}>
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 bg-orange-500/70 inline-block" />Primary
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="w-2 h-2 bg-yellow-500/40 inline-block" />Secondary
+        </span>
       </div>
     </div>
   );
@@ -199,7 +247,6 @@ function LottiePanel({ exerciseId, name, mechanics, playing, speed }) {
   const [animData, setAnimData] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
-  // Dynamically import the Lottie JSON — fails gracefully if file absent
   useEffect(() => {
     setAnimData(null);
     setLoaded(false);
@@ -208,14 +255,12 @@ function LottiePanel({ exerciseId, name, mechanics, playing, speed }) {
       .catch(() => setLoaded(true));
   }, [exerciseId]);
 
-  // Sync play/pause to Lottie instance
   useEffect(() => {
     if (!lottieRef.current || !animData) return;
     if (playing) lottieRef.current.play();
     else lottieRef.current.pause();
   }, [playing, animData]);
 
-  // Sync playback speed
   useEffect(() => {
     if (!lottieRef.current || !animData) return;
     lottieRef.current.setSpeed(speed);
@@ -245,13 +290,11 @@ function LottiePanel({ exerciseId, name, mechanics, playing, speed }) {
   );
 }
 
-// ── Placeholder shown when no .json animation file exists yet ─────────────────
+// ── Placeholder shown when animation file not yet added ───────────────────────
 function AnimationPlaceholder({ name, mechanics }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6">
-      {/* Dashed border slot */}
       <div className="relative w-28 h-28 border border-dashed border-stone-700/50 flex items-center justify-center overflow-hidden">
-        {/* Shimmer sweep */}
         <div
           className="absolute inset-0 opacity-20"
           style={{
@@ -260,13 +303,11 @@ function AnimationPlaceholder({ name, mechanics }) {
           }}
         />
         <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-          {/* Simplified standing figure */}
           <circle cx="24" cy="7" r="5" fill="none" stroke="#44403c" strokeWidth="1.5" />
           <line x1="24" y1="12" x2="24" y2="28" stroke="#44403c" strokeWidth="1.5" strokeLinecap="round" />
           <line x1="14" y1="18" x2="34" y2="18" stroke="#44403c" strokeWidth="1.5" strokeLinecap="round" />
           <line x1="24" y1="28" x2="16" y2="42" stroke="#44403c" strokeWidth="1.5" strokeLinecap="round" />
           <line x1="24" y1="28" x2="32" y2="42" stroke="#44403c" strokeWidth="1.5" strokeLinecap="round" />
-          {/* Play triangle */}
           <path d="M18 30 L30 36 L18 42 Z" fill="#ed7a2a" opacity="0.6" />
         </svg>
       </div>
@@ -277,9 +318,6 @@ function AnimationPlaceholder({ name, mechanics }) {
           Animation coming soon
         </p>
       </div>
-      <p className="text-[7px] font-mono text-stone-800 text-center absolute bottom-3">
-        Drop <span className="text-stone-600">{'{id}'}.json</span> in assets/animations/exercises/
-      </p>
     </div>
   );
 }
