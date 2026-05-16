@@ -1560,7 +1560,7 @@ export default function IronLabLogger() {
           <AppNav />
           <div className="relative z-10 max-w-[1400px] mx-auto px-6 py-8 pb-36">
             <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
-              <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">FORGE</span>
+              <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">FORGE LOGGER</span>
               {todaySessions.length > 1 && (
                 <button
                   onClick={() => setMergeSessions(m => !m)}
@@ -1687,7 +1687,7 @@ export default function IronLabLogger() {
         <AppNav />
         <div className="relative z-10 max-w-[1400px] mx-auto px-6 py-8 pb-24">
           <header className="flex items-end justify-between gap-6 mb-8 pb-6 border-b border-stone-800/60">
-            <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">FORGE</span>
+            <span className="font-anton text-5xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">FORGE LOGGER</span>
           </header>
           <div className="flex flex-col items-center justify-center py-24 gap-4">
             <div className="font-anton text-2xl uppercase text-stone-600 tracking-wide">Ready to train?</div>
@@ -1873,7 +1873,7 @@ export default function IronLabLogger() {
         <header className="grid grid-cols-3 items-center gap-4 mb-8 pb-6 border-b border-stone-800/60">
           {/* LEFT */}
           <div className="flex items-baseline gap-3 flex-wrap min-w-0">
-            <span className="font-anton text-4xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">FORGE</span>
+            <span className="font-anton text-4xl uppercase tracking-tight bg-gradient-to-br from-orange-300 to-orange-600 bg-clip-text text-transparent">FORGE LOGGER</span>
             <span className="hidden md:inline-block w-px h-7 bg-stone-800" />
             <input
               value={name}

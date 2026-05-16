@@ -209,16 +209,16 @@
 }
 
 /*
-  Vault title — red (specificity 0,3,0)
+  Vault title — blue (specificity 0,3,0)
   Hook: .vault-gradient-title added to BiometricsPage JSX
 */
 [data-theme="neutral"] [class*="from-orange-"].vault-gradient-title {
-  --tw-gradient-from: #ef4444;
-  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(239, 68, 68, 0));
+  --tw-gradient-from: #38bdf8;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(56, 189, 248, 0));
 }
 [data-theme="neutral"] [class*="to-orange-"].vault-gradient-title,
 [data-theme="neutral"] [class*="to-red-"].vault-gradient-title {
-  --tw-gradient-to: #991b1b;
+  --tw-gradient-to: #0284c7;
 }
 
 /* Exercise card header: dark stone gradient → subtle sky-blue tint */
@@ -230,8 +230,9 @@
 /* Exercise card header text → blue (not near-black) */
 [data-theme="neutral"] [class*="from-stone-950"] .text-stone-100 { color: #1e3a8a !important; }
 [data-theme="neutral"] [class*="from-stone-950"] .text-stone-600 { color: #3b82f6 !important; }
-/* Exercise name specifically → green */
-[data-theme="neutral"] .forge-exercise-name { color: #16a34a !important; }
+/* Exercise name specifically → green (compound selector beats from-stone-950 container rule) */
+[data-theme="neutral"] .forge-exercise-name,
+[data-theme="neutral"] [class*="from-stone-950"] .forge-exercise-name { color: #16a34a !important; }
 
 /*
   ── WEEKLY ADHERENCE GRID (neutral) ─────────────────────────
