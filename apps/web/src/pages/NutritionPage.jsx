@@ -1055,10 +1055,10 @@ export default function VisionNutrition() {
             <Sk w="w-2/3" h="h-14" />
           ) : (
             <h1 className="font-anton text-5xl md:text-6xl uppercase tracking-tight leading-[0.95] text-stone-100 max-w-4xl">
-              <span className="text-orange-400 tabular-nums">{displayEnergy(totals.kcal, { noUnit: true })}</span>{' '}
+              <span className="sentinel-calories-consumed text-orange-400 tabular-nums">{displayEnergy(totals.kcal, { noUnit: true })}</span>{' '}
               <span className="text-stone-500">/</span>{' '}
               {displayEnergy(tgt.kcal, { noUnit: true })} <span className="text-stone-500">{energyLabel}</span>
-              <span className="text-stone-600"> — {displayEnergy(remaining, { noUnit: true })} remaining for the day.</span>
+              <span className="sentinel-calories-remaining text-stone-600"> — {displayEnergy(remaining, { noUnit: true })} remaining for the day.</span>
             </h1>
           )}
         </div>

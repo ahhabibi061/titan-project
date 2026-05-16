@@ -1039,9 +1039,9 @@ export default function BiometricVault() {
             <div className="text-[10px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-2">Trajectory projection</div>
             <h1 className="font-anton text-4xl md:text-5xl uppercase tracking-tight leading-[0.95] text-stone-100 max-w-4xl">
               At your current rate, you'll hit{' '}
-              <span className="text-orange-400">{fmt1(toDisplay(goalWeightKg, unit))} {unit}</span> by{' '}
-              <span className="text-orange-400">{fmtDateLong(projection.date)}</span>
-              <span className="text-stone-600"> — about {projection.daysToGoal} days from today.</span>
+              <span className="vault-projection-highlight text-orange-400">{fmt1(toDisplay(goalWeightKg, unit))} {unit}</span> by{' '}
+              <span className="vault-projection-highlight text-orange-400">{fmtDateLong(projection.date)}</span>
+              <span className="vault-projection-tail text-stone-600"> — about {projection.daysToGoal} days from today.</span>
             </h1>
           </div>
         )}
