@@ -1208,11 +1208,11 @@ export default function Dashboard() {
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
-                { name: 'FORGE',    sub: 'Workout',   accent: 'from-orange-300 to-orange-600', to: '/logger' },
-                { name: 'Sentinel', sub: 'Nutrition', accent: 'from-amber-300 to-orange-500',  to: '/nutrition' },
-                { name: 'Vault',    sub: 'Biometric', accent: 'from-orange-300 to-red-500',    to: '/biometrics' },
-                { name: 'Codex',    sub: 'Exercises', accent: 'from-stone-300 to-stone-500',   to: '/exercises' },
-                { name: 'Oracle',   sub: 'Engine',    accent: 'from-orange-400 to-orange-700', to: '/coach' },
+                { name: 'FORGE',    sub: 'Workout',   accent: 'from-orange-300 to-orange-600', to: '/logger',     cls: 'module-forge' },
+                { name: 'Sentinel', sub: 'Nutrition', accent: 'from-amber-300 to-orange-500',  to: '/nutrition',  cls: 'module-sentinel' },
+                { name: 'Vault',    sub: 'Biometric', accent: 'from-orange-300 to-red-500',    to: '/biometrics', cls: 'module-vault' },
+                { name: 'Codex',    sub: 'Exercises', accent: 'from-stone-300 to-stone-500',   to: '/exercises',  cls: 'module-codex' },
+                { name: 'Oracle',   sub: 'Engine',    accent: 'from-orange-400 to-orange-700', to: '/coach',      cls: 'module-oracle' },
               ].map(m => (
                 <Link
                   key={m.name}
@@ -1222,7 +1222,7 @@ export default function Dashboard() {
                   <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-1">
                     {m.sub}
                   </div>
-                  <div className={`module-card-name font-anton text-2xl uppercase tracking-tight bg-gradient-to-br ${m.accent} bg-clip-text text-transparent`}>
+                  <div className={`module-card-name ${m.cls} font-anton text-2xl uppercase tracking-tight bg-gradient-to-br ${m.accent} bg-clip-text text-transparent`}>
                     {m.name}
                   </div>
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" className="absolute top-3 right-3 text-stone-700 group-hover:text-orange-400 transition-colors">

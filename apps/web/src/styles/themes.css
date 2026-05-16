@@ -181,6 +181,33 @@
   --tw-gradient-to: #c2410c;
 }
 
+/* Per-module colors in neutral theme — specificity (0,3,0) beats base rule */
+[data-theme="neutral"] .module-card-name.module-forge {
+  --tw-gradient-from: #f97316;
+  --tw-gradient-stops: var(--tw-gradient-from), #c2410c;
+  --tw-gradient-to: #c2410c;
+}
+[data-theme="neutral"] .module-card-name.module-sentinel {
+  --tw-gradient-from: #10b981;
+  --tw-gradient-stops: var(--tw-gradient-from), #059669;
+  --tw-gradient-to: #059669;
+}
+[data-theme="neutral"] .module-card-name.module-vault {
+  --tw-gradient-from: #38bdf8;
+  --tw-gradient-stops: var(--tw-gradient-from), #0284c7;
+  --tw-gradient-to: #0284c7;
+}
+[data-theme="neutral"] .module-card-name.module-codex {
+  --tw-gradient-from: #a78bfa;
+  --tw-gradient-stops: var(--tw-gradient-from), #7c3aed;
+  --tw-gradient-to: #7c3aed;
+}
+[data-theme="neutral"] .module-card-name.module-oracle {
+  --tw-gradient-from: #fbbf24;
+  --tw-gradient-stops: var(--tw-gradient-from), #d97706;
+  --tw-gradient-to: #d97706;
+}
+
 /*
   Vault title — red (specificity 0,3,0)
   Hook: .vault-gradient-title added to BiometricsPage JSX
