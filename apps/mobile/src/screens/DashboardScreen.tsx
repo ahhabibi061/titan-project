@@ -546,6 +546,8 @@ export default function DashboardScreen() {
     })();
   }, []);
 
+  const coach = null; // populated once Oracle module is wired up
+
   const remaining   = targets.kcal - consumed.kcal;
   const weightDelta = bio.current && bio.weekAgo ? bio.current - bio.weekAgo : 0;
   const initials    = getInitials(displayName || 'A');
