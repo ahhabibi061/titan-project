@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import {
   View,
@@ -462,6 +462,27 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
   const [workoutModalVisible, setWorkoutModalVisible] = useState(false);
   const [mapMode, setMapMode] = useState<'fatigue' | 'progression'>('fatigue');
+  const [displayName, setDisplayName] = useState('');
+  const [tier, setTier] = useState('FREE');
+
+  useEffect(() => {
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      // Try profile table first
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('display_name, subscription_tier')
+        .eq('id', user.id)
+        .single();
+      if (profile?.display_name) {
+        setDisplayName(profile.display_name);
+      } else {
+        // Fall back to email prefix
+        setDisplayName(user.email?.split('@')[0] ?? 'Athlete');
+      }
+      if (profile?.subscription_tier) setTier(profile.subscription_tier.toUpperCase());
+    });
+  }, []);
 
   const profile  = MOCK_PROFILE;
   const consumed = MOCK_CONSUMED;
@@ -475,8 +496,7 @@ export default function DashboardScreen() {
 
   const remaining   = targets.kcal - consumed.kcal;
   const weightDelta = bio.current - bio.weekAgo;
-  const initials    = getInitials(profile.display_name);
-  const tier        = profile.subscription_tier.toUpperCase();
+  const initials    = getInitials(displayName || profile.display_name);
 
   return (
     // FIX 1: SafeAreaView handles the top notch/status-bar gap
@@ -499,7 +519,7 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={s.greeting}>{getGreeting()}, {profile.display_name}.</Text>
+        <Text style={s.greeting}>{getGreeting()}, {displayName || profile.display_name}.</Text>
 
         <View style={s.metaRow}>
           <View style={s.tierBadge}><Text style={s.tierText}>{tier}</Text></View>
