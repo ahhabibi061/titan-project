@@ -5,7 +5,7 @@ import React, {
 } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput, Modal,
-  Animated, PanResponder, KeyboardAvoidingView, Platform, ActivityIndicator,
+  Animated, PanResponder, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
@@ -528,10 +528,10 @@ function AddExerciseSheet({ visible, onClose, onAdd, usedIds }: {
 }
 
 // ─── Finish Confirm Sheet ─────────────────────────────────────────────────────
-function FinishConfirmSheet({ visible, onConfirm, onDiscard, onClose, totalVolume, doneSets, totalSets, elapsed, volumes }: {
+function FinishConfirmSheet({ visible, onConfirm, onDiscard, onClose, totalVolume, doneSets, totalSets, elapsed, volumes, saving }: {
   visible: boolean; onConfirm: () => void; onDiscard: () => void; onClose: () => void;
   totalVolume: number; doneSets: number; totalSets: number; elapsed: number;
-  volumes: Record<string, number>;
+  volumes: Record<string, number>; saving: boolean;
 }) {
   const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
   const secs = String(elapsed % 60).padStart(2, '0');
@@ -571,8 +571,11 @@ function FinishConfirmSheet({ visible, onConfirm, onDiscard, onClose, totalVolum
             </View>
           )}
 
-          <TouchableOpacity onPress={onConfirm} style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent, marginBottom: 8 }}>
-            <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>CONFIRM FINISH</Text>
+          <TouchableOpacity onPress={onConfirm} disabled={saving}
+            style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent, marginBottom: 8, opacity: saving ? 0.7 : 1 }}>
+            {saving
+              ? <ActivityIndicator color={COLORS.bg} />
+              : <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>CONFIRM FINISH</Text>}
           </TouchableOpacity>
           <TouchableOpacity onPress={onDiscard} style={{ paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#7f1d1d', backgroundColor: 'rgba(127,29,29,0.1)', marginBottom: 8 }}>
             <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.red400, textTransform: 'uppercase', letterSpacing: 1 }}>Discard Workout</Text>
@@ -807,7 +810,7 @@ export default function ForgeScreen() {
       setWeIdMap(new Map());
       navigation.navigate('Home');
     } catch (e: any) {
-      showToast(`Save failed: ${e?.message ?? 'Unknown error'}. Keep this sheet open and retry.`);
+      Alert.alert('Save Failed', e?.message ?? 'Unknown error. Keep this sheet open and try again.');
     }
   }
 
@@ -911,6 +914,7 @@ export default function ForgeScreen() {
         onDiscard={() => { setWorkout(INITIAL_WORKOUT as any); setFinishSheet(false); setElapsed(0); setStarted(false); setWorkoutId(null); setWeIdMap(new Map()); }}
         onClose={() => setFinishSheet(false)}
         totalVolume={totalVolume} doneSets={doneSets} totalSets={totalSets} elapsed={elapsed} volumes={volumes}
+        saving={finishing}
       />
     </View>
   );
