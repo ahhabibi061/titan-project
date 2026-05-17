@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
-import Lottie from 'lottie-react';
+import React, { useState, useEffect } from 'react';
 import Model from 'react-body-highlighter';
 import './ExerciseDemo.css';
 import { EXERCISE_DEMOS, NO_ANIMATION_IDS } from './exercises';
@@ -7,19 +6,17 @@ import { EXERCISE_DEMOS, NO_ANIMATION_IDS } from './exercises';
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function ExerciseDemo({ exerciseId }) {
   const demo = EXERCISE_DEMOS[exerciseId];
-  const [playing, setPlaying] = useState(true);
-  const [speed, setSpeed] = useState(1);
   const [cueIndex, setCueIndex] = useState(0);
   const isAnimated = !NO_ANIMATION_IDS.has(exerciseId);
 
   useEffect(() => {
-    if (!playing || !demo) return;
+    if (!demo) return;
     const id = setInterval(
       () => setCueIndex(i => (i + 1) % demo.cues.length),
       4000,
     );
     return () => clearInterval(id);
-  }, [playing, demo]);
+  }, [demo]);
 
   if (!demo) return <DemoPlaceholder exerciseId={exerciseId} />;
 
@@ -36,18 +33,12 @@ export default function ExerciseDemo({ exerciseId }) {
     <div className="flex flex-col bg-[#0a0908]">
 
       {isAnimated ? (
-        /* ── Animated layout: Lottie left, muscle map right ── */
+        /* ── Animated layout: GIF left, muscle map right ── */
         <div className="flex min-h-[300px]">
 
-          {/* Left — Lottie form animation */}
-          <div className="flex-1 relative border-r border-stone-800/60 bg-[#0d0c0b]">
-            <LottiePanel
-              exerciseId={exerciseId}
-              name={demo.name}
-              mechanics={demo.mechanics}
-              playing={playing}
-              speed={speed}
-            />
+          {/* Left — exercise GIF */}
+          <div className="flex-1 relative border-r border-stone-800/60 bg-[#0d0c0b] flex items-center justify-center overflow-hidden">
+            <GifPanel exerciseId={exerciseId} name={demo.name} mechanics={demo.mechanics} />
           </div>
 
           {/* Right — muscle activation maps */}
@@ -94,7 +85,7 @@ export default function ExerciseDemo({ exerciseId }) {
         </div>
 
       ) : (
-        /* ── Static layout: muscle map full-width, no animation ── */
+        /* ── Static layout: muscle maps full-width ── */
         <div className="flex flex-col items-center gap-4 px-5 pt-5 pb-4 bg-[#0a0908]">
           <div className="flex items-center justify-between w-full">
             <p className="text-[8px] font-mono uppercase tracking-[0.18em] text-stone-600">
@@ -108,8 +99,6 @@ export default function ExerciseDemo({ exerciseId }) {
               ))}
             </div>
           </div>
-
-          {/* Larger maps side by side */}
           <div className="flex gap-8 justify-center">
             <div className="flex flex-col items-center gap-1.5">
               <span className="text-[7px] font-mono text-stone-700 uppercase tracking-widest">Front</span>
@@ -134,7 +123,6 @@ export default function ExerciseDemo({ exerciseId }) {
               />
             </div>
           </div>
-
           <MuscleTags demo={demo} centered />
         </div>
       )}
@@ -183,37 +171,39 @@ export default function ExerciseDemo({ exerciseId }) {
         </button>
       </div>
 
-      {/* ── Playback controls — animated exercises only ── */}
-      {isAnimated && (
-        <div className="flex items-center justify-between px-3 pb-3 pt-1">
-          <button
-            onClick={() => setPlaying(p => !p)}
-            className="px-3 py-1.5 border border-stone-700 text-stone-400 hover:text-stone-200 hover:border-stone-500 transition-all text-[10px] font-mono uppercase tracking-wider"
-          >
-            {playing ? '⏸ Pause' : '▶ Play'}
-          </button>
-          <div className="flex items-center gap-1">
-            {[0.5, 1, 2].map(s => (
-              <button
-                key={s}
-                onClick={() => setSpeed(s)}
-                className={`px-2 py-1 text-[9px] font-mono border transition-all ${
-                  speed === s
-                    ? 'border-orange-500/60 text-orange-300 bg-orange-500/10'
-                    : 'border-stone-700/60 text-stone-500 hover:text-stone-300'
-                }`}
-              >
-                {s}×
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-// ── Muscle tag legend — shared between layouts ────────────────────────────────
+// ── GIF animation panel ───────────────────────────────────────────────────────
+function GifPanel({ exerciseId, name, mechanics }) {
+  const [status, setStatus] = useState('loading'); // loading | loaded | missing
+
+  const src = `/animations/exercises/${exerciseId}.gif`;
+
+  return (
+    <div className="relative w-full h-full min-h-[300px] flex items-center justify-center bg-[#0d0c0b]">
+      {status === 'loading' && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-8 h-8 border border-stone-700/50 border-t-orange-500/60 rounded-full animate-spin" />
+        </div>
+      )}
+      {status === 'missing' && (
+        <AnimationPlaceholder name={name} mechanics={mechanics} />
+      )}
+      <img
+        src={src}
+        alt={name}
+        onLoad={() => setStatus('loaded')}
+        onError={() => setStatus('missing')}
+        className="w-full h-full object-contain"
+        style={{ display: status === 'loaded' ? 'block' : 'none', minHeight: '300px' }}
+      />
+    </div>
+  );
+}
+
+// ── Muscle tag legend ─────────────────────────────────────────────────────────
 function MuscleTags({ demo, centered = false }) {
   return (
     <div className={`flex flex-col gap-1 ${centered ? 'items-center w-full' : ''}`}>
@@ -241,56 +231,7 @@ function MuscleTags({ demo, centered = false }) {
   );
 }
 
-// ── Lottie animation panel ────────────────────────────────────────────────────
-function LottiePanel({ exerciseId, name, mechanics, playing, speed }) {
-  const lottieRef = useRef(null);
-  const [animData, setAnimData] = useState(null);
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    setAnimData(null);
-    setLoaded(false);
-    import(`../../assets/animations/exercises/${exerciseId}.json`)
-      .then(mod => { setAnimData(mod.default); setLoaded(true); })
-      .catch(() => setLoaded(true));
-  }, [exerciseId]);
-
-  useEffect(() => {
-    if (!lottieRef.current || !animData) return;
-    if (playing) lottieRef.current.play();
-    else lottieRef.current.pause();
-  }, [playing, animData]);
-
-  useEffect(() => {
-    if (!lottieRef.current || !animData) return;
-    lottieRef.current.setSpeed(speed);
-  }, [speed, animData]);
-
-  if (!loaded) {
-    return (
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border border-stone-700/50 border-t-orange-500/60 rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (!animData) {
-    return <AnimationPlaceholder name={name} mechanics={mechanics} />;
-  }
-
-  return (
-    <Lottie
-      lottieRef={lottieRef}
-      animationData={animData}
-      loop
-      autoplay={playing}
-      style={{ width: '100%', height: '100%', minHeight: '300px' }}
-      rendererSettings={{ preserveAspectRatio: 'xMidYMid meet' }}
-    />
-  );
-}
-
-// ── Placeholder shown when animation file not yet added ───────────────────────
+// ── Placeholder for animated exercises not yet delivered ──────────────────────
 function AnimationPlaceholder({ name, mechanics }) {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-6">
@@ -314,9 +255,6 @@ function AnimationPlaceholder({ name, mechanics }) {
       <div className="text-center space-y-1">
         <p className="text-[11px] font-mono uppercase tracking-[0.18em] text-stone-400">{name}</p>
         <p className="text-[9px] font-mono text-stone-600">{mechanics}</p>
-        <p className="text-[8px] font-mono uppercase tracking-wider text-stone-700 mt-2">
-          Animation coming soon
-        </p>
       </div>
     </div>
   );
