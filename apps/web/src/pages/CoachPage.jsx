@@ -873,7 +873,7 @@ RESPONSE FORMAT RULES
               onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
               placeholder={`Ask Oracle about ${ctx.name}'s training, nutrition, or recovery…`}
               disabled={loading}
-              className="flex-1 bg-stone-900/80 border border-stone-800 text-stone-100 font-mono text-sm px-4 py-3 placeholder:text-stone-700 focus:outline-none focus:border-orange-500/50 transition-colors disabled:opacity-50"
+              className="oracle-chat-input flex-1 bg-stone-900/80 border border-stone-800 text-stone-100 font-mono text-sm px-4 py-3 placeholder:text-stone-700 focus:outline-none focus:border-orange-500/50 transition-colors disabled:opacity-50"
             />
             <button
               onClick={() => sendMessage()}

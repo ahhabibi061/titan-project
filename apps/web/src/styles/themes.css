@@ -484,3 +484,15 @@
   border-color: rgba(184, 112, 148, 0.28) !important;
   color: #9a5078 !important;
 }
+
+/*
+  ── ORACLE CHAT INPUT — text stays white in light themes ─────
+  bg-stone-900/80 has no theme override so the input background
+  stays dark (#1c1917 at 80%) while text-stone-100 gets remapped
+  to near-black — unreadable. Pin the typed text to white.
+  Hook: .oracle-chat-input on the <input> in CoachPage.jsx
+*/
+[data-theme="neutral"] .oracle-chat-input,
+[data-theme="rose"]    .oracle-chat-input {
+  color: #ffffff !important;
+}
