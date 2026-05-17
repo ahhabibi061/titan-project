@@ -22,12 +22,17 @@ export default function AuthScreen() {
   async function handleEmail() {
     if (!email || !password) { Alert.alert('Fill in email and password'); return; }
     setLoading(true);
-    const { error } = mode === 'signin'
-      ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password });
-    setLoading(false);
-    if (error) Alert.alert('Error', error.message);
-    else if (mode === 'signup') Alert.alert('Check your email', 'Confirm your account then sign in.');
+    if (mode === 'signin') {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      setLoading(false);
+      if (error) Alert.alert('Error', error.message);
+    } else {
+      const { data, error } = await supabase.auth.signUp({ email, password });
+      setLoading(false);
+      if (error) Alert.alert('Error', error.message);
+      else if (!data.session) Alert.alert('Check your email', 'Confirm your account then sign in.');
+      // if session exists, onAuthStateChange handles the redirect automatically
+    }
   }
 
   async function handleGoogle() {
