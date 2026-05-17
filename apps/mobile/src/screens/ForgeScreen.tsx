@@ -834,10 +834,12 @@ export default function ForgeScreen() {
 
         {/* Bottom buttons */}
         <View style={{ paddingHorizontal: 12, paddingBottom: 12, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 8 }}>
-          <TouchableOpacity onPress={() => setShowAddSheet(true)}
-            style={{ paddingVertical: 13, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(87,83,78,0.5)', alignItems: 'center' }}>
-            <Text style={{ fontFamily: FONTS.anton, fontSize: 14, color: COLORS.text600, letterSpacing: 1 }}>+ ADD EXERCISE</Text>
-          </TouchableOpacity>
+          {sessionStarted && (
+            <TouchableOpacity onPress={() => setShowAddSheet(true)}
+              style={{ paddingVertical: 13, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(87,83,78,0.5)', alignItems: 'center' }}>
+              <Text style={{ fontFamily: FONTS.anton, fontSize: 14, color: COLORS.text600, letterSpacing: 1 }}>+ ADD EXERCISE</Text>
+            </TouchableOpacity>
+          )}
 
           {sessionStarted ? (
             <TouchableOpacity onPress={handleFinishTap}
@@ -845,8 +847,8 @@ export default function ForgeScreen() {
               <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>FINISH WORKOUT</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity onPress={handleStartSession} disabled={starting || workout.length === 0}
-              style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent, opacity: (starting || workout.length === 0) ? 0.4 : 1 }}>
+            <TouchableOpacity onPress={handleStartSession} disabled={starting}
+              style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent, opacity: starting ? 0.7 : 1 }}>
               {starting
                 ? <ActivityIndicator color={COLORS.bg} />
                 : <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>START SESSION</Text>}
