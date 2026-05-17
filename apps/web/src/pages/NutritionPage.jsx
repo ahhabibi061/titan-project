@@ -203,13 +203,12 @@ function MealEntry({ meal, onDelete }) {
 // -------------------- ADD MEAL FORM --------------------
 // AddMealForm replaced by FoodSearch component (Open Food Facts + barcode)
 
-// -------------------- MEAL SECTION --------------------
-const MEAL_COLORS = { breakfast: '#fbbf24', lunch: '#ed7a2a', dinner: '#f87171', snacks: '#78716c' };
+// -------------------- MEAL LOG (tab-based) --------------------
+const MEAL_TYPES  = ['breakfast', 'lunch', 'dinner', 'snacks'];
+const MEAL_COLORS = { breakfast: '#fbbf24', lunch: '#ed7a2a', dinner: '#f87171', snacks: '#a78bfa' };
+const MEAL_ICONS  = { breakfast: '☀', lunch: '🌤', dinner: '🌙', snacks: '⚡' };
 
-function MealSection({ type, section, activeAddSection, setActiveAddSection, addMeal, deleteMeal, userId, isPro }) {
-  const [collapsed, setCollapsed] = useState(false);
-  const label = type.charAt(0).toUpperCase() + type.slice(1);
-  const color = MEAL_COLORS[type];
+function MealPanel({ type, section, activeAddSection, setActiveAddSection, addMeal, deleteMeal, userId, isPro }) {
   const { meals: sectionMeals, totals } = section;
 
   function handleAdd(item) {
@@ -218,55 +217,104 @@ function MealSection({ type, section, activeAddSection, setActiveAddSection, add
   }
 
   return (
-    <div className="border-b border-stone-800/60 last:border-0">
-      <button
-        onClick={() => setCollapsed(c => !c)}
-        className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-stone-900/30 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 shrink-0" style={{ backgroundColor: color }} />
-          <span className="font-anton text-base uppercase tracking-tight text-stone-100">{label}</span>
-          {sectionMeals.length > 0 && (
-            <span className="font-mono text-[10px] text-stone-500 tabular-nums">
-              {sectionMeals.length} item{sectionMeals.length !== 1 ? 's' : ''}
+    <div className="min-h-[180px]">
+      {/* Macro summary bar for this meal */}
+      {totals.kcal > 0 && (
+        <div className="flex items-center gap-4 px-5 py-2.5 border-b border-stone-800/40 bg-stone-900/20">
+          <span className="font-anton text-lg tabular-nums text-stone-200">{Math.round(totals.kcal)}</span>
+          <span className="text-[10px] text-stone-600 font-mono uppercase tracking-wider">kcal</span>
+          <div className="h-3 w-px bg-stone-800/60 mx-1" />
+          {[
+            { l: 'P', v: totals.protein, c: '#ed7a2a' },
+            { l: 'C', v: totals.carbs,   c: '#7eb6ff' },
+            { l: 'F', v: totals.fat,     c: '#fbbf24' },
+          ].map(m => (
+            <span key={m.l} className="font-mono text-[10px] tabular-nums" style={{ color: m.c }}>
+              {Math.round(m.v)}g <span className="text-stone-700">{m.l}</span>
             </span>
-          )}
-        </div>
-        <div className="flex items-center gap-4">
-          {totals.kcal > 0 && (
-            <span className="font-mono text-xs tabular-nums text-stone-400">{Math.round(totals.kcal)} kcal</span>
-          )}
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"
-            className={`text-stone-600 transition-transform ${collapsed ? '' : 'rotate-180'}`}>
-            <path d="M2 4L6 8L10 4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-      </button>
-      {!collapsed && (
-        <div className="px-5 pb-4">
-          {sectionMeals.length > 0 && (
-            <div className="mb-3">
-              {sectionMeals.map(m => <MealEntry key={m.id} meal={m} onDelete={deleteMeal} />)}
-            </div>
-          )}
-          {activeAddSection === type ? (
-            <FoodSearch
-              onAdd={handleAdd}
-              onCancel={() => setActiveAddSection(null)}
-              confirmLabel="Add →"
-              userId={userId}
-              isPro={isPro}
-            />
-          ) : (
-            <button
-              onClick={() => setActiveAddSection(type)}
-              className="w-full py-2.5 border border-dashed border-stone-700 text-stone-600 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
-            >
-              + Add Food
-            </button>
-          )}
+          ))}
+          <span className="ml-auto font-mono text-[10px] text-stone-600">
+            {sectionMeals.length} item{sectionMeals.length !== 1 ? 's' : ''}
+          </span>
         </div>
       )}
+
+      {/* Food items */}
+      <div className="px-5">
+        {sectionMeals.length > 0 ? (
+          <div className="mb-3">
+            {sectionMeals.map(m => <MealEntry key={m.id} meal={m} onDelete={deleteMeal} />)}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <div className="text-3xl mb-2 opacity-20">{MEAL_ICONS[type]}</div>
+            <p className="text-[11px] font-mono text-stone-700 uppercase tracking-wider">
+              No {type} logged yet
+            </p>
+          </div>
+        )}
+
+        {activeAddSection === type ? (
+          <FoodSearch
+            onAdd={handleAdd}
+            onCancel={() => setActiveAddSection(null)}
+            confirmLabel="Add →"
+            userId={userId}
+            isPro={isPro}
+          />
+        ) : (
+          <button
+            onClick={() => setActiveAddSection(type)}
+            className="w-full py-3 border border-dashed border-stone-700/60 text-stone-600 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 hover:bg-orange-500/[0.03] transition-all flex items-center justify-center gap-2"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M5 1v8M1 5h8" strokeLinecap="round" />
+            </svg>
+            Add food to {type}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -------------------- MEAL TAB NAV --------------------
+function MealTabNav({ activeTab, setActiveTab, sections }) {
+  return (
+    <div className="flex border-b border-stone-800/60">
+      {MEAL_TYPES.map(type => {
+        const isActive = activeTab === type;
+        const sec = sections[type] ?? { meals: [], totals: { kcal: 0 } };
+        const color = MEAL_COLORS[type];
+        const hasItems = sec.meals.length > 0;
+        return (
+          <button
+            key={type}
+            onClick={() => setActiveTab(type)}
+            className={`flex-1 flex flex-col items-center py-3 px-1 transition-all border-b-2 -mb-px relative ${
+              isActive ? 'border-[var(--tab-color)]' : 'border-transparent hover:border-stone-700/60'
+            }`}
+            style={{ '--tab-color': color }}
+          >
+            <span className={`text-sm mb-0.5 transition-all ${isActive ? 'opacity-100' : 'opacity-30'}`}>
+              {MEAL_ICONS[type]}
+            </span>
+            <span className={`font-anton text-[11px] uppercase tracking-wider transition-colors ${
+              isActive ? 'text-stone-100' : 'text-stone-600'
+            }`}>
+              {type.charAt(0).toUpperCase() + type.slice(1)}
+            </span>
+            {hasItems ? (
+              <span className="font-mono text-[9px] tabular-nums mt-0.5 transition-colors"
+                style={{ color: isActive ? color : '#57534e' }}>
+                {Math.round(sec.totals.kcal)} kcal
+              </span>
+            ) : (
+              <span className="text-[9px] font-mono text-stone-800 mt-0.5">—</span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -857,6 +905,7 @@ export default function VisionNutrition() {
   const { displayEnergy, energyLabel, displayVolume, parseVolume, volumeUnit, volumeLabel } = useUnits();
 
   const [activeAddSection, setActiveAddSection] = useState(null);
+  const [activeMealTab, setActiveMealTab]       = useState('breakfast');
   const [showBreakdown, setShowBreakdown]       = useState(false);
   const [showTemplates, setShowTemplates]       = useState(false);
 
@@ -1255,17 +1304,26 @@ export default function VisionNutrition() {
 
           {loading ? (
             <div className="p-6 space-y-3">
-              <Sk w="w-full" h="h-10" />
-              <Sk w="w-full" h="h-10" />
-              <Sk w="w-4/5"  h="h-10" />
+              <div className="flex gap-0 border-b border-stone-800/60">
+                {MEAL_TYPES.map(t => <div key={t} className="flex-1 py-3 px-1"><Sk w="w-full" h="h-8" /></div>)}
+              </div>
+              <div className="space-y-2 px-5 pt-2">
+                <Sk w="w-full" h="h-10" />
+                <Sk w="w-full" h="h-10" />
+                <Sk w="w-4/5"  h="h-10" />
+              </div>
             </div>
           ) : (
             <div>
-              {['breakfast', 'lunch', 'dinner', 'snacks'].map(type => (
-                <MealSection
-                  key={type}
-                  type={type}
-                  section={sections[type] ?? { meals: [], totals: { kcal: 0, protein: 0, carbs: 0, fat: 0 } }}
+              <MealTabNav
+                activeTab={activeMealTab}
+                setActiveTab={(t) => { setActiveMealTab(t); setActiveAddSection(null); }}
+                sections={sections}
+              />
+              <div className="py-4">
+                <MealPanel
+                  type={activeMealTab}
+                  section={sections[activeMealTab] ?? { meals: [], totals: { kcal: 0, protein: 0, carbs: 0, fat: 0 } }}
                   activeAddSection={activeAddSection}
                   setActiveAddSection={setActiveAddSection}
                   addMeal={addMeal}
@@ -1273,7 +1331,7 @@ export default function VisionNutrition() {
                   userId={user?.id}
                   isPro={isPro}
                 />
-              ))}
+              </div>
               {sections.uncategorized?.meals?.length > 0 && (
                 <div className="border-t border-stone-800/60 px-5 py-3">
                   <div className="text-[9px] font-mono uppercase tracking-wider text-stone-600 mb-2">Other</div>

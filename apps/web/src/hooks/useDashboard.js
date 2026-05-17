@@ -105,6 +105,7 @@ export function useDashboard(userId) {
           recentWorkoutsRes,
           eatBackRes,
           burnRes,
+          waterLogsRes,
         ] = await Promise.all([
           // 1. Nutrition today — consumed macros + activity feed
           supabase.from('nutrition_logs')
@@ -193,6 +194,13 @@ export function useDashboard(userId) {
             .order('completed_at', { ascending: false })
             .limit(1)
             .maybeSingle(),
+
+          // 12. Today's water logs — for activity feed
+          supabase.from('water_logs')
+            .select('amount_ml, logged_at')
+            .eq('user_id', userId)
+            .eq('log_date', todayStr)
+            .order('logged_at', { ascending: true }),
         ]);
 
         if (cancelled) return;
@@ -225,7 +233,7 @@ export function useDashboard(userId) {
           mealsLogged: nlToday.length,
         };
 
-        // ── Activity feed (today's meals + completed workout) ──
+        // ── Activity feed (today's meals + workout + water) ──
         const activityFeed = nlToday.map(r => ({
           time: new Date(r.logged_at).toLocaleTimeString('en-US', {
             hour: '2-digit', minute: '2-digit', hour12: false,
@@ -235,7 +243,7 @@ export function useDashboard(userId) {
         }));
         const workoutRaw = workoutTodayRes.data;
         if (workoutRaw?.completed_at) {
-          activityFeed.unshift({
+          activityFeed.push({
             time: new Date(workoutRaw.completed_at).toLocaleTimeString('en-US', {
               hour: '2-digit', minute: '2-digit', hour12: false,
             }),
@@ -243,6 +251,22 @@ export function useDashboard(userId) {
             text: `${workoutRaw.name || 'Workout'} · ${workoutRaw.workout_exercises?.length ?? 0} exercises completed`,
           });
         }
+        // Water summary — single entry showing total vs target
+        const waterLogsToday = waterLogsRes.data ?? [];
+        const totalWaterMl = waterLogsToday.reduce((s, r) => s + (r.amount_ml ?? 0), 0);
+        if (totalWaterMl > 0) {
+          const waterTarget = profile?.settings?.water_target_ml ?? 2500;
+          const lastWater = waterLogsToday[waterLogsToday.length - 1];
+          activityFeed.push({
+            time: new Date(lastWater.logged_at).toLocaleTimeString('en-US', {
+              hour: '2-digit', minute: '2-digit', hour12: false,
+            }),
+            type: 'water',
+            text: `${(totalWaterMl / 1000).toFixed(1)} L water · goal ${(waterTarget / 1000).toFixed(1)} L`,
+          });
+        }
+        // Sort feed chronologically
+        activityFeed.sort((a, b) => a.time.localeCompare(b.time));
 
         // ── Workout today ──
         const allWeSets   = (workoutRaw?.workout_exercises ?? []).flatMap(we => we.sets ?? []);

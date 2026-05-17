@@ -5,6 +5,7 @@ import { useSession } from '../hooks/useSession';
 import { useProfileStore } from '../store/useProfileStore';
 import { useTheme, THEME_OPTIONS } from '../hooks/useTheme';
 import { PENDING_TIER_KEY } from '../hooks/useProfile';
+import { useReminders } from '../hooks/useReminders';
 
 // -------------------- DOMAIN --------------------
 const ACTIVITY_LEVELS = [
@@ -287,6 +288,16 @@ export default function SettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [upgradeLoading, setUpgradeLoading] = useState(null);
   const [upgradeError, setUpgradeError] = useState(null);
+
+  // ---- Reminders ----
+  const { config: reminderConfig, updateConfig: updateReminders, requestPermission, notificationPermission } = useReminders();
+
+  // ---- Support ticket ----
+  const [ticketType,    setTicketType]    = useState('bug');
+  const [ticketSubject, setTicketSubject] = useState('');
+  const [ticketBody,    setTicketBody]    = useState('');
+  const [ticketSending, setTicketSending] = useState(false);
+  const [ticketStatus,  setTicketStatus]  = useState({ error: null, success: null });
 
   // ---- Page loading ----
   const [pageLoading, setPageLoading] = useState(true);
@@ -1170,6 +1181,238 @@ export default function SettingsPage() {
           </section>
 
         </div>
+
+        {/* ── REMINDERS ── */}
+        <section className="mb-10">
+          <SectionHeader label="Reminders" />
+          <div className="space-y-4">
+
+            {/* Permission banner */}
+            {notificationPermission === 'denied' && (
+              <div className="border border-red-500/30 bg-red-500/5 px-4 py-3 text-xs font-mono text-red-300">
+                Notifications are blocked in your browser. Enable them in browser settings to use reminders.
+              </div>
+            )}
+            {notificationPermission === 'default' && (
+              <div className="flex items-center justify-between border border-stone-800/60 bg-stone-950/40 px-4 py-3">
+                <span className="text-xs font-mono text-stone-400">Allow browser notifications to enable reminders</span>
+                <button
+                  type="button"
+                  onClick={requestPermission}
+                  className="px-4 py-1.5 bg-orange-500 text-stone-950 font-anton text-xs uppercase tracking-wider hover:bg-orange-400 transition-colors shrink-0 ml-4"
+                >
+                  Allow
+                </button>
+              </div>
+            )}
+
+            {/* Master toggle */}
+            <div className="flex items-center justify-between border border-stone-800/60 bg-stone-950/40 px-4 py-3.5">
+              <div>
+                <div className="text-sm text-stone-200 font-sans">Enable Reminders</div>
+                <div className="text-[10px] font-mono text-stone-600 mt-0.5 uppercase tracking-wider">Push notifications for training, nutrition & recovery</div>
+              </div>
+              <Toggle
+                enabled={reminderConfig.enabled}
+                onChange={val => updateReminders({ enabled: val })}
+              />
+            </div>
+
+            {reminderConfig.enabled && notificationPermission === 'granted' && (
+              <div className="border border-stone-800/60 bg-stone-950/40 divide-y divide-stone-800/40">
+
+                {/* Water */}
+                <div className="flex items-center justify-between px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <span className="text-base">💧</span>
+                    <div>
+                      <div className="text-sm text-stone-200 font-sans">Drink Water</div>
+                      <div className="text-[10px] font-mono text-stone-600 uppercase tracking-wider mt-0.5">
+                        Every {reminderConfig.water.intervalHours}h
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={reminderConfig.water.intervalHours}
+                      onChange={e => updateReminders({ water: { ...reminderConfig.water, intervalHours: Number(e.target.value) } })}
+                      className="bg-stone-900 border border-stone-800 text-stone-300 font-mono text-xs px-2 py-1.5 focus:outline-none focus:border-orange-500/40"
+                      style={{ backgroundImage: "none" }}
+                    >
+                      {[1,2,3,4].map(h => <option key={h} value={h} style={{ background: '#1c1917' }}>{h}h</option>)}
+                    </select>
+                    <Toggle
+                      enabled={reminderConfig.water.on}
+                      onChange={val => updateReminders({ water: { ...reminderConfig.water, on: val } })}
+                    />
+                  </div>
+                </div>
+
+                {/* Meals */}
+                <div className="flex items-center justify-between px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <span className="text-base">🍽</span>
+                    <div>
+                      <div className="text-sm text-stone-200 font-sans">Log Meals</div>
+                      <div className="text-[10px] font-mono text-stone-600 uppercase tracking-wider mt-0.5">
+                        {reminderConfig.meals.times.join(' · ')}
+                      </div>
+                    </div>
+                  </div>
+                  <Toggle
+                    enabled={reminderConfig.meals.on}
+                    onChange={val => updateReminders({ meals: { ...reminderConfig.meals, on: val } })}
+                  />
+                </div>
+
+                {/* Workout */}
+                <div className="flex items-center justify-between px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <span className="text-base">🏋</span>
+                    <div>
+                      <div className="text-sm text-stone-200 font-sans">Log Workout</div>
+                      <div className="text-[10px] font-mono text-stone-600 uppercase tracking-wider mt-0.5">
+                        Daily at {reminderConfig.workout.time}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="time"
+                      value={reminderConfig.workout.time}
+                      onChange={e => updateReminders({ workout: { ...reminderConfig.workout, time: e.target.value } })}
+                      className="bg-stone-900 border border-stone-800 text-stone-300 font-mono text-xs px-2 py-1.5 focus:outline-none focus:border-orange-500/40"
+                    />
+                    <Toggle
+                      enabled={reminderConfig.workout.on}
+                      onChange={val => updateReminders({ workout: { ...reminderConfig.workout, on: val } })}
+                    />
+                  </div>
+                </div>
+
+                {/* Weigh-in */}
+                <div className="flex items-center justify-between px-4 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <span className="text-base">⚖️</span>
+                    <div>
+                      <div className="text-sm text-stone-200 font-sans">Daily Weigh-in</div>
+                      <div className="text-[10px] font-mono text-stone-600 uppercase tracking-wider mt-0.5">
+                        Daily at {reminderConfig.weigh_in.time}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="time"
+                      value={reminderConfig.weigh_in.time}
+                      onChange={e => updateReminders({ weigh_in: { ...reminderConfig.weigh_in, time: e.target.value } })}
+                      className="bg-stone-900 border border-stone-800 text-stone-300 font-mono text-xs px-2 py-1.5 focus:outline-none focus:border-orange-500/40"
+                    />
+                    <Toggle
+                      enabled={reminderConfig.weigh_in.on}
+                      onChange={val => updateReminders({ weigh_in: { ...reminderConfig.weigh_in, on: val } })}
+                    />
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── HELP & SUPPORT ── */}
+        <section className="mb-10">
+          <SectionHeader label="Help & Support" />
+          <div className="border border-stone-800/60 bg-stone-950/40 p-6">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-stone-600 font-mono mb-4">Submit a ticket</div>
+
+            {/* Type selector */}
+            <div className="flex gap-2 mb-4">
+              {[
+                { id: 'bug',     label: '🐛 Bug report' },
+                { id: 'question', label: '❓ Question' },
+                { id: 'feature', label: '💡 Feature idea' },
+              ].map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTicketType(t.id)}
+                  className={`px-3 py-1.5 font-mono text-[10px] uppercase tracking-wider border transition-all ${
+                    ticketType === t.id
+                      ? 'border-orange-500/60 bg-orange-500/10 text-orange-300'
+                      : 'border-stone-800 text-stone-600 hover:border-stone-700 hover:text-stone-400'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-3 mb-4">
+              <input
+                type="text"
+                value={ticketSubject}
+                onChange={e => setTicketSubject(e.target.value)}
+                placeholder="Subject"
+                className="w-full bg-stone-900/80 border border-stone-800 text-stone-100 font-mono text-sm px-4 py-3 placeholder:text-stone-700 focus:outline-none focus:border-orange-500/50 transition-colors"
+              />
+              <textarea
+                value={ticketBody}
+                onChange={e => setTicketBody(e.target.value)}
+                placeholder="Describe your issue, question, or idea in detail…"
+                rows={4}
+                className="w-full bg-stone-900/80 border border-stone-800 text-stone-100 font-mono text-sm px-4 py-3 placeholder:text-stone-700 focus:outline-none focus:border-orange-500/50 transition-colors resize-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-mono text-stone-700 uppercase tracking-wider">
+                We typically respond within 24 hours
+              </div>
+              <button
+                type="button"
+                disabled={!ticketSubject.trim() || !ticketBody.trim() || ticketSending}
+                onClick={async () => {
+                  if (!ticketSubject.trim() || !ticketBody.trim()) return;
+                  setTicketSending(true);
+                  setTicketStatus({ error: null, success: null });
+                  const { error } = await supabase.from('support_tickets').insert({
+                    user_id: user?.id,
+                    type: ticketType,
+                    subject: ticketSubject.trim(),
+                    body: ticketBody.trim(),
+                  });
+                  setTicketSending(false);
+                  if (error) {
+                    setTicketStatus({ error: 'Failed to submit. Please try again.', success: null });
+                  } else {
+                    setTicketSubject('');
+                    setTicketBody('');
+                    setTicketStatus({ error: null, success: 'Ticket submitted — we\'ll be in touch soon.' });
+                  }
+                }}
+                className={`px-6 py-2.5 font-anton text-sm uppercase tracking-wider transition-all ${
+                  ticketSubject.trim() && ticketBody.trim() && !ticketSending
+                    ? 'bg-orange-500 text-stone-950 hover:bg-orange-400'
+                    : 'bg-stone-900 text-stone-700 border border-stone-800 cursor-not-allowed'
+                }`}
+              >
+                {ticketSending ? 'Sending…' : 'Submit →'}
+              </button>
+            </div>
+
+            {ticketStatus.error && (
+              <p className="mt-3 text-xs font-mono px-3 py-2 border border-red-500/30 bg-red-500/10 text-red-300">
+                {ticketStatus.error}
+              </p>
+            )}
+            {ticketStatus.success && (
+              <p className="mt-3 text-xs font-mono px-3 py-2 border border-green-500/30 bg-green-500/10 text-green-300">
+                {ticketStatus.success}
+              </p>
+            )}
+          </div>
+        </section>
 
         <footer className="mt-12 pt-6 border-t border-stone-800/60 flex items-center justify-between text-[10px] uppercase tracking-wider text-stone-600 font-mono">
           <span>IRONLAB v0.4 · Settings</span>

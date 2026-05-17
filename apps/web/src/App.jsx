@@ -19,6 +19,7 @@ import ExercisesPage from './pages/ExercisesPage';
 import BiometricsPage from './pages/BiometricsPage';
 import CoachPage from './pages/CoachPage';
 import SettingsPage from './pages/SettingsPage';
+import TutorialOverlay from './components/TutorialOverlay';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +35,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ProfileBootstrap />
+        <TutorialOverlay />
         <Routes>
           {/* Public */}
           <Route path="/auth" element={<AuthPage />} />

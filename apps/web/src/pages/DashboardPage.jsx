@@ -527,7 +527,7 @@ export default function Dashboard() {
   const bio            = data?.biometrics     ?? { current: null, weekAgo: null, goal: null, sparkline: [] };
   const weeklyStats    = data?.weeklyStats    ?? { totalSets: 0, avgKcal: 0, avgProtein: 0, streak: 0 };
   const weeklyAdherence = data?.weeklyAdherence ?? [];
-  const activityFeed   = [...(data?.activityFeed ?? []), { time: '16:45', type: 'water', text: '2.4 L logged · goal 3.0 L' }];
+  const activityFeed   = data?.activityFeed ?? [];
 
   const remaining    = targets.kcal - consumed.kcal;
   const weightDelta  = bio.current != null && bio.weekAgo != null ? bio.current - bio.weekAgo : null;
