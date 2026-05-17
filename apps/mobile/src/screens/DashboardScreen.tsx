@@ -725,7 +725,7 @@ const s = StyleSheet.create({
   wordmark:    { fontFamily: FONTS.anton, fontSize: 22, color: COLORS.text100, textTransform: 'uppercase', letterSpacing: 1 },
   avatar:      { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.accent, alignItems: 'center', justifyContent: 'center' },
   avatarText:  { fontFamily: FONTS.anton, fontSize: 13, color: COLORS.bg },
-  greeting:    { fontFamily: FONTS.anton, fontSize: 34, color: COLORS.text100, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 40, marginBottom: SPACING.sm },
+  greeting:    { fontFamily: FONTS.anton, fontSize: 34, color: COLORS.text100, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 43, paddingTop: 2, marginBottom: SPACING.sm },
   metaRow:     { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, marginBottom: SPACING.xl, flexWrap: 'wrap' },
   tierBadge:   { paddingHorizontal: SPACING.sm, paddingVertical: 3, backgroundColor: COLORS.accentMuted, borderWidth: 1, borderColor: COLORS.accentBorder },
   tierText:    { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.orange300, textTransform: 'uppercase', letterSpacing: 1.5 },
@@ -740,7 +740,7 @@ const s = StyleSheet.create({
   statCardBL: { borderRightWidth: 1, borderColor: COLORS.border },
   statCardBR: {},
   statLabel:  { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.8, marginBottom: 4 },
-  statValue:  { fontFamily: FONTS.anton, fontSize: 28, color: COLORS.text100, lineHeight: 32 },
+  statValue:  { fontFamily: FONTS.anton, fontSize: 28, color: COLORS.text100, lineHeight: 35, paddingTop: 2 },
   statUnit:   { fontFamily: FONTS.anton, fontSize: 14, color: COLORS.text500 },
   statSub:    { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.orange300, marginTop: 2 },
 
@@ -762,7 +762,7 @@ const s = StyleSheet.create({
   sectionTitle:{ fontFamily: FONTS.anton, fontSize: 22, color: COLORS.text100, textTransform: 'uppercase' },
 
   // Workout
-  workoutName: { fontFamily: FONTS.anton, fontSize: 38, color: COLORS.text100, textTransform: 'uppercase', lineHeight: 42, marginBottom: SPACING.xs },
+  workoutName: { fontFamily: FONTS.anton, fontSize: 38, color: COLORS.text100, textTransform: 'uppercase', lineHeight: 48, paddingTop: 2, marginBottom: SPACING.xs },
   workoutMeta: { fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: SPACING.md },
   exerciseList:{ marginBottom: SPACING.lg },
   exerciseRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: SPACING.sm, borderBottomWidth: 1, borderBottomColor: 'rgba(41,37,36,0.4)' },
@@ -794,7 +794,7 @@ const s = StyleSheet.create({
   ringSub:   { fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text500, marginTop: 2 },
 
   // Weight card
-  bigWeight:     { fontFamily: FONTS.anton, fontSize: 52, color: COLORS.text100, lineHeight: 56 },
+  bigWeight:     { fontFamily: FONTS.anton, fontSize: 52, color: COLORS.text100, lineHeight: 65, paddingTop: 2 },
   weightDeltaRow:{ flexDirection: 'row', alignItems: 'baseline', marginBottom: SPACING.xs },
   weightGoalRow: { flexDirection: 'row', alignItems: 'baseline', gap: SPACING.md, marginTop: SPACING.sm },
   goalLabel:     { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5 },
@@ -836,7 +836,7 @@ const s = StyleSheet.create({
   weekStatsGrid:{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.lg, marginTop: SPACING.lg },
   weekStat:     { minWidth: (SW - 32 * 2 - SPACING.lg * 2) / 2 - SPACING.sm },
   weekStatLabel:{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 4 },
-  weekStatValue:{ fontFamily: FONTS.anton, fontSize: 24, color: COLORS.text100 },
+  weekStatValue:{ fontFamily: FONTS.anton, fontSize: 24, color: COLORS.text100, lineHeight: 30, paddingTop: 2 },
 
   // Activity feed
   feedRow:    { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
@@ -851,5 +851,5 @@ const s = StyleSheet.create({
   modalOverlay:{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.7)' },
   modalSheet:  { backgroundColor: '#0c0b0a', borderTopWidth: 1, borderTopColor: COLORS.border, padding: SPACING.xl },
   modalHandle: { width: 40, height: 4, backgroundColor: COLORS.text600, alignSelf: 'center', marginBottom: SPACING.lg },
-  modalTitle:  { fontFamily: FONTS.anton, fontSize: 32, color: COLORS.text100, textTransform: 'uppercase', marginBottom: SPACING.xs },
+  modalTitle:  { fontFamily: FONTS.anton, fontSize: 32, color: COLORS.text100, textTransform: 'uppercase', lineHeight: 40, paddingTop: 2, marginBottom: SPACING.xs },
 });
