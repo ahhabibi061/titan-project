@@ -5,12 +5,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../constants/theme';
 import DashboardScreen from '../screens/DashboardScreen';
 import PlaceholderScreen from '../screens/PlaceholderScreen';
+import ForgeScreen from '../screens/ForgeScreen';
 
 const Tab = createBottomTabNavigator();
 
 const TABS = [
   { name: 'Home',     label: 'Home',     icon: 'home',         Screen: () => <DashboardScreen /> },
-  { name: 'Forge',    label: 'Forge',    icon: 'barbell',      Screen: () => <PlaceholderScreen name="Forge" /> },
+  { name: 'Forge',    label: 'Forge',    icon: 'barbell',      Screen: () => <ForgeScreen /> },
   { name: 'Sentinel', label: 'Sentinel', icon: 'eye',          Screen: () => <PlaceholderScreen name="Sentinel" /> },
   { name: 'Vault',    label: 'Vault',    icon: 'analytics',    Screen: () => <PlaceholderScreen name="Vault" /> },
   { name: 'Oracle',   label: 'Oracle',   icon: 'sparkles',     Screen: () => <PlaceholderScreen name="Oracle" /> },
