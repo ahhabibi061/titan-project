@@ -624,9 +624,9 @@ export default function DashboardScreen() {
       // Latest biometric
       const { data: brows } = await supabase
         .from('biometric_entries')
-        .select('weight_kg, recorded_at')
+        .select('weight_kg, logged_at')
         .eq('user_id', user.id)
-        .order('recorded_at', { ascending: false })
+        .order('logged_at', { ascending: false })
         .limit(8);
       if (brows?.length) {
         const sparkline = [...brows].reverse().map(r => r.weight_kg);
