@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
+import { EXERCISE_LIBRARY } from '../constants/exercises';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 async function getUserId() {
@@ -32,6 +33,7 @@ export interface FinishWorkoutParams {
   totalVolumeKg: number;
   workoutName: string;
   doneSets: number;
+  caloriesBurned?: number;
 }
 
 // ── useStartWorkout ────────────────────────────────────────────────────────────
@@ -148,6 +150,7 @@ export function useFinishWorkout() {
           finished_at:      now,
           duration_seconds: params.durationSeconds,
           total_volume_kg:  params.totalVolumeKg,
+          calories_burned:  params.caloriesBurned ?? Math.round((params.durationSeconds / 60) * 7),
           updated_at:       now,
         })
         .eq('id', params.workoutId);
@@ -175,6 +178,7 @@ export function useFinishWorkout() {
       qc.invalidateQueries({ queryKey: ['weekly-workouts'] });
       qc.invalidateQueries({ queryKey: ['weekly-sets'] });
       qc.invalidateQueries({ queryKey: ['activity-feed'] });
+      qc.invalidateQueries({ queryKey: ['muscle-volumes'] });
     },
   });
 }
@@ -306,5 +310,41 @@ export function useActivityFeed() {
       return data ?? [];
     },
     staleTime: 10_000,
+  });
+}
+
+// ── useWeeklyMuscleVolumes ────────────────────────────────────────────────────
+export function useWeeklyMuscleVolumes() {
+  return useQuery({
+    queryKey: ['muscle-volumes'],
+    queryFn:  async () => {
+      const userId = await getUserId();
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+
+      const { data: sets, error } = await supabase
+        .from('sets')
+        .select('weight_kg, reps, workout_exercises(notes)')
+        .eq('user_id', userId)
+        .gte('created_at', sevenDaysAgo.toISOString())
+        .eq('completed', true);
+      if (error) throw error;
+
+      const volumes: Record<string, number> = {};
+      for (const set of sets ?? []) {
+        const notes = (set as any).workout_exercises?.notes as string | undefined;
+        if (!notes) continue;
+        const ex = EXERCISE_LIBRARY.find(
+          e => e.name.toLowerCase().trim() === notes.toLowerCase().trim()
+        );
+        if (!ex) continue;
+        const vol = (set.weight_kg ?? 0) * (set.reps ?? 0);
+        ex.primary.forEach(m   => { volumes[m] = (volumes[m] || 0) + vol; });
+        ex.secondary.forEach(m => { volumes[m] = (volumes[m] || 0) + vol * 0.5; });
+      }
+      return volumes;
+    },
+    staleTime: 30_000,
   });
 }

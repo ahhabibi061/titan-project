@@ -12,100 +12,13 @@ import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS } from '../constants/theme';
+import { MUSCLES, EXERCISE_LIBRARY } from '../constants/exercises';
 import {
   useStartWorkout, useAddWorkoutExercise, useLogSet, useFinishWorkout,
 } from '../hooks/useWorkout';
 
 // ─── Domain ──────────────────────────────────────────────────────────────────
-const MUSCLES: Record<string, string> = {
-  chest: 'Chest', front_delts: 'Front Delts', side_delts: 'Side Delts',
-  rear_delts: 'Rear Delts', biceps: 'Biceps', triceps: 'Triceps',
-  forearms: 'Forearms', abs: 'Abs', obliques: 'Obliques', traps: 'Traps',
-  lats: 'Lats', lower_back: 'Lower Back', glutes: 'Glutes', quads: 'Quads',
-  hamstrings: 'Hamstrings', calves: 'Calves',
-};
-
 const MUSCLE_GROUPS = Object.keys(MUSCLES);
-
-const EXERCISE_LIBRARY = [
-  // CHEST
-  { id: 'bench',               name: 'Barbell Bench Press',        primary: ['chest'],         secondary: ['front_delts','triceps'] },
-  { id: 'incline_db',          name: 'Incline DB Press',           primary: ['chest'],         secondary: ['front_delts','triceps'] },
-  { id: 'cable_fly',           name: 'Cable Crossover',            primary: ['chest'],         secondary: ['front_delts'] },
-  { id: 'dips',                name: 'Weighted Dips',              primary: ['chest'],         secondary: ['triceps','front_delts'] },
-  { id: 'pushup',              name: 'Push-Up',                    primary: ['chest'],         secondary: ['front_delts','triceps','abs'] },
-  { id: 'chest_press',         name: 'Machine Chest Press',        primary: ['chest'],         secondary: ['front_delts','triceps'] },
-  // SHOULDERS
-  { id: 'ohp',                 name: 'Standing Overhead Press',    primary: ['front_delts'],   secondary: ['side_delts','triceps'] },
-  { id: 'lateral_raise',       name: 'DB Lateral Raise',           primary: ['side_delts'],    secondary: [] },
-  { id: 'cable_lateral',       name: 'Cable Lateral Raise',        primary: ['side_delts'],    secondary: [] },
-  { id: 'rear_delt_fly',       name: 'Reverse Pec Deck',           primary: ['rear_delts'],    secondary: ['traps'] },
-  { id: 'face_pull',           name: 'Cable Face Pull',            primary: ['rear_delts'],    secondary: ['traps'] },
-  { id: 'pike_pushup',         name: 'Pike Push-Up',               primary: ['front_delts'],   secondary: ['triceps','traps'] },
-  { id: 'smith_ohp',           name: 'Smith Machine OHP',          primary: ['front_delts'],   secondary: ['side_delts','triceps'] },
-  { id: 'kb_press',            name: 'Kettlebell Overhead Press',  primary: ['front_delts'],   secondary: ['side_delts','triceps','abs'] },
-  { id: 'shrug',               name: 'DB Shrug',                   primary: ['traps'],         secondary: [] },
-  // BACK
-  { id: 'pullup',              name: 'Pull-Up',                    primary: ['lats'],          secondary: ['biceps','rear_delts'] },
-  { id: 'chin_up',             name: 'Chin-Up',                    primary: ['biceps'],        secondary: ['lats','rear_delts'] },
-  { id: 'row',                 name: 'Barbell Row',                primary: ['lats'],          secondary: ['biceps','rear_delts','traps'] },
-  { id: 'lat_pulldown',        name: 'Lat Pulldown',               primary: ['lats'],          secondary: ['biceps'] },
-  { id: 'tbar_row',            name: 'T-Bar Row',                  primary: ['lats'],          secondary: ['biceps','traps'] },
-  { id: 'cable_row',           name: 'Seated Cable Row',           primary: ['lats'],          secondary: ['biceps','rear_delts','traps'] },
-  { id: 'inverted_row',        name: 'Inverted Row',               primary: ['lats'],          secondary: ['biceps','rear_delts','traps'] },
-  { id: 'kb_row',              name: 'Kettlebell Single-Arm Row',  primary: ['lats'],          secondary: ['biceps','rear_delts'] },
-  { id: 'machine_pullover',    name: 'Machine Pullover',           primary: ['lats'],          secondary: ['chest','abs'] },
-  // ARMS
-  { id: 'curl',                name: 'Barbell Curl',               primary: ['biceps'],        secondary: ['forearms'] },
-  { id: 'hammer_curl',         name: 'Hammer Curl',                primary: ['biceps'],        secondary: ['forearms'] },
-  { id: 'preacher_curl',       name: 'Preacher Curl',              primary: ['biceps'],        secondary: [] },
-  { id: 'cable_curl',          name: 'Cable Curl',                 primary: ['biceps'],        secondary: ['forearms'] },
-  { id: 'tricep_pushdown',     name: 'Cable Tricep Pushdown',      primary: ['triceps'],       secondary: [] },
-  { id: 'skullcrusher',        name: 'Skullcrusher',               primary: ['triceps'],       secondary: [] },
-  { id: 'dip_bw',              name: 'Bodyweight Dip',             primary: ['triceps'],       secondary: ['chest','front_delts'] },
-  { id: 'diamond_pushup',      name: 'Diamond Push-Up',            primary: ['triceps'],       secondary: ['chest','front_delts'] },
-  // LEGS
-  { id: 'squat',               name: 'Back Squat',                 primary: ['quads'],         secondary: ['glutes','hamstrings'] },
-  { id: 'front_squat',         name: 'Front Squat',                primary: ['quads'],         secondary: ['glutes','abs'] },
-  { id: 'leg_press',           name: 'Leg Press',                  primary: ['quads'],         secondary: ['glutes','hamstrings'] },
-  { id: 'hack_squat',          name: 'Hack Squat Machine',         primary: ['quads'],         secondary: ['glutes','hamstrings'] },
-  { id: 'bodyweight_squat',    name: 'Bodyweight Squat',           primary: ['quads'],         secondary: ['glutes','hamstrings'] },
-  { id: 'pistol_squat',        name: 'Pistol Squat',               primary: ['quads'],         secondary: ['glutes','abs'] },
-  { id: 'bulgarian',           name: 'Bulgarian Split Squat',      primary: ['quads'],         secondary: ['glutes'] },
-  { id: 'kb_goblet_squat',     name: 'Kettlebell Goblet Squat',    primary: ['quads'],         secondary: ['glutes','abs'] },
-  { id: 'kb_lunge',            name: 'Kettlebell Lunge',           primary: ['quads'],         secondary: ['glutes','hamstrings'] },
-  { id: 'rdl',                 name: 'Romanian Deadlift',          primary: ['hamstrings'],    secondary: ['glutes','lower_back'] },
-  { id: 'deadlift',            name: 'Conventional Deadlift',      primary: ['hamstrings'],    secondary: ['glutes','lower_back','traps'] },
-  { id: 'leg_curl',            name: 'Lying Leg Curl',             primary: ['hamstrings'],    secondary: [] },
-  { id: 'nordic_curl',         name: 'Nordic Hamstring Curl',      primary: ['hamstrings'],    secondary: ['glutes','calves'] },
-  { id: 'kb_deadlift',         name: 'Kettlebell Deadlift',        primary: ['hamstrings'],    secondary: ['glutes','lower_back','traps'] },
-  { id: 'hip_thrust',          name: 'Barbell Hip Thrust',         primary: ['glutes'],        secondary: ['hamstrings'] },
-  { id: 'glute_bridge',        name: 'Glute Bridge',               primary: ['glutes'],        secondary: ['hamstrings','lower_back'] },
-  { id: 'adductor_machine',    name: 'Hip Adduction Machine',      primary: ['glutes'],        secondary: ['hamstrings'] },
-  { id: 'cable_pull_through',  name: 'Cable Pull-Through',         primary: ['glutes'],        secondary: ['hamstrings','lower_back'] },
-  { id: 'calf_raise',          name: 'Standing Calf Raise',        primary: ['calves'],        secondary: [] },
-  { id: 'seated_calf',         name: 'Seated Calf Raise',          primary: ['calves'],        secondary: [] },
-  // CORE
-  { id: 'crunch',              name: 'Cable Crunch',               primary: ['abs'],           secondary: [] },
-  { id: 'plank',               name: 'Plank',                      primary: ['abs'],           secondary: ['obliques'] },
-  { id: 'leg_raise',           name: 'Hanging Leg Raise',          primary: ['abs'],           secondary: ['obliques'] },
-  { id: 'situp',               name: 'Sit-Up',                     primary: ['abs'],           secondary: ['obliques'] },
-  { id: 'ab_wheel',            name: 'Ab Wheel Rollout',           primary: ['abs'],           secondary: ['obliques','lats','lower_back'] },
-  { id: 'dead_bug',            name: 'Dead Bug',                   primary: ['abs'],           secondary: ['obliques'] },
-  { id: 'dragon_flag',         name: 'Dragon Flag',                primary: ['abs'],           secondary: ['obliques','lower_back'] },
-  { id: 'pallof_press',        name: 'Pallof Press',               primary: ['abs'],           secondary: ['obliques'] },
-  { id: 'cable_woodchop',      name: 'Cable Woodchop',             primary: ['obliques'],      secondary: ['abs','front_delts'] },
-  { id: 'russian_twist',       name: 'Russian Twist',              primary: ['obliques'],      secondary: ['abs'] },
-  // KETTLEBELL / CARRIES
-  { id: 'kb_swing',            name: 'Kettlebell Swing',           primary: ['glutes'],        secondary: ['hamstrings','lower_back','traps'] },
-  { id: 'kb_clean',            name: 'Kettlebell Clean',           primary: ['glutes'],        secondary: ['traps','hamstrings','forearms'] },
-  { id: 'kb_turkish_getup',    name: 'Turkish Get-Up',             primary: ['abs'],           secondary: ['front_delts','glutes','traps'] },
-  { id: 'farmers_carry',       name: "Farmer's Carry",             primary: ['traps'],         secondary: ['forearms','abs','glutes','calves'] },
-  // CARDIO / CONDITIONING
-  { id: 'rowing_machine',      name: 'Rowing Machine',             primary: ['lats'],          secondary: ['hamstrings','glutes','biceps','abs'] },
-  { id: 'assault_bike',        name: 'Assault Bike',               primary: ['quads'],         secondary: ['glutes','hamstrings','chest','lats'] },
-  { id: 'sled_push',           name: 'Sled Push',                  primary: ['quads'],         secondary: ['glutes','hamstrings','calves','abs'] },
-];
 
 const INITIAL_WORKOUT = [
   { id: 'we1', exerciseId: 'bench', sets: [
@@ -528,10 +441,10 @@ function AddExerciseSheet({ visible, onClose, onAdd, usedIds }: {
 }
 
 // ─── Finish Confirm Sheet ─────────────────────────────────────────────────────
-function FinishConfirmSheet({ visible, onConfirm, onDiscard, onClose, totalVolume, doneSets, totalSets, elapsed, volumes, saving }: {
+function FinishConfirmSheet({ visible, onConfirm, onDiscard, onClose, totalVolume, doneSets, totalSets, elapsed, volumes, saving, calories }: {
   visible: boolean; onConfirm: () => void; onDiscard: () => void; onClose: () => void;
   totalVolume: number; doneSets: number; totalSets: number; elapsed: number;
-  volumes: Record<string, number>; saving: boolean;
+  volumes: Record<string, number>; saving: boolean; calories: number;
 }) {
   const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
   const secs = String(elapsed % 60).padStart(2, '0');
@@ -549,8 +462,9 @@ function FinishConfirmSheet({ visible, onConfirm, onDiscard, onClose, totalVolum
               { label: 'Volume', value: fmt0(totalVolume), sub: 'kg·reps' },
               { label: 'Sets',   value: `${doneSets}/${totalSets}`, sub: 'completed' },
               { label: 'Time',   value: `${mins}:${secs}`, sub: 'elapsed' },
+              { label: 'Kcal',   value: `~${calories}`, sub: 'est. burned' },
             ].map((s, i) => (
-              <View key={s.label} style={{ flex: 1, padding: 12, borderRightWidth: i < 2 ? 1 : 0, borderRightColor: COLORS.border, alignItems: 'center' }}>
+              <View key={s.label} style={{ flex: 1, padding: 12, borderRightWidth: i < 3 ? 1 : 0, borderRightColor: COLORS.border, alignItems: 'center' }}>
                 <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</Text>
                 <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 22, paddingTop: 2 }}>{s.value}</Text>
                 <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700 }}>{s.sub}</Text>
@@ -795,12 +709,14 @@ export default function ForgeScreen() {
       return;
     }
     try {
+      const caloriesBurned = Math.round((elapsed / 60) * 7);
       await finishWorkout({
         workoutId,
         durationSeconds: elapsed,
         totalVolumeKg:   totalVolume,
         workoutName:     'Push Day',
         doneSets,
+        caloriesBurned,
       });
       setFinishSheet(false);
       setWorkout(INITIAL_WORKOUT as any);
@@ -914,7 +830,7 @@ export default function ForgeScreen() {
         onDiscard={() => { setWorkout(INITIAL_WORKOUT as any); setFinishSheet(false); setElapsed(0); setStarted(false); setWorkoutId(null); setWeIdMap(new Map()); }}
         onClose={() => setFinishSheet(false)}
         totalVolume={totalVolume} doneSets={doneSets} totalSets={totalSets} elapsed={elapsed} volumes={volumes}
-        saving={finishing}
+        saving={finishing} calories={Math.round((elapsed / 60) * 7)}
       />
     </View>
   );

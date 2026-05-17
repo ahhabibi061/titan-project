@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
-import { useTodayWorkout, useWeeklyWorkouts, useWeeklySets, useActivityFeed } from '../hooks/useWorkout';
+import { useTodayWorkout, useWeeklyWorkouts, useWeeklySets, useActivityFeed, useWeeklyMuscleVolumes } from '../hooks/useWorkout';
 import {
   View,
   Text,
@@ -146,23 +146,34 @@ const SLUG_MAP: { slug: Slug; dataKey: string; views: ('front' | 'back')[] }[] =
   { slug: 'trapezius',   dataKey: 'traps',        views: ['front', 'back'] },
 ];
 
-function volumeToFill(dataKey: string, mode: 'fatigue' | 'progression'): string | null {
-  if (mode === 'fatigue') {
-    const e = MOCK_RECOVERY_MAP[dataKey];
-    if (!e) return null;
-    return RECOVERY_COLORS[e.status] ?? null;
-  } else {
-    const e = MOCK_GROWTH_MAP[dataKey];
-    if (!e) return null;
-    return GROWTH_COLORS[e.status] ?? null;
+function volToHeat(volume: number, max: number): string | null {
+  if (!volume || volume <= 0) return null;
+  const t = Math.min(volume / Math.max(max, 1), 1);
+  const stops = [
+    { t: 0.00, c: [44, 36, 30] },
+    { t: 0.18, c: [98, 42, 18] },
+    { t: 0.45, c: [186, 74, 28] },
+    { t: 0.72, c: [240, 110, 38] },
+    { t: 1.00, c: [255, 78, 38] },
+  ];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t <= stops[i + 1].t) {
+      const local = (t - stops[i].t) / (stops[i + 1].t - stops[i].t || 1);
+      const r = Math.round(stops[i].c[0] + (stops[i + 1].c[0] - stops[i].c[0]) * local);
+      const g = Math.round(stops[i].c[1] + (stops[i + 1].c[1] - stops[i].c[1]) * local);
+      const b = Math.round(stops[i].c[2] + (stops[i + 1].c[2] - stops[i].c[2]) * local);
+      return `rgb(${r},${g},${b})`;
+    }
   }
+  const last = stops[stops.length - 1].c;
+  return `rgb(${last[0]},${last[1]},${last[2]})`;
 }
 
-function buildBodyData(mode: 'fatigue' | 'progression', view: 'front' | 'back'): ExtendedBodyPart[] {
+function buildBodyData(volumes: Record<string, number>, maxVol: number, view: 'front' | 'back'): ExtendedBodyPart[] {
   const result: ExtendedBodyPart[] = [];
   for (const entry of SLUG_MAP) {
     if (!entry.views.includes(view)) continue;
-    const color = volumeToFill(entry.dataKey, mode);
+    const color = volToHeat(volumes[entry.dataKey] ?? 0, maxVol);
     if (color) {
       result.push({ slug: entry.slug, styles: { fill: color } });
     }
@@ -334,14 +345,16 @@ function WeeklyGrid({ days }: { days: DayAdherence[] }) {
 
 interface SelectedMuscle { slug: string; view: 'front' | 'back'; dataKey: string; name: string; }
 
-function MuscleMap({ mode, setMode }: { mode: 'fatigue' | 'progression'; setMode: (m: 'fatigue' | 'progression') => void }) {
+function MuscleMap({ mode, setMode, volumes, maxVol }: {
+  mode: 'fatigue' | 'progression'; setMode: (m: 'fatigue' | 'progression') => void;
+  volumes: Record<string, number>; maxVol: number;
+}) {
   const [selected, setSelected] = useState<SelectedMuscle | null>(null);
   const slideY   = useRef(new Animated.Value(80)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const BODY_SCALE = 0.75;
-  const fatigueLegend     = [['#4ade80','Ready'],['#fbbf24','Almost'],['#f97316','Partial'],['#ef4444','Resting']] as [string,string][];
-  const progressionLegend = [['#fb923c','PR'],['#4ade80','Improved'],['#fbbf24','Regressed'],['#f87171','Dropped']] as [string,string][];
+  const BODY_SCALE  = 0.75;
+  const volumeLegend = [['rgb(98,42,18)','Low'],['rgb(186,74,28)','Mid'],['rgb(240,110,38)','High'],['rgb(255,78,38)','Peak']] as [string,string][];
 
   const showCard = (slug: string, view: 'front' | 'back') => {
     const entry = SLUG_TO_DATA[slug];
@@ -379,13 +392,10 @@ function MuscleMap({ mode, setMode }: { mode: 'fatigue' | 'progression'; setMode
     ];
   };
 
-  const frontData = injectSelected(buildBodyData(mode, 'front'), 'front');
-  const backData  = injectSelected(buildBodyData(mode, 'back'),  'back');
+  const frontData = injectSelected(buildBodyData(volumes, maxVol, 'front'), 'front');
+  const backData  = injectSelected(buildBodyData(volumes, maxVol, 'back'),  'back');
 
-  const vol  = selected ? (MUSCLE_DATA.weeklyVolume[selected.dataKey] ?? 0) : 0;
-  const prog = selected ? (MUSCLE_DATA.progression[selected.dataKey]  ?? 0) : 0;
-  const pillColor = prog > 0 ? COLORS.accent : prog < 0 ? '#f87171' : COLORS.text600;
-  const pillBg    = prog > 0 ? COLORS.accentMuted : prog < 0 ? 'rgba(248,113,113,0.15)' : 'rgba(87,83,78,0.2)';
+  const vol = selected ? (volumes[selected.dataKey] ?? 0) : 0;
 
   return (
     <View style={s.card}>
@@ -429,26 +439,16 @@ function MuscleMap({ mode, setMode }: { mode: 'fatigue' | 'progression'; setMode
         <Animated.View style={[s.muscleInfoCard, { opacity: fadeAnim, transform: [{ translateY: slideY }] }]}>
           <View style={s.muscleInfoRow}>
             <Text style={s.muscleInfoName}>{selected.name.toUpperCase()}</Text>
-            <View style={[s.musclePill, { backgroundColor: pillBg, borderColor: pillColor + '88' }]}>
-              <Text style={[s.musclePillText, { color: pillColor }]}>
-                {prog === 0 ? '—' : prog > 0 ? `+${prog.toFixed(1)}%` : `${prog.toFixed(1)}%`}
-              </Text>
-            </View>
+            <Text style={[s.musclePillText, { color: COLORS.text600 }]}>7d volume</Text>
           </View>
-          <Text style={s.muscleInfoVol}>{vol.toLocaleString()} kg·reps</Text>
-          <Text style={s.muscleInfoSub}>
-            {prog === 0
-              ? 'No change vs last week'
-              : prog > 0
-              ? `↑ Progressing — ${prog.toFixed(1)}% vs last week`
-              : `↓ Regressing — ${Math.abs(prog).toFixed(1)}% vs last week`}
-          </Text>
+          <Text style={s.muscleInfoVol}>{vol > 0 ? vol.toLocaleString() : '0'} kg·reps</Text>
+          <Text style={s.muscleInfoSub}>{vol > 0 ? 'Volume logged in the last 7 days' : 'No volume logged for this muscle in last 7 days'}</Text>
         </Animated.View>
       )}
 
       <View style={[s.divider, { marginVertical: SPACING.md }]} />
       <View style={s.legendRow}>
-        {(mode === 'fatigue' ? fatigueLegend : progressionLegend).map(([color, label]) => (
+        {volumeLegend.map(([color, label]) => (
           <View key={label} style={s.legendItem}>
             <View style={[s.legendDot, { backgroundColor: color }]} />
             <Text style={s.legendLabel}>{label}</Text>
@@ -476,7 +476,11 @@ export default function DashboardScreen() {
   const { data: weeklyWorkouts } = useWeeklyWorkouts();
   const { data: weeklySets }     = useWeeklySets();
   const { data: activityFeed }   = useActivityFeed();
+  const { data: muscleVolumes }  = useWeeklyMuscleVolumes();
   const qc = useQueryClient();
+
+  const muscleVolumesData = muscleVolumes ?? {} as Record<string, number>;
+  const muscleMaxVol = Math.max(1, ...Object.values(muscleVolumesData));
 
   // Refetch all dashboard queries whenever this tab gains focus
   useFocusEffect(useCallback(() => {
@@ -484,6 +488,7 @@ export default function DashboardScreen() {
     qc.invalidateQueries({ queryKey: ['weekly-workouts'] });
     qc.invalidateQueries({ queryKey: ['weekly-sets'] });
     qc.invalidateQueries({ queryKey: ['activity-feed'] });
+    qc.invalidateQueries({ queryKey: ['muscle-volumes'] });
   }, [qc]));
 
   // Real-time activity feed subscription
@@ -782,7 +787,7 @@ export default function DashboardScreen() {
         </View>
 
         {/* ── FIX 2: MUSCLE MAP — between This Week and Activity Feed ── */}
-        <MuscleMap mode={mapMode} setMode={setMapMode} />
+        <MuscleMap mode={mapMode} setMode={setMapMode} volumes={muscleVolumesData} maxVol={muscleMaxVol} />
 
         {/* ── 8. TODAY'S ACTIVITY FEED ───────────────────────────────── */}
         <View style={s.card}>
