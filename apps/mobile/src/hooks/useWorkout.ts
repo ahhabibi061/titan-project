@@ -195,7 +195,7 @@ export function useWorkoutHistory() {
           id, name, completed, started_at, finished_at,
           duration_seconds, total_volume_kg,
           workout_exercises (
-            id, position, notes,
+            id, notes,
             sets (set_number, weight_kg, reps, rir, completed)
           )
         `)

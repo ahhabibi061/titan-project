@@ -240,8 +240,9 @@ function SetRow({ set, idx, lastSet, onUpdate, onDelete, isLast }: {
       {/* × Remove */}
       <TouchableOpacity
         onPress={() => { if (!isLast) onDelete(); }}
-        style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center', opacity: isLast ? 0.2 : 1 }}>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 16, color: '#f87171', lineHeight: 20 }}>×</Text>
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        style={{ width: 32, height: 44, alignItems: 'center', justifyContent: 'center', opacity: isLast ? 0.2 : 1 }}>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 18, color: '#f87171' }}>×</Text>
       </TouchableOpacity>
     </View>
   );
