@@ -127,6 +127,14 @@ export default function ExerciseDemo({ exerciseId }) {
         </div>
       )}
 
+      {/* ── Load variants ── */}
+      {demo.variants?.length > 0 && (
+        <div className="flex items-center gap-2 px-3 py-1.5 border-t border-stone-800/60 bg-stone-950/20">
+          <span className="text-[7px] font-mono uppercase tracking-[0.15em] text-stone-700 shrink-0">Also:</span>
+          <span className="text-[8px] font-mono text-stone-500">{demo.variants.join(' · ')}</span>
+        </div>
+      )}
+
       {/* ── Mechanics bar ── */}
       <div className="flex items-center justify-between px-3 py-2 border-t border-stone-800/60 bg-stone-950/40">
         <span className="text-[9px] font-mono uppercase tracking-[0.15em] text-orange-400/80">

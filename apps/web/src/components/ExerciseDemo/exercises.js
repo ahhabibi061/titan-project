@@ -83,6 +83,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'dips',
     mechanics: 'Vertical Push',
     joints: ['Shoulder', 'Elbow'],
+    variants: ['Bodyweight', 'Dip Belt', 'Weighted Vest'],
     cues: [
       'Lean forward ~30° to maximise chest contribution',
       'Lower until shoulder is level with elbow',
@@ -100,6 +101,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'ohp',
     mechanics: 'Vertical Push',
     joints: ['Shoulder', 'Elbow'],
+    variants: ['Barbell', 'Dumbbell', 'Kettlebell', 'Cable'],
     cues: [
       'Bar rests on front deltoids in rack position',
       'Brace abs hard and squeeze glutes before pressing',
@@ -117,6 +119,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'lateral_raise',
     mechanics: 'Shoulder Abduction',
     joints: ['Shoulder'],
+    variants: ['Dumbbell', 'Cable', 'Machine'],
     cues: [
       'Slight bend in elbow — locked in for the whole set',
       'Lead with your pinkies, not your thumbs',
@@ -263,6 +266,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'shrug',
     mechanics: 'Scapular Elevation',
     joints: ['Shoulder Girdle'],
+    variants: ['Dumbbell', 'Barbell', 'Cable', 'Trap Bar'],
     cues: [
       'Straight up — not rolling forward or back',
       'Pause at the top for a full second',
@@ -420,6 +424,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'rdl',
     mechanics: 'Hip Hinge — Eccentric Dominant',
     joints: ['Hip'],
+    variants: ['Barbell', 'Dumbbell', 'Kettlebell', 'Cable'],
     cues: [
       'Hip hinge — keep shins relatively vertical',
       'Bar stays in contact with your legs the whole way',
@@ -467,6 +472,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'hip_thrust',
     mechanics: 'Hip Extension (Supine)',
     joints: ['Hip'],
+    variants: ['Barbell', 'Dumbbell', 'Machine', 'Banded'],
     cues: [
       'Upper back across the bench — find the meaty part',
       'Feet flat, shins vertical at the top',
@@ -575,6 +581,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'crunch',
     mechanics: 'Spinal Flexion (Loaded)',
     joints: ['Spine'],
+    variants: ['Cable', 'Rope', 'Band'],
     cues: [
       'Curl spine — this is not a hip hinge',
       'Elbows lead the movement downward',
@@ -743,6 +750,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'cable_pull_through',
     mechanics: 'Hip Hinge (Cable)',
     joints: ['Hip'],
+    variants: ['Cable', 'Resistance Band'],
     cues: [
       'Cable between your legs from the low pulley',
       'Hinge at the hip — not a squat',
@@ -775,6 +783,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'cable_woodchop',
     mechanics: 'Rotational Pull',
     joints: ['Spine', 'Shoulder'],
+    variants: ['Cable', 'Resistance Band'],
     cues: [
       'Rotate from the torso — not just the arms',
       'Arms stay nearly straight throughout',
@@ -851,6 +860,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'russian_twist',
     mechanics: 'Rotational Flexion',
     joints: ['Spine'],
+    variants: ['Kettlebell', 'Dumbbell', 'Plate'],
     cues: [
       'Lean back to ~45° and stay there',
       'Rotate from the torso — hands follow, not lead',
@@ -999,14 +1009,15 @@ export const EXERCISE_DEMOS = {
   },
 
   kb_goblet_squat: {
-    name: 'Kettlebell Goblet Squat',
+    name: 'Goblet Squat',
     primaryMuscles:   ['quadriceps'],
     secondaryMuscles: ['gluteal', 'abs'],
     lottieFile: 'kb_goblet_squat',
     mechanics: 'Bilateral Squat (Anterior Load)',
     joints: ['Hip', 'Knee', 'Ankle'],
+    variants: ['Kettlebell', 'Dumbbell', 'Cable'],
     cues: [
-      'Hold the bell at chest height — elbows inside knees at depth',
+      'Hold the weight at chest height — elbows inside knees at depth',
       'The anterior load forces an upright torso — use it',
       'Full depth — elbows push knees out at the bottom',
       'Great squat teaching tool — groove the pattern',
@@ -1161,6 +1172,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'back_extension',
     mechanics: 'Hip Hinge (Erector Focus)',
     joints: ['Hip', 'Spine'],
+    variants: ['Bodyweight', 'Plate', 'Barbell'],
     cues: [
       'Hips at the pad edge — full hip hinge ROM',
       'Rise to neutral spine — not into hyperextension',
@@ -1177,6 +1189,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'lunge',
     mechanics: 'Unilateral Squat (Split)',
     joints: ['Hip', 'Knee'],
+    variants: ['Dumbbell', 'Barbell', 'Kettlebell', 'Bodyweight'],
     cues: [
       'Long stride — 90° at both knees at depth',
       'Front knee tracks over second toe',
@@ -1225,6 +1238,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'upright_row',
     mechanics: 'Vertical Pull',
     joints: ['Shoulder', 'Elbow'],
+    variants: ['Barbell', 'Dumbbell', 'Cable'],
     cues: [
       'Wide grip — shoulder width or beyond',
       'Lead with elbows, not wrists',
@@ -1287,6 +1301,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'bent_over_lateral',
     mechanics: 'Horizontal Abduction',
     joints: ['Shoulder'],
+    variants: ['Dumbbell', 'Cable'],
     cues: [
       'Hinge forward 70–90° — torso nearly parallel to floor',
       'Soft elbow — fixed throughout',
@@ -1319,6 +1334,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'good_morning',
     mechanics: 'Hip Hinge (Bar on Back)',
     joints: ['Hip', 'Spine'],
+    variants: ['Barbell', 'Smith Machine'],
     cues: [
       'Soft knee bend — this is a hinge, not a squat',
       'Hinge until torso approaches parallel to floor',
@@ -1336,6 +1352,7 @@ export const EXERCISE_DEMOS = {
     lottieFile: 'kb_swing',
     mechanics: 'Ballistic Hip Hinge',
     joints: ['Hip'],
+    variants: ['Kettlebell', 'Dumbbell'],
     cues: [
       'Hike the bell back between your legs',
       'Explosive hip snap — not a squat',
