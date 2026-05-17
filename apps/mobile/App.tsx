@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,8 +11,11 @@ import {
   Manrope_500Medium,
   Manrope_600SemiBold,
 } from '@expo-google-fonts/manrope';
+import { Session } from '@supabase/supabase-js';
 
 import AppNavigator from './src/navigation/AppNavigator';
+import AuthScreen from './src/screens/AuthScreen';
+import { supabase } from './src/lib/supabase';
 import { COLORS } from './src/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -26,19 +29,33 @@ export default function App() {
     Manrope_600SemiBold,
   });
 
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthReady(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   const onLayoutRootView = useCallback(async () => {
-    if (fontsLoaded || fontError) {
+    if ((fontsLoaded || fontError) && authReady) {
       await SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, authReady]);
 
-  if (!fontsLoaded && !fontError) return null;
+  if ((!fontsLoaded && !fontError) || !authReady) return null;
 
   return (
     <SafeAreaProvider>
       <View style={{ flex: 1, backgroundColor: COLORS.bg }} onLayout={onLayoutRootView}>
         <NavigationContainer>
-          <AppNavigator />
+          {session ? <AppNavigator /> : <AuthScreen />}
         </NavigationContainer>
       </View>
     </SafeAreaProvider>
