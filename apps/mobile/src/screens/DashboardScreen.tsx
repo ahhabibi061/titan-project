@@ -463,7 +463,7 @@ export default function DashboardScreen() {
   const [workoutModalVisible, setWorkoutModalVisible] = useState(false);
   const [mapMode, setMapMode] = useState<'fatigue' | 'progression'>('fatigue');
   const [displayName, setDisplayName] = useState('');
-  const [tier, setTier]               = useState('FREE');
+  const [tier, setTier]               = useState('BASIC');
   const [consumed, setConsumed]       = useState({ kcal: 0, protein: 0, carbs: 0, fat: 0, mealsLogged: 0 });
   const [targets, setTargets]         = useState({ kcal: 2000, protein: 150, carbs: 200, fat: 65 });
   const [bio, setBio]                 = useState({ current: 0, weekAgo: 0, goal: 0, sparkline: [] as number[] });
