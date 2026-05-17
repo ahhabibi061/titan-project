@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,27 +12,12 @@ serve(async (req) => {
   }
 
   try {
-    // ── Auth ─────────────────────────────────────────────────────────────────
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
+    if (!anthropicKey) {
+      console.error('[oracle-chat] ANTHROPIC_API_KEY secret is not set');
       return new Response(
-        JSON.stringify({ error: 'unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const supabaseUrl  = Deno.env.get('SUPABASE_URL')!;
-    const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY')!;
-
-    const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'config_error', message: 'ANTHROPIC_API_KEY not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -45,6 +29,8 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log('[oracle-chat] sending', messages.length, 'message(s) to Claude');
 
     // ── Call Claude ──────────────────────────────────────────────────────────
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -64,7 +50,7 @@ serve(async (req) => {
 
     if (!anthropicRes.ok) {
       const errText = await anthropicRes.text();
-      console.error('[oracle-chat] Anthropic error:', errText);
+      console.error('[oracle-chat] Anthropic error', anthropicRes.status, ':', errText);
       return new Response(
         JSON.stringify({ error: 'ai_error', message: 'Oracle unavailable — try again.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -73,6 +59,7 @@ serve(async (req) => {
 
     const data  = await anthropicRes.json();
     const reply = data.content?.map((b: { text?: string }) => b.text ?? '').join('') ?? '';
+    console.log('[oracle-chat] reply length:', reply.length, 'chars');
 
     return new Response(
       JSON.stringify({ reply }),
