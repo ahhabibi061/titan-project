@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
-import { useTodayWorkout, useWeeklyWorkouts, useWeeklySets, useActivityFeed, useWeeklyMuscleVolumes } from '../hooks/useWorkout';
+import { useTodayWorkout, useWeeklyWorkouts, useWeeklySets, useActivityFeed, useWeeklyMuscleVolumes, useUpdateSet } from '../hooks/useWorkout';
 import {
   View,
   Text,
@@ -13,6 +13,10 @@ import {
   Dimensions,
   StatusBar,
   Animated,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -177,6 +181,17 @@ function buildBodyData(volumes: Record<string, number>, maxVol: number, view: 'f
     if (color) {
       result.push({ slug: entry.slug, styles: { fill: color } });
     }
+  }
+  return result;
+}
+
+function buildProgressionBodyData(progressionPcts: Record<string,number>, view: 'front' | 'back'): ExtendedBodyPart[] {
+  const result: ExtendedBodyPart[] = [];
+  for (const entry of SLUG_MAP) {
+    if (!entry.views.includes(view)) continue;
+    const pct = progressionPcts[entry.dataKey] ?? 0;
+    if (pct === 0) continue;
+    result.push({ slug: entry.slug, styles: { fill: pct > 0 ? '#4ade80' : '#f87171' } });
   }
   return result;
 }
@@ -392,10 +407,21 @@ function MuscleMap({ mode, setMode, volumes, maxVol }: {
     ];
   };
 
-  const frontData = injectSelected(buildBodyData(volumes, maxVol, 'front'), 'front');
-  const backData  = injectSelected(buildBodyData(volumes, maxVol, 'back'),  'back');
+  const frontData = injectSelected(
+    mode === 'fatigue'
+      ? buildBodyData(volumes, maxVol, 'front')
+      : buildProgressionBodyData(MUSCLE_DATA.progression, 'front'),
+    'front'
+  );
+  const backData = injectSelected(
+    mode === 'fatigue'
+      ? buildBodyData(volumes, maxVol, 'back')
+      : buildProgressionBodyData(MUSCLE_DATA.progression, 'back'),
+    'back'
+  );
 
   const vol = selected ? (volumes[selected.dataKey] ?? 0) : 0;
+  const progPct = selected ? (MUSCLE_DATA.progression[selected.dataKey] ?? null) : null;
 
   return (
     <View style={s.card}>
@@ -439,22 +465,46 @@ function MuscleMap({ mode, setMode, volumes, maxVol }: {
         <Animated.View style={[s.muscleInfoCard, { opacity: fadeAnim, transform: [{ translateY: slideY }] }]}>
           <View style={s.muscleInfoRow}>
             <Text style={s.muscleInfoName}>{selected.name.toUpperCase()}</Text>
-            <Text style={[s.musclePillText, { color: COLORS.text600 }]}>7d volume</Text>
+            <Text style={[s.musclePillText, { color: COLORS.text600 }]}>{mode === 'fatigue' ? '7d volume' : 'vs last week'}</Text>
           </View>
-          <Text style={s.muscleInfoVol}>{vol > 0 ? vol.toLocaleString() : '0'} kg·reps</Text>
-          <Text style={s.muscleInfoSub}>{vol > 0 ? 'Volume logged in the last 7 days' : 'No volume logged for this muscle in last 7 days'}</Text>
+          {mode === 'fatigue' ? (
+            <>
+              <Text style={s.muscleInfoVol}>{vol > 0 ? vol.toLocaleString() : '0'} kg·reps</Text>
+              <Text style={s.muscleInfoSub}>{vol > 0 ? 'Volume logged in the last 7 days' : 'No volume logged for this muscle in last 7 days'}</Text>
+            </>
+          ) : (
+            <>
+              <Text style={[s.muscleInfoVol, { color: progPct !== null && progPct > 0 ? '#4ade80' : '#f87171' }]}>
+                {progPct !== null ? `${progPct > 0 ? '+' : ''}${progPct.toFixed(1)}%` : '—'}
+              </Text>
+              <Text style={s.muscleInfoSub}>vs last week</Text>
+            </>
+          )}
         </Animated.View>
       )}
 
       <View style={[s.divider, { marginVertical: SPACING.md }]} />
-      <View style={s.legendRow}>
-        {volumeLegend.map(([color, label]) => (
-          <View key={label} style={s.legendItem}>
-            <View style={[s.legendDot, { backgroundColor: color }]} />
-            <Text style={s.legendLabel}>{label}</Text>
+      {mode === 'fatigue' ? (
+        <View style={s.legendRow}>
+          {volumeLegend.map(([color, label]) => (
+            <View key={label} style={s.legendItem}>
+              <View style={[s.legendDot, { backgroundColor: color }]} />
+              <Text style={s.legendLabel}>{label}</Text>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <View style={s.legendRow}>
+          <View style={s.legendItem}>
+            <View style={[s.legendDot, { backgroundColor: '#4ade80' }]} />
+            <Text style={s.legendLabel}>Progressing</Text>
           </View>
-        ))}
-      </View>
+          <View style={s.legendItem}>
+            <View style={[s.legendDot, { backgroundColor: '#f87171' }]} />
+            <Text style={s.legendLabel}>Down</Text>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -463,7 +513,12 @@ function MuscleMap({ mode, setMode, volumes, maxVol }: {
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   const [workoutModalVisible, setWorkoutModalVisible] = useState(false);
+  const [editedSets, setEditedSets] = useState<Record<string, { weight: string; reps: string }>>({});
+  const [savingChanges, setSavingChanges] = useState(false);
+  const [savedMsg, setSavedMsg] = useState(false);
+  const { mutateAsync: updateSet } = useUpdateSet();
   const [mapMode, setMapMode] = useState<'fatigue' | 'progression'>('fatigue');
   const [displayName, setDisplayName] = useState('');
   const [tier, setTier]               = useState('BASIC');
@@ -582,6 +637,29 @@ export default function DashboardScreen() {
       // Weekly sets count is handled by useWeeklySets() hook above
     })();
   }, []);
+
+  useEffect(() => {
+    if (!workoutModalVisible || !todayWorkout) return;
+    const initial: Record<string, { weight: string; reps: string }> = {};
+    for (const we of (todayWorkout as any).workout_exercises ?? []) {
+      for (const s of (we.sets ?? [])) {
+        if (s.id) initial[s.id] = { weight: String(s.weight_kg ?? 0), reps: String(s.reps ?? 0) };
+      }
+    }
+    setEditedSets(initial);
+  }, [workoutModalVisible]);
+
+  async function handleSaveChanges() {
+    setSavingChanges(true);
+    for (const [setId, vals] of Object.entries(editedSets)) {
+      try {
+        await updateSet({ setId, weightKg: Number(vals.weight) || 0, reps: Number(vals.reps) || 0 });
+      } catch {}
+    }
+    setSavingChanges(false);
+    setSavedMsg(true);
+    setTimeout(() => { setSavedMsg(false); setWorkoutModalVisible(false); }, 1500);
+  }
 
   const coach = null; // populated once Oracle module is wired up
 
@@ -818,26 +896,83 @@ export default function DashboardScreen() {
 
       {/* ── WORKOUT REVIEW MODAL ────────────────────────────────────── */}
       <Modal visible={workoutModalVisible} animationType="slide" transparent onRequestClose={() => setWorkoutModalVisible(false)}>
-        <View style={s.modalOverlay}>
-          <View style={[s.modalSheet, { paddingBottom: insets.bottom + SPACING.lg }]}>
-            <View style={s.modalHandle} />
-            <Text style={s.modalTitle}>{todayWorkout?.name ?? ''}</Text>
-            <Text style={[s.metaText, { marginBottom: SPACING.lg }]}>
-              {(todayWorkout?.workout_exercises ?? []).length} exercises
-              {todayWorkout?.duration_seconds ? ` · ${Math.round(todayWorkout.duration_seconds / 60)} min` : ''}
-            </Text>
-            {(todayWorkout?.workout_exercises ?? []).sort((a: any, b: any) => a.position - b.position).map((we: any, i: number) => (
-              <View key={we.id} style={s.exerciseRow}>
-                <Text style={s.exerciseNum}>{String(i + 1).padStart(2, '0')}</Text>
-                <Text style={s.exerciseName}>{we.notes}</Text>
-                <Text style={s.exerciseSets}>{(we.sets ?? []).length} × sets</Text>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={s.modalOverlay}>
+            <View style={[s.modalSheet, { paddingBottom: 0, height: '90%' }]}>
+              {/* Header */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.xs }}>
+                <View style={{ flex: 1, marginRight: SPACING.md }}>
+                  <Text style={s.modalTitle}>{todayWorkout?.name ?? ''}</Text>
+                  <Text style={[s.metaText, { marginTop: 4 }]}>
+                    {new Date(todayWorkout?.started_at ?? '').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                    {todayWorkout?.duration_seconds ? ` · ${Math.round(todayWorkout.duration_seconds / 60)}m` : ''}
+                    {todayWorkout?.total_volume_kg ? ` · ${Math.round(todayWorkout.total_volume_kg).toLocaleString()} kg·reps` : ''}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setWorkoutModalVisible(false)} style={{ paddingTop: 4 }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase' }}>CLOSE</Text>
+                </TouchableOpacity>
               </View>
-            ))}
-            <TouchableOpacity style={[s.secondaryBtn, { marginTop: SPACING.xl }]} onPress={() => setWorkoutModalVisible(false)}>
-              <Text style={s.secondaryBtnText}>Close</Text>
-            </TouchableOpacity>
+
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
+                {(todayWorkout?.workout_exercises ?? []).sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0)).map((we: any, i: number) => (
+                  <View key={we.id} style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 12 }}>
+                    <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+                      <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 24, paddingTop: 2 }}>{(we.notes ?? '').toUpperCase()}</Text>
+                    </View>
+                    {/* Column headers */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(28,25,23,0.5)', gap: 8 }}>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 24, textAlign: 'center', textTransform: 'uppercase' }}>SET</Text>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 62, textAlign: 'center', textTransform: 'uppercase' }}>KG</Text>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 62, textAlign: 'center', textTransform: 'uppercase' }}>REPS</Text>
+                    </View>
+                    {(we.sets ?? []).sort((a: any, b: any) => a.set_number - b.set_number).map((s: any, si: number) => (
+                      <View key={s.id ?? si} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 4, gap: 8, borderTopWidth: 1, borderTopColor: COLORS.borderLight, minHeight: 44 }}>
+                        <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text600, width: 24, textAlign: 'center' }}>{si + 1}</Text>
+                        <TextInput
+                          style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, height: 38, width: 62, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, lineHeight: 20, paddingTop: 2 }}
+                          value={s.id && editedSets[s.id] ? editedSets[s.id].weight : String(s.weight_kg ?? 0)}
+                          onChangeText={v => { if (s.id) setEditedSets(prev => ({ ...prev, [s.id]: { ...prev[s.id], weight: v } })); }}
+                          keyboardType="decimal-pad"
+                          placeholder="0"
+                          placeholderTextColor={COLORS.text700}
+                        />
+                        <TextInput
+                          style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, height: 38, width: 62, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, lineHeight: 20, paddingTop: 2 }}
+                          value={s.id && editedSets[s.id] ? editedSets[s.id].reps : String(s.reps ?? 0)}
+                          onChangeText={v => { if (s.id) setEditedSets(prev => ({ ...prev, [s.id]: { ...prev[s.id], reps: v } })); }}
+                          keyboardType="number-pad"
+                          placeholder="0"
+                          placeholderTextColor={COLORS.text700}
+                        />
+                      </View>
+                    ))}
+                    <View style={{ paddingVertical: 11, borderTopWidth: 1, borderTopColor: COLORS.borderLight, alignItems: 'center' }}>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 2 }}>+ ADD SET</Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+
+              {/* Footer */}
+              <View style={{ paddingTop: SPACING.md, paddingBottom: insets.bottom + SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.border, gap: SPACING.sm }}>
+                <TouchableOpacity
+                  onPress={handleSaveChanges}
+                  disabled={savingChanges}
+                  style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent, opacity: savingChanges ? 0.7 : 1 }}>
+                  {savingChanges
+                    ? <ActivityIndicator color={COLORS.bg} />
+                    : <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>{savedMsg ? 'SAVED ✓' : 'SAVE CHANGES'}</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => { setWorkoutModalVisible(false); navigation.navigate('Forge'); }}
+                  style={{ paddingVertical: 10, alignItems: 'center' }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text600 }}>Start New Session →</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );

@@ -226,7 +226,7 @@ export function useTodayWorkout() {
           duration_seconds, total_volume_kg,
           workout_exercises (
             id, notes,
-            sets (set_number, weight_kg, reps, completed)
+            sets (id, set_number, weight_kg, reps, completed)
           )
         `)
         .eq('user_id', userId)
@@ -310,6 +310,20 @@ export function useActivityFeed() {
       return data ?? [];
     },
     staleTime: 10_000,
+  });
+}
+
+// ── useUpdateSet ──────────────────────────────────────────────────────────────
+export function useUpdateSet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: { setId: string; weightKg: number; reps: number }) => {
+      const { error } = await supabase.from('sets')
+        .update({ weight_kg: params.weightKg, reps: params.reps })
+        .eq('id', params.setId);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['today-workout'] }),
   });
 }
 

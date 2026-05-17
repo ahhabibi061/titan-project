@@ -7,13 +7,13 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import Body, { ExtendedBodyPart, Slug } from 'react-native-body-highlighter';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS } from '../constants/theme';
 import { MUSCLES, EXERCISE_LIBRARY } from '../constants/exercises';
 import {
-  useStartWorkout, useAddWorkoutExercise, useLogSet, useFinishWorkout, useWorkoutHistory,
+  useStartWorkout, useAddWorkoutExercise, useLogSet, useFinishWorkout, useWorkoutHistory, useTodayWorkout,
 } from '../hooks/useWorkout';
 
 // ─── Domain ──────────────────────────────────────────────────────────────────
@@ -105,79 +105,52 @@ function fmtPreset(secs: number) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-// ─── SVG Muscle Paths (viewBox 220×460) ──────────────────────────────────────
-const FRONT_PATHS: Record<string, string> = {
-  chest:       'M 76,96 Q 90,88 108,90 L 108,138 Q 96,144 84,140 Q 76,134 74,124 Z M 144,96 Q 130,88 112,90 L 112,138 Q 124,144 136,140 Q 144,134 146,124 Z',
-  front_delts: 'M 64,86 Q 56,88 52,102 Q 50,116 56,124 Q 66,124 74,118 Q 76,104 74,94 Q 70,86 64,86 Z M 156,86 Q 164,88 168,102 Q 170,116 164,124 Q 154,124 146,118 Q 144,104 146,94 Q 150,86 156,86 Z',
-  side_delts:  'M 50,100 Q 42,104 40,118 Q 40,128 46,134 Q 52,132 56,124 Q 50,116 52,102 Z M 170,100 Q 178,104 180,118 Q 180,128 174,134 Q 168,132 164,124 Q 170,116 168,102 Z',
-  traps:       'M 102,68 Q 98,76 100,84 Q 106,86 110,84 L 110,68 Z M 118,68 Q 122,76 120,84 Q 114,86 110,84 L 110,68 Z',
-  biceps:      'M 46,128 Q 38,134 38,158 Q 42,176 50,178 Q 56,176 56,156 Q 56,138 52,130 Z M 174,128 Q 182,134 182,158 Q 178,176 170,178 Q 164,176 164,156 Q 164,138 168,130 Z',
-  forearms:    'M 38,182 Q 32,196 32,222 Q 36,238 44,236 Q 50,234 52,218 Q 52,200 50,184 Z M 182,182 Q 188,196 188,222 Q 184,238 176,236 Q 170,234 168,218 Q 168,200 170,184 Z',
-  abs:         'M 96,144 L 124,144 L 124,160 L 96,160 Z M 96,164 L 124,164 L 124,180 L 96,180 Z M 96,184 L 124,184 L 124,200 L 96,200 Z M 96,204 L 124,204 L 124,220 L 96,220 Z M 96,224 L 124,224 L 124,238 L 96,238 Z',
-  obliques:    'M 78,150 Q 76,180 86,224 L 96,222 L 96,148 Q 86,146 78,150 Z M 142,150 Q 144,180 134,224 L 124,222 L 124,148 Q 134,146 142,150 Z',
-  quads:       'M 78,250 Q 70,290 76,348 L 104,348 L 104,250 Q 90,246 78,250 Z M 142,250 Q 150,290 144,348 L 116,348 L 116,250 Q 130,246 142,250 Z',
-  calves:      'M 84,388 Q 80,408 84,438 L 102,438 L 102,388 Z M 136,388 Q 140,408 136,438 L 118,438 L 118,388 Z',
-};
-const BACK_PATHS: Record<string, string> = {
-  traps:       'M 110,72 L 90,86 Q 84,108 92,124 L 110,118 L 128,124 Q 136,108 130,86 Z',
-  rear_delts:  'M 64,90 Q 56,96 52,110 Q 52,124 60,128 Q 70,126 76,118 Q 78,104 74,94 Z M 156,90 Q 164,96 168,110 Q 168,124 160,128 Q 150,126 144,118 Q 142,104 146,94 Z',
-  triceps:     'M 46,132 Q 40,144 40,166 Q 44,180 52,180 Q 58,178 58,158 Q 58,140 52,132 Z M 174,132 Q 180,144 180,166 Q 176,180 168,180 Q 162,178 162,158 Q 162,140 168,132 Z',
-  forearms:    'M 38,184 Q 32,200 32,224 Q 36,238 44,236 Q 50,234 52,218 Q 52,200 50,186 Z M 182,184 Q 188,200 188,224 Q 184,238 176,236 Q 170,234 168,218 Q 168,200 170,186 Z',
-  lats:        'M 76,118 Q 60,150 64,200 L 102,206 L 102,134 Q 88,124 76,118 Z M 144,118 Q 160,150 156,200 L 118,206 L 118,134 Q 132,124 144,118 Z',
-  lower_back:  'M 100,206 L 120,206 L 122,244 Q 110,248 98,244 Z',
-  glutes:      'M 86,250 Q 76,272 88,300 Q 102,304 108,294 L 108,254 Q 96,248 86,250 Z M 134,250 Q 144,272 132,300 Q 118,304 112,294 L 112,254 Q 124,248 134,250 Z',
-  hamstrings:  'M 80,300 Q 72,340 78,386 L 104,386 L 104,300 Q 92,296 80,300 Z M 140,300 Q 148,340 142,386 L 116,386 L 116,300 Q 128,296 140,300 Z',
-  calves:      'M 76,388 Q 72,416 80,442 L 104,442 L 104,388 Z M 144,388 Q 148,416 140,442 L 116,442 L 116,388 Z',
-};
+// ─── Forge Body Map ───────────────────────────────────────────────────────────
+const FORGE_SLUG_MAP: { slug: Slug; dataKey: string; views: ('front'|'back')[] }[] = [
+  { slug: 'chest',      dataKey: 'chest',       views: ['front']         },
+  { slug: 'biceps',     dataKey: 'biceps',       views: ['front']         },
+  { slug: 'quadriceps', dataKey: 'quads',        views: ['front']         },
+  { slug: 'upper-back', dataKey: 'lats',         views: ['back']          },
+  { slug: 'lower-back', dataKey: 'lower_back',   views: ['back']          },
+  { slug: 'hamstring',  dataKey: 'hamstrings',   views: ['back']          },
+  { slug: 'gluteal',    dataKey: 'glutes',       views: ['back']          },
+  { slug: 'deltoids',   dataKey: 'front_delts',  views: ['front']         },
+  { slug: 'deltoids',   dataKey: 'rear_delts',   views: ['back']          },
+  { slug: 'triceps',    dataKey: 'triceps',      views: ['front', 'back'] },
+  { slug: 'calves',     dataKey: 'calves',       views: ['front', 'back'] },
+  { slug: 'trapezius',  dataKey: 'traps',        views: ['front', 'back'] },
+];
 
-// ─── Muscle Heatmap ───────────────────────────────────────────────────────────
-function MuscleHeatmap({ volumes, max }: { volumes: Record<string,number>; max: number }) {
-  const [selected, setSelected] = useState<{ key: string; vol: number } | null>(null);
-
-  function renderPaths(paths: Record<string, string>) {
-    return Object.entries(paths).map(([key, d]) => (
-      <Path key={key} d={d}
-        fill={volumeToFill(volumes[key] || 0, max)}
-        stroke="rgba(255,255,255,0.05)" strokeWidth={0.5}
-        onPress={() => setSelected(s => s?.key === key ? null : { key, vol: volumes[key] || 0 })}
-      />
-    ));
+function buildForgeBodyData(volumes: Record<string,number>, maxVol: number, view: 'front'|'back'): ExtendedBodyPart[] {
+  const result: ExtendedBodyPart[] = [];
+  for (const entry of FORGE_SLUG_MAP) {
+    if (!entry.views.includes(view)) continue;
+    const color = volumeToFill(volumes[entry.dataKey] ?? 0, maxVol);
+    if (color && color !== 'rgba(255,255,255,0.025)') {
+      result.push({ slug: entry.slug, styles: { fill: color } });
+    }
   }
+  return result;
+}
 
+function ForgeBodyMap({ volumes, maxVol }: { volumes: Record<string,number>; maxVol: number }) {
   return (
-    <View>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {[{ label: 'ANTERIOR', paths: FRONT_PATHS }, { label: 'POSTERIOR', paths: BACK_PATHS }].map(side => (
-          <View key={side.label} style={{ flex: 1 }}>
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 2, textAlign: 'center', marginBottom: 4 }}>{side.label}</Text>
-            <Svg viewBox="0 0 220 460" style={{ width: '100%', aspectRatio: 220 / 460 }}>
-              <Circle cx={110} cy={44} r={22} fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)" strokeWidth={1} />
-              <Rect x={100} y={62} width={20} height={14} fill="rgba(255,255,255,0.04)" />
-              {renderPaths(side.paths)}
-            </Svg>
-          </View>
-        ))}
-      </View>
-      {selected && (
-        <View style={{ marginTop: 8, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: COLORS.accentBorder, backgroundColor: COLORS.bg, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1 }}>{MUSCLES[selected.key]}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-            <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.orange400, lineHeight: 24, paddingTop: 2 }}>{fmt0(selected.vol)}</Text>
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600 }}>kg·reps</Text>
-          </View>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start' }}>
+      {(['front', 'back'] as const).map(side => (
+        <View key={side} style={{ alignItems: 'center' }}>
+          <Body
+            data={buildForgeBodyData(volumes, maxVol, side)}
+            side={side}
+            gender="male"
+            scale={0.65}
+            border="none"
+            defaultFill="#1c1917"
+          />
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>
+            {side === 'front' ? 'ANTERIOR' : 'POSTERIOR'}
+          </Text>
         </View>
-      )}
-      <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600 }}>Volume</Text>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600 }}>0 → {fmt0(max)}</Text>
-        </View>
-        <View style={{ height: 6, flexDirection: 'row' }}>
-          {(['rgba(44,36,30,0.8)', 'rgb(98,42,18)', 'rgb(186,74,28)', 'rgb(240,110,38)'] as const).map((c, i) => (
-            <View key={i} style={{ flex: 1, backgroundColor: c }} />
-          ))}
-        </View>
-      </View>
+      ))}
     </View>
   );
 }
@@ -561,11 +534,188 @@ function Toast({ message }: { message: string }) {
   );
 }
 
+// ─── Templates ───────────────────────────────────────────────────────────────
+interface Template {
+  name: string;
+  estimatedMins: number;
+  exercises: { exerciseId: string; setsTarget: number }[];
+}
+
+const TEMPLATES: Template[] = [
+  {
+    name: 'PPL Push',
+    estimatedMins: 55,
+    exercises: [
+      { exerciseId: 'bench',           setsTarget: 4 },
+      { exerciseId: 'incline_db',      setsTarget: 3 },
+      { exerciseId: 'cable_fly',       setsTarget: 3 },
+      { exerciseId: 'ohp',             setsTarget: 3 },
+      { exerciseId: 'lateral_raise',   setsTarget: 3 },
+      { exerciseId: 'tricep_pushdown', setsTarget: 3 },
+    ],
+  },
+  {
+    name: 'PPL Pull',
+    estimatedMins: 55,
+    exercises: [
+      { exerciseId: 'pullup',       setsTarget: 4 },
+      { exerciseId: 'row',          setsTarget: 4 },
+      { exerciseId: 'lat_pulldown', setsTarget: 3 },
+      { exerciseId: 'face_pull',    setsTarget: 3 },
+      { exerciseId: 'curl',         setsTarget: 3 },
+      { exerciseId: 'hammer_curl',  setsTarget: 3 },
+    ],
+  },
+  {
+    name: 'PPL Legs',
+    estimatedMins: 60,
+    exercises: [
+      { exerciseId: 'squat',      setsTarget: 4 },
+      { exerciseId: 'rdl',        setsTarget: 3 },
+      { exerciseId: 'leg_press',  setsTarget: 3 },
+      { exerciseId: 'leg_curl',   setsTarget: 3 },
+      { exerciseId: 'calf_raise', setsTarget: 4 },
+    ],
+  },
+  {
+    name: 'Upper A',
+    estimatedMins: 60,
+    exercises: [
+      { exerciseId: 'bench',           setsTarget: 4 },
+      { exerciseId: 'row',             setsTarget: 4 },
+      { exerciseId: 'ohp',             setsTarget: 3 },
+      { exerciseId: 'lat_pulldown',    setsTarget: 3 },
+      { exerciseId: 'tricep_pushdown', setsTarget: 3 },
+      { exerciseId: 'curl',            setsTarget: 3 },
+    ],
+  },
+  {
+    name: 'Full Body',
+    estimatedMins: 50,
+    exercises: [
+      { exerciseId: 'squat', setsTarget: 3 },
+      { exerciseId: 'bench', setsTarget: 3 },
+      { exerciseId: 'row',   setsTarget: 3 },
+      { exerciseId: 'ohp',   setsTarget: 2 },
+      { exerciseId: 'rdl',   setsTarget: 3 },
+      { exerciseId: 'curl',  setsTarget: 2 },
+    ],
+  },
+];
+
+// ─── Session Selector ─────────────────────────────────────────────────────────
+const SELECTOR_TABS = ['New Session', 'Templates', 'Past Session'] as const;
+type SelectorTab = typeof SELECTOR_TABS[number];
+
+function SessionSelector({
+  historyData,
+  todayWorkout,
+  onSelectTemplate,
+  onRepeatSession,
+  onNewSession,
+}: {
+  historyData: any[] | undefined;
+  todayWorkout: any;
+  onSelectTemplate: (exercises: { exerciseId: string; setsTarget: number }[]) => void;
+  onRepeatSession: (workout: any) => void;
+  onNewSession: () => void;
+}) {
+  const [tab, setTab] = useState<SelectorTab>('New Session');
+
+  return (
+    <View style={{ flex: 1 }}>
+      {todayWorkout?.completed && (
+        <View style={{ marginHorizontal: 12, marginTop: 12, padding: 12, borderWidth: 1, borderColor: COLORS.accentBorder, backgroundColor: COLORS.accentMuted }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.orange400, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 4 }}>Already trained today</Text>
+          <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, lineHeight: 20, paddingTop: 2 }}>{todayWorkout.name}</Text>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, marginTop: 2 }}>
+            {fmt0(todayWorkout.total_volume_kg ?? 0)} kg·reps
+            {todayWorkout.duration_seconds ? ` · ${Math.round(todayWorkout.duration_seconds / 60)}m` : ''}
+          </Text>
+        </View>
+      )}
+
+      <View style={{ flexDirection: 'row', paddingHorizontal: 12, paddingTop: 16, gap: 6 }}>
+        {SELECTOR_TABS.map(t => (
+          <TouchableOpacity key={t} onPress={() => setTab(t)}
+            style={{ flex: 1, paddingVertical: 8, borderWidth: 1, alignItems: 'center',
+              borderColor: tab === t ? COLORS.accent : COLORS.border,
+              backgroundColor: tab === t ? COLORS.accentMuted : 'transparent' }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: tab === t ? COLORS.accent : COLORS.text600, textTransform: 'uppercase', letterSpacing: 0.5 }} numberOfLines={1}>
+              {t}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+        {tab === 'New Session' && (
+          <View style={{ paddingTop: 24, alignItems: 'center' }}>
+            <Text style={{ fontFamily: FONTS.anton, fontSize: 22, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Blank Session</Text>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text700, textAlign: 'center', marginBottom: 24 }}>Build your workout from scratch.</Text>
+            <TouchableOpacity onPress={onNewSession}
+              style={{ paddingVertical: 14, paddingHorizontal: 32, borderWidth: 1, borderColor: COLORS.accent, backgroundColor: COLORS.accentMuted }}>
+              <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.accent, letterSpacing: 2 }}>START BLANK</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {tab === 'Templates' && TEMPLATES.map((tmpl, i) => {
+          const exerciseNames = tmpl.exercises.map(e => EXERCISE_LIBRARY.find(ex => ex.id === e.exerciseId)?.name ?? e.exerciseId);
+          return (
+            <TouchableOpacity key={i} onPress={() => onSelectTemplate(tmpl.exercises)}
+              style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 10, padding: 14 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 24, paddingTop: 2 }}>{tmpl.name.toUpperCase()}</Text>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>~{tmpl.estimatedMins}m</Text>
+              </View>
+              {exerciseNames.slice(0, 4).map((name, j) => (
+                <Text key={j} style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, marginBottom: 2 }}>
+                  {tmpl.exercises[j].setsTarget}× {name}
+                </Text>
+              ))}
+              {exerciseNames.length > 4 && (
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, marginTop: 2 }}>+{exerciseNames.length - 4} more</Text>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+
+        {tab === 'Past Session' && (
+          historyData && historyData.length > 0 ? historyData.map((w: any, i: number) => {
+            const date = w.finished_at ? new Date(w.finished_at).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+            const exercises = (w.workout_exercises ?? []);
+            return (
+              <TouchableOpacity key={w.id} onPress={() => onRepeatSession(w)}
+                style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 10, padding: 14 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                  <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, lineHeight: 20, paddingTop: 2, flex: 1, marginRight: 8 }}>{w.name || 'Workout'}</Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>{date}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 16 }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.orange400 }}>{fmt0(w.total_volume_kg ?? 0)} kg·reps</Text>
+                  {w.duration_seconds && <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>{Math.round(w.duration_seconds / 60)}m</Text>}
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>{exercises.length} ex</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          }) : (
+            <View style={{ paddingTop: 40, alignItems: 'center' }}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700, textTransform: 'uppercase' }}>No past sessions yet.</Text>
+            </View>
+          )
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ForgeScreen() {
   const navigation = useNavigation<any>();
 
   const [workout, setWorkout]             = useState<WorkoutEntry[]>([]);
+  const [showSelector, setShowSelector]   = useState(true);
   const [elapsed, setElapsed]             = useState(0);
   const [sessionStarted, setStarted]      = useState(false);
   const [workoutId, setWorkoutId]         = useState<string | null>(null);
@@ -586,6 +736,7 @@ export default function ForgeScreen() {
   const { mutateAsync: logSet }                              = useLogSet();
   const { mutateAsync: finishWorkout, isPending: finishing  } = useFinishWorkout();
   const { data: historyData }                                = useWorkoutHistory();
+  const { data: todayWorkout }                               = useTodayWorkout();
 
   // Build last-session map: exercise name (lower) → { sets, totalVol }
   const lastSessionMap = useMemo(() => {
@@ -733,6 +884,49 @@ export default function ForgeScreen() {
     setStarted(false);
     setWorkoutId(null);
     setWeIdMap(new Map());
+    setShowSelector(true);
+  }
+
+  function handleNewSession() {
+    setShowSelector(false);
+  }
+
+  function handleSelectTemplate(exercises: { exerciseId: string; setsTarget: number }[]) {
+    const newEntries: WorkoutEntry[] = exercises.map((e, idx) => {
+      const newId = `we-${Date.now()}-${idx}`;
+      return {
+        id: newId,
+        exerciseId: e.exerciseId,
+        sets: Array.from({ length: e.setsTarget }, (_, i) => ({
+          id: `s-${Date.now()}-${idx}-${i}`,
+          weight: 0,
+          reps: 8,
+        })),
+      };
+    });
+    setWorkout(newEntries);
+    setShowSelector(false);
+  }
+
+  function handleRepeatSession(pastWorkout: any) {
+    const newEntries: WorkoutEntry[] = ((pastWorkout.workout_exercises ?? []) as any[]).map((we: any, idx: number) => {
+      const ex = EXERCISE_LIBRARY.find(e => e.name.toLowerCase().trim() === (we.notes ?? '').toLowerCase().trim());
+      if (!ex) return null;
+      const pastSets = ((we.sets ?? []) as any[]).sort((a: any, b: any) => a.set_number - b.set_number);
+      return {
+        id: `we-${Date.now()}-${idx}`,
+        exerciseId: ex.id,
+        sets: pastSets.length > 0
+          ? pastSets.map((s: any, i: number) => ({
+              id: `s-${Date.now()}-${idx}-${i}`,
+              weight: s.weight_kg ?? 0,
+              reps: s.reps ?? 8,
+            }))
+          : [{ id: `s-${Date.now()}-${idx}-0`, weight: 0, reps: 8 }],
+      };
+    }).filter(Boolean) as WorkoutEntry[];
+    setWorkout(newEntries);
+    setShowSelector(false);
   }
 
   async function handleConfirmFinish() {
@@ -831,63 +1025,169 @@ export default function ForgeScreen() {
           <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, marginTop: 4 }}>{Math.round(progressPct * 100)}% with values</Text>
         </View>
 
-        {/* Exercise list */}
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 14, paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
-          {workout.length === 0 && (
-            <View style={{ alignItems: 'center', paddingTop: 48, paddingBottom: 24 }}>
-              <Text style={{ fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>No exercises yet</Text>
-              <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text700, textAlign: 'center' }}>Tap + ADD EXERCISE below to build your session</Text>
-            </View>
-          )}
-
-          {workout.map((we, idx) => {
-            const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
-            const lastSession = ex ? lastSessionMap.get(ex.name.toLowerCase().trim()) : undefined;
-            return (
-              <ExerciseCard key={we.id} we={we} index={idx}
-                lastSession={lastSession}
-                onUpdate={updated => updateExercise(we.id, updated)}
-                onRemove={() => setWorkout(w => w.filter(x => x.id !== we.id))}
-                onAddSet={() => addSet(we.id)}
-              />
-            );
-          })}
-
-          {/* Muscle Heatmap */}
-          {workout.length > 0 && (
-            <View style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', padding: 14, marginBottom: 16 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
-                <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, lineHeight: 20, paddingTop: 2 }}>MUSCLE MAP</Text>
-                <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700 }}>live · tap to detail</Text>
+        {/* Main content area */}
+        {showSelector && !sessionStarted ? (
+          <SessionSelector
+            historyData={historyData}
+            todayWorkout={todayWorkout}
+            onSelectTemplate={handleSelectTemplate}
+            onRepeatSession={handleRepeatSession}
+            onNewSession={handleNewSession}
+          />
+        ) : (
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 14, paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
+            {workout.length === 0 && sessionStarted && (
+              <View style={{ alignItems: 'center', paddingTop: 48, paddingBottom: 24 }}>
+                <Text style={{ fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>No exercises yet</Text>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text700, textAlign: 'center' }}>Tap + ADD EXERCISE below</Text>
               </View>
-              <MuscleHeatmap volumes={volumes} max={maxVol} />
-            </View>
-          )}
-        </ScrollView>
+            )}
+
+            {workout.map((we, idx) => {
+              const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
+              const lastSession = ex ? lastSessionMap.get(ex.name.toLowerCase().trim()) : undefined;
+              return (
+                <ExerciseCard key={we.id} we={we} index={idx}
+                  lastSession={lastSession}
+                  onUpdate={updated => updateExercise(we.id, updated)}
+                  onRemove={() => setWorkout(w => w.filter(x => x.id !== we.id))}
+                  onAddSet={() => addSet(we.id)}
+                />
+              );
+            })}
+
+            {/* Muscle Map */}
+            {workout.length > 0 && (
+              <View style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', padding: 14, marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+                  <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, lineHeight: 20, paddingTop: 2 }}>MUSCLE MAP</Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700 }}>live</Text>
+                </View>
+                <ForgeBodyMap volumes={volumes} maxVol={maxVol} />
+                <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+                  <View style={{ height: 6, flexDirection: 'row' }}>
+                    {(['rgba(44,36,30,0.8)', 'rgb(98,42,18)', 'rgb(186,74,28)', 'rgb(240,110,38)'] as const).map((c, i) => (
+                      <View key={i} style={{ flex: 1, backgroundColor: c }} />
+                    ))}
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Volume Breakdown */}
+            {workout.length > 0 && (
+              <View style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+                  <Text style={{ fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text100, lineHeight: 26, paddingTop: 2 }}>VOLUME BREAKDOWN</Text>
+                </View>
+                <View style={{ flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: 'rgba(28,25,23,0.5)' }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, flex: 1, textTransform: 'uppercase' }}>EXERCISE</Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 40, textAlign: 'center', textTransform: 'uppercase' }}>SETS</Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 60, textAlign: 'right', textTransform: 'uppercase' }}>KG·REPS</Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 48, textAlign: 'right', textTransform: 'uppercase' }}>Δ</Text>
+                </View>
+                {workout.map((we, i) => {
+                  const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
+                  if (!ex) return null;
+                  const vol = exerciseVolume(we);
+                  const lastSession = lastSessionMap.get(ex.name.toLowerCase().trim());
+                  const delta = lastSession && lastSession.totalVol > 0
+                    ? ((vol - lastSession.totalVol) / lastSession.totalVol) * 100
+                    : null;
+                  const deltaColor = delta === null ? COLORS.text600 : delta > 0 ? '#4ade80' : '#f87171';
+                  const deltaStr = delta === null ? '—' : `${delta > 0 ? '+' : ''}${Math.round(delta)}%`;
+                  return (
+                    <View key={we.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.borderLight }}>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text300, flex: 1 }} numberOfLines={1}>{ex.name}</Text>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, width: 40, textAlign: 'center' }}>{we.sets.length}</Text>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.orange400, width: 60, textAlign: 'right' }}>{fmt0(vol)}</Text>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: deltaColor, width: 48, textAlign: 'right' }}>{deltaStr}</Text>
+                    </View>
+                  );
+                })}
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: 'rgba(28,25,23,0.5)' }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, flex: 1, textTransform: 'uppercase', letterSpacing: 1 }}>TOTAL</Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, width: 40, textAlign: 'center' }}>{totalSets}</Text>
+                  <Text style={{ fontFamily: FONTS.anton, fontSize: 14, color: COLORS.orange400, width: 60, textAlign: 'right', lineHeight: 18, paddingTop: 2 }}>{fmt0(totalVolume)}</Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700, width: 48, textAlign: 'right' }}>—</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Progressive Overload */}
+            {workout.length > 0 && (
+              <View style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 16 }}>
+                <View style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+                  <Text style={{ fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text100, lineHeight: 26, paddingTop: 2 }}>PROGRESSIVE OVERLOAD</Text>
+                </View>
+                <View style={{ flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: 'rgba(28,25,23,0.5)' }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, flex: 1, textTransform: 'uppercase' }}>EXERCISE</Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 64, textAlign: 'center', textTransform: 'uppercase' }}>LAST TOP SET</Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 64, textAlign: 'center', textTransform: 'uppercase' }}>TODAY TOP</Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 48, textAlign: 'center', textTransform: 'uppercase' }}>STATUS</Text>
+                </View>
+                {workout.map(we => {
+                  const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
+                  if (!ex) return null;
+                  const lastSess = lastSessionMap.get(ex.name.toLowerCase().trim());
+                  const lastTopVol = lastSess ? Math.max(0, ...lastSess.sets.map(s => s.weight * s.reps)) : 0;
+                  const lastTopSet = lastSess?.sets.reduce((best, s) => s.weight * s.reps > best.weight * best.reps ? s : best, { weight: 0, reps: 0 });
+                  const todaySets = we.sets.filter(s => Number(s.weight) > 0 && Number(s.reps) > 0);
+                  const todayTopVol = todaySets.length > 0 ? Math.max(0, ...todaySets.map(s => Number(s.weight) * Number(s.reps))) : 0;
+                  const todayTopSet = todaySets.reduce((best, s) => Number(s.weight) * Number(s.reps) > Number(best.weight) * Number(best.reps) ? s : best, { weight: 0, reps: 0 } as any);
+
+                  let statusLabel: string;
+                  let statusColor: string;
+                  if (!lastSess) { statusLabel = 'FIRST'; statusColor = COLORS.accent; }
+                  else if (todaySets.length === 0) { statusLabel = '—'; statusColor = COLORS.text700; }
+                  else if (todayTopVol > lastTopVol * 1.001) { statusLabel = '↑ UP'; statusColor = '#4ade80'; }
+                  else if (todayTopVol < lastTopVol * 0.999) { statusLabel = '↓ DOWN'; statusColor = '#f87171'; }
+                  else { statusLabel = '→ HOLD'; statusColor = COLORS.text500; }
+
+                  const lastStr = lastTopSet && lastTopSet.weight > 0 ? `${lastTopSet.weight}×${lastTopSet.reps}` : '—';
+                  const todayStr = todaySets.length > 0 && Number(todayTopSet.weight) > 0 ? `${todayTopSet.weight}×${todayTopSet.reps}` : '—';
+
+                  return (
+                    <View key={we.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.borderLight }}>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text300, flex: 1 }} numberOfLines={1}>{ex.name}</Text>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, width: 64, textAlign: 'center' }}>{lastStr}</Text>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text100, width: 64, textAlign: 'center' }}>{todayStr}</Text>
+                      <View style={{ width: 48, alignItems: 'center' }}>
+                        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: statusColor }}>{statusLabel}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </ScrollView>
+        )}
 
         {/* Bottom buttons */}
-        <View style={{ paddingHorizontal: 12, paddingBottom: 12, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 8 }}>
-          {sessionStarted && (
-            <TouchableOpacity onPress={() => setShowAddSheet(true)}
-              style={{ paddingVertical: 13, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(87,83,78,0.5)', alignItems: 'center' }}>
-              <Text style={{ fontFamily: FONTS.anton, fontSize: 14, color: COLORS.text600, letterSpacing: 1 }}>+ ADD EXERCISE</Text>
-            </TouchableOpacity>
-          )}
+        {(!showSelector || sessionStarted) && (
+          <View style={{ paddingHorizontal: 12, paddingBottom: 12, paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 8 }}>
+            {(!showSelector || sessionStarted) && (
+              <TouchableOpacity onPress={() => setShowAddSheet(true)}
+                style={{ paddingVertical: 13, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(87,83,78,0.5)', alignItems: 'center' }}>
+                <Text style={{ fontFamily: FONTS.anton, fontSize: 14, color: COLORS.text600, letterSpacing: 1 }}>+ ADD EXERCISE</Text>
+              </TouchableOpacity>
+            )}
 
-          {sessionStarted ? (
-            <TouchableOpacity onPress={handleFinishTap}
-              style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent }}>
-              <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>FINISH WORKOUT</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity onPress={handleStartSession} disabled={starting}
-              style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent, opacity: starting ? 0.7 : 1 }}>
-              {starting
-                ? <ActivityIndicator color={COLORS.bg} />
-                : <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>START SESSION</Text>}
-            </TouchableOpacity>
-          )}
-        </View>
+            {sessionStarted ? (
+              <TouchableOpacity onPress={handleFinishTap}
+                style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent }}>
+                <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>FINISH WORKOUT</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity onPress={handleStartSession} disabled={starting}
+                style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent, opacity: starting ? 0.7 : 1 }}>
+                {starting
+                  ? <ActivityIndicator color={COLORS.bg} />
+                  : <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>START SESSION</Text>}
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
       </SafeAreaView>
 
