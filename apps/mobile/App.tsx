@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
@@ -19,6 +20,8 @@ import { supabase } from './src/lib/supabase';
 import { COLORS } from './src/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
+
+const queryClient = new QueryClient();
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -52,12 +55,14 @@ export default function App() {
   if ((!fontsLoaded && !fontError) || !authReady) return null;
 
   return (
-    <SafeAreaProvider>
-      <View style={{ flex: 1, backgroundColor: COLORS.bg }} onLayout={onLayoutRootView}>
-        <NavigationContainer>
-          {session ? <AppNavigator /> : <AuthScreen />}
-        </NavigationContainer>
-      </View>
-    </SafeAreaProvider>
+    <QueryClientProvider client={queryClient}>
+      <SafeAreaProvider>
+        <View style={{ flex: 1, backgroundColor: COLORS.bg }} onLayout={onLayoutRootView}>
+          <NavigationContainer>
+            {session ? <AppNavigator /> : <AuthScreen />}
+          </NavigationContainer>
+        </View>
+      </SafeAreaProvider>
+    </QueryClientProvider>
   );
 }

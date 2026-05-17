@@ -5,12 +5,16 @@ import React, {
 } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput, Modal,
-  Animated, PanResponder, KeyboardAvoidingView, Platform,
+  Animated, PanResponder, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
+import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS } from '../constants/theme';
+import {
+  useStartWorkout, useAddWorkoutExercise, useLogSet, useFinishWorkout,
+} from '../hooks/useWorkout';
 
 // ─── Domain ──────────────────────────────────────────────────────────────────
 const MUSCLES: Record<string, string> = {
@@ -292,7 +296,7 @@ function SwipeableSetRow({ set, idx, onUpdate, onToggle, onDelete, isLast, onSet
   set: SetData; idx: number;
   onUpdate: (patch: Partial<SetData>) => void;
   onToggle: () => void; onDelete: () => void;
-  isLast: boolean; onSetComplete: () => void;
+  isLast: boolean; onSetComplete: (set: SetData, idx: number) => void;
 }) {
   const translateX = useRef(new Animated.Value(0)).current;
   const [revealed, setRevealed] = useState(false);
@@ -373,7 +377,7 @@ function SwipeableSetRow({ set, idx, onUpdate, onToggle, onDelete, isLast, onSet
             <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: ol.color }}>{ol.label}</Text>
           </View>
 
-          <TouchableOpacity onPress={() => { if (!set.done) onSetComplete(); onToggle(); }}
+          <TouchableOpacity onPress={() => { if (!set.done) onSetComplete(set, idx); onToggle(); }}
             style={{ width: 26, height: 26, borderWidth: 1, borderColor: set.done ? COLORS.accent : COLORS.border, backgroundColor: set.done ? COLORS.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
             {set.done && <Text style={{ color: COLORS.bg, fontSize: 13, fontWeight: '700' }}>✓</Text>}
           </TouchableOpacity>
@@ -387,7 +391,7 @@ function SwipeableSetRow({ set, idx, onUpdate, onToggle, onDelete, isLast, onSet
 function ExerciseCard({ we, index, onUpdate, onRemove, onAddSet, onSetComplete }: {
   we: WorkoutEntry; index: number;
   onUpdate: (u: WorkoutEntry) => void; onRemove: () => void;
-  onAddSet: () => void; onSetComplete: () => void;
+  onAddSet: () => void; onSetComplete: (we: WorkoutEntry, set: SetData, setIdx: number) => void;
 }) {
   const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
   if (!ex) return null;
@@ -437,7 +441,7 @@ function ExerciseCard({ we, index, onUpdate, onRemove, onAddSet, onSetComplete }
           onUpdate={patch => onUpdate({ ...we, sets: we.sets.map(x => x.id === s.id ? { ...x, ...patch } : x) })}
           onToggle={() => onUpdate({ ...we, sets: we.sets.map(x => x.id === s.id ? { ...x, done: !x.done } : x) })}
           onDelete={() => onUpdate({ ...we, sets: we.sets.filter(x => x.id !== s.id) })}
-          onSetComplete={onSetComplete}
+          onSetComplete={(set, idx) => onSetComplete(we, set, idx)}
         />
       ))}
 
@@ -653,29 +657,56 @@ function RestTimerBanner({ onDismiss }: { onDismiss: () => void }) {
   );
 }
 
+// ─── Toast ────────────────────────────────────────────────────────────────────
+function Toast({ message }: { message: string }) {
+  return (
+    <View style={{ position: 'absolute', bottom: 100, left: 20, right: 20, backgroundColor: '#1c1917', borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 16, paddingVertical: 12, zIndex: 999 }}>
+      <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text300 }}>{message}</Text>
+    </View>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ForgeScreen() {
-  const [workout, setWorkout] = useState<WorkoutEntry[]>(INITIAL_WORKOUT as any);
-  const [elapsed, setElapsed] = useState(0);
-  const [showAddSheet, setShowAddSheet] = useState(false);
-  const [showFinishSheet, setShowFinishSheet] = useState(false);
-  const [showRestTimer, setShowRestTimer] = useState(false);
+  const navigation = useNavigation<any>();
 
+  const [workout, setWorkout]           = useState<WorkoutEntry[]>(INITIAL_WORKOUT as any);
+  const [elapsed, setElapsed]           = useState(0);
+  const [sessionStarted, setStarted]    = useState(false);
+  const [workoutId, setWorkoutId]       = useState<string | null>(null);
+  const [weIdMap, setWeIdMap]           = useState<Map<string, string>>(new Map());
+  const [showAddSheet, setShowAddSheet] = useState(false);
+  const [showFinishSheet, setFinishSheet] = useState(false);
+  const [showRestTimer, setShowRestTimer] = useState(false);
+  const [toast, setToast]               = useState<string | null>(null);
+
+  const { mutateAsync: startWorkout,  isPending: starting  } = useStartWorkout();
+  const { mutateAsync: addWeToDb }                           = useAddWorkoutExercise();
+  const { mutateAsync: logSet }                              = useLogSet();
+  const { mutateAsync: finishWorkout, isPending: finishing  } = useFinishWorkout();
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }
+
+  // Timer only runs once session is started
   useEffect(() => {
+    if (!sessionStarted) return;
     const i = setInterval(() => setElapsed(s => s + 1), 1000);
     return () => clearInterval(i);
-  }, []);
+  }, [sessionStarted]);
 
-  const volumes  = useMemo(() => muscleVolumes(workout), [workout]);
-  const maxVol   = useMemo(() => Math.max(800, ...Object.values(volumes)), [volumes]);
-  const doneSets = useMemo(() => workout.reduce((a, we) => a + we.sets.filter(s => s.done).length, 0), [workout]);
-  const totalSets = useMemo(() => workout.reduce((a, we) => a + we.sets.length, 0), [workout]);
+  const volumes     = useMemo(() => muscleVolumes(workout), [workout]);
+  const maxVol      = useMemo(() => Math.max(800, ...Object.values(volumes)), [volumes]);
+  const doneSets    = useMemo(() => workout.reduce((a, we) => a + we.sets.filter(s => s.done).length, 0), [workout]);
+  const totalSets   = useMemo(() => workout.reduce((a, we) => a + we.sets.length, 0), [workout]);
   const totalVolume = useMemo(() => workout.reduce((a, we) => a + exerciseVolume(we, true), 0), [workout]);
-  const usedIds = useMemo(() => new Set(workout.map(we => we.exerciseId)), [workout]);
+  const usedIds     = useMemo(() => new Set(workout.map(we => we.exerciseId)), [workout]);
   const progressPct = totalSets > 0 ? doneSets / totalSets : 0;
-  const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
-  const ss = String(elapsed % 60).padStart(2, '0');
-  const todayLabel = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  const mm          = String(Math.floor(elapsed / 60)).padStart(2, '0');
+  const ss          = String(elapsed % 60).padStart(2, '0');
+  const todayLabel  = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
   const updateExercise = useCallback((id: string, updated: WorkoutEntry) =>
     setWorkout(w => w.map(we => we.id === id ? updated : we)), []);
@@ -687,12 +718,97 @@ export default function ForgeScreen() {
       return { ...we, sets: [...we.sets, { id: `s-${Date.now()}`, reps: last?.reps ?? 8, weight: last?.weight ?? 0, rir: last?.rir ?? 2, done: false, prevReps: last?.prevReps ?? 0, prevWeight: last?.prevWeight ?? 0 }] };
     })), []);
 
-  const addExercise = useCallback((exerciseId: string) =>
-    setWorkout(w => [...w, { id: `we-${Date.now()}`, exerciseId, sets: [{ id: `s-${Date.now()}-1`, reps: 8, weight: 0, rir: 2, done: false, prevReps: 0, prevWeight: 0 }] }]), []);
+  const addExercise = useCallback(async (exerciseId: string) => {
+    const newId = `we-${Date.now()}`;
+    const newWe: WorkoutEntry = {
+      id: newId, exerciseId,
+      sets: [{ id: `s-${Date.now()}-1`, reps: 8, weight: 0, rir: 2, done: false, prevReps: 0, prevWeight: 0 }],
+    };
+    setWorkout(w => [...w, newWe]);
+
+    // If session already started, persist the new exercise to Supabase immediately
+    if (workoutId) {
+      const ex = EXERCISE_LIBRARY.find(e => e.id === exerciseId);
+      try {
+        const supabaseWeId = await addWeToDb({
+          workoutId,
+          exerciseName: ex?.name ?? exerciseId,
+          position:     workout.length,
+          setsTarget:   1,
+        });
+        setWeIdMap(m => new Map(m).set(newId, supabaseWeId));
+      } catch {
+        showToast('Exercise added locally — will sync on next session start.');
+      }
+    }
+  }, [workoutId, workout.length, addWeToDb]);
+
+  async function handleStartSession() {
+    try {
+      const result = await startWorkout({
+        name:      'Push Day',
+        exercises: workout.map((we, idx) => {
+          const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
+          return { exerciseName: ex?.name ?? we.exerciseId, setsTarget: we.sets.length, position: idx };
+        }),
+      });
+      const map = new Map<string, string>();
+      workout.forEach((we, idx) => {
+        if (result.workoutExerciseIds[idx]) map.set(we.id, result.workoutExerciseIds[idx]);
+      });
+      setWorkoutId(result.workoutId);
+      setWeIdMap(map);
+      setStarted(true);
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } catch (e: any) {
+      showToast(`Failed to start session: ${e?.message ?? 'Unknown error'}. Tap again to retry.`);
+    }
+  }
+
+  function handleSetComplete(we: WorkoutEntry, set: SetData, setIdx: number) {
+    setShowRestTimer(true);
+    const supabaseWeId = weIdMap.get(we.id);
+    if (!supabaseWeId) return;
+    logSet({
+      workoutExerciseId: supabaseWeId,
+      setNumber:         setIdx + 1,
+      weightKg:          Number(set.weight) || 0,
+      reps:              Number(set.reps)   || 0,
+      rir:               set.rir,
+    }).catch(() => showToast('Set logged locally — sync failed. Will retry on finish.'));
+  }
 
   async function handleFinishTap() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setShowFinishSheet(true);
+    setFinishSheet(true);
+  }
+
+  async function handleConfirmFinish() {
+    if (!workoutId) {
+      // Session was never started — just reset
+      setWorkout(INITIAL_WORKOUT as any);
+      setFinishSheet(false);
+      setElapsed(0);
+      return;
+    }
+    try {
+      await finishWorkout({
+        workoutId,
+        durationSeconds: elapsed,
+        totalVolumeKg:   totalVolume,
+        workoutName:     'Push Day',
+        doneSets,
+      });
+      setFinishSheet(false);
+      setWorkout(INITIAL_WORKOUT as any);
+      setElapsed(0);
+      setStarted(false);
+      setWorkoutId(null);
+      setWeIdMap(new Map());
+      navigation.navigate('Home');
+    } catch (e: any) {
+      showToast(`Save failed: ${e?.message ?? 'Unknown error'}. Keep this sheet open and retry.`);
+    }
   }
 
   return (
@@ -703,7 +819,9 @@ export default function ForgeScreen() {
         <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
             <Text style={{ fontFamily: FONTS.anton, fontSize: 28, color: COLORS.text100, lineHeight: 36, paddingTop: 2 }}>FORGE</Text>
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500 }}>Push Day · Week 4</Text>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: sessionStarted ? COLORS.accent : COLORS.text500 }}>
+              {sessionStarted ? 'SESSION LIVE' : 'Push Day · Week 4'}
+            </Text>
           </View>
           <View style={{ flexDirection: 'row', gap: 14, marginTop: 4 }}>
             <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700 }}>{todayLabel}</Text>
@@ -745,7 +863,7 @@ export default function ForgeScreen() {
               onUpdate={updated => updateExercise(we.id, updated)}
               onRemove={() => setWorkout(w => w.filter(x => x.id !== we.id))}
               onAddSet={() => addSet(we.id)}
-              onSetComplete={() => setShowRestTimer(true)}
+              onSetComplete={handleSetComplete}
             />
           ))}
 
@@ -765,19 +883,35 @@ export default function ForgeScreen() {
             style={{ paddingVertical: 13, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(87,83,78,0.5)', alignItems: 'center' }}>
             <Text style={{ fontFamily: FONTS.anton, fontSize: 14, color: COLORS.text600, letterSpacing: 1 }}>+ ADD EXERCISE</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleFinishTap}
-            style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent }}>
-            <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>FINISH WORKOUT</Text>
-          </TouchableOpacity>
+
+          {sessionStarted ? (
+            <TouchableOpacity onPress={handleFinishTap}
+              style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent }}>
+              <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>FINISH WORKOUT</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={handleStartSession} disabled={starting}
+              style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent, opacity: starting ? 0.7 : 1 }}>
+              {starting
+                ? <ActivityIndicator color={COLORS.bg} />
+                : <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>START SESSION</Text>}
+            </TouchableOpacity>
+          )}
         </View>
 
       </SafeAreaView>
 
+      {toast && <Toast message={toast} />}
       {showRestTimer && <RestTimerBanner onDismiss={() => setShowRestTimer(false)} />}
 
       <AddExerciseSheet visible={showAddSheet} onClose={() => setShowAddSheet(false)} onAdd={addExercise} usedIds={usedIds} />
-      <FinishConfirmSheet visible={showFinishSheet} onConfirm={() => setShowFinishSheet(false)} onDiscard={() => { setWorkout(INITIAL_WORKOUT as any); setShowFinishSheet(false); }}
-        onClose={() => setShowFinishSheet(false)} totalVolume={totalVolume} doneSets={doneSets} totalSets={totalSets} elapsed={elapsed} volumes={volumes} />
+      <FinishConfirmSheet
+        visible={showFinishSheet}
+        onConfirm={handleConfirmFinish}
+        onDiscard={() => { setWorkout(INITIAL_WORKOUT as any); setFinishSheet(false); setElapsed(0); setStarted(false); setWorkoutId(null); setWeIdMap(new Map()); }}
+        onClose={() => setFinishSheet(false)}
+        totalVolume={totalVolume} doneSets={doneSets} totalSets={totalSets} elapsed={elapsed} volumes={volumes}
+      />
     </View>
   );
 }

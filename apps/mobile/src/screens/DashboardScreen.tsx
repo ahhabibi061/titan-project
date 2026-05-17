@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { useTodayWorkout, useWeeklyWorkouts, useActivityFeed } from '../hooks/useWorkout';
 import {
   View,
   Text,
@@ -468,11 +469,52 @@ export default function DashboardScreen() {
   const [targets, setTargets]         = useState({ kcal: 2000, protein: 150, carbs: 200, fat: 65 });
   const [bio, setBio]                 = useState({ current: 0, weekAgo: 0, goal: 0, sparkline: [] as number[] });
   const [weekly, setWeekly]           = useState({ totalSets: 0, avgKcal: 0, avgProtein: 0, streak: 0 });
-  const [workout, setWorkout]         = useState<typeof MOCK_WORKOUT | null>(null);
-  const [feed, setFeed]               = useState<typeof MOCK_ACTIVITY>([]);
-  const [days, setDays]               = useState<typeof MOCK_WEEKLY>(MOCK_WEEKLY.map(d => ({
-    ...d, workout: false, meals: false, weight: false,
-  })));
+  // Real-time hooks
+  const { data: todayWorkout }   = useTodayWorkout();
+  const { data: weeklyWorkouts } = useWeeklyWorkouts();
+  const { data: activityFeed }   = useActivityFeed();
+
+  // Real-time activity feed subscription
+  useEffect(() => {
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      channel = supabase
+        .channel('dashboard-activity')
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'activity_feed',
+          filter: `user_id=eq.${user.id}`,
+        }, () => {
+          // useActivityFeed will re-fetch on next focus; for instant update just refetch
+        })
+        .subscribe();
+    });
+    return () => { if (channel) supabase.removeChannel(channel); };
+  }, []);
+
+  // Compute weekly adherence grid from real workouts
+  const days = useCallback((): typeof MOCK_WEEKLY => {
+    const now = new Date();
+    const dow = now.getDay();
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
+    monday.setHours(0, 0, 0, 0);
+
+    const LABELS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    return LABELS.map((day, i) => {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
+      const isoDate = date.toISOString().split('T')[0];
+      const isToday  = isoDate === now.toISOString().split('T')[0];
+      const isFuture = date > now && !isToday;
+      const hasWorkout = (weeklyWorkouts ?? []).some(w => w.started_at?.startsWith(isoDate) && w.completed);
+      return {
+        day, label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        today: isToday, future: isFuture, rest: false,
+        workout: hasWorkout, meals: false, weight: false,
+      };
+    });
+  }, [weeklyWorkouts])();
 
   useEffect(() => {
     (async () => {
@@ -518,20 +560,6 @@ export default function DashboardScreen() {
         const sparkline = [...brows].reverse().map(r => r.weight_kg);
         const weekAgo   = brows.length > 1 ? brows[brows.length - 1].weight_kg : brows[0].weight_kg;
         setBio(b => ({ ...b, current: brows[0].weight_kg, weekAgo, sparkline }));
-      }
-
-      // Today's workout
-      const { data: wrows } = await supabase
-        .from('workouts')
-        .select('id, name, completed')
-        .eq('user_id', user.id)
-        .gte('created_at', today + 'T00:00:00')
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (wrows?.length) {
-        setWorkout({ ...MOCK_WORKOUT, name: wrows[0].name, completed: wrows[0].completed ?? false });
-      } else {
-        setWorkout(null);
       }
 
       // Weekly sets count
@@ -602,8 +630,8 @@ export default function DashboardScreen() {
           {/* Today's Workout — bottom-left */}
           <View style={[s.statCard, s.statCardBL]}>
             <Text style={s.statLabel}>Workout</Text>
-            <Text style={[s.statValue, { fontSize: 20 }]} numberOfLines={1}>{workout ? workout.name : '—'}</Text>
-            <Text style={s.statSub}>{workout ? `${workout.exercises.length} ex · ~${workout.estimatedMinutes}m` : 'None logged'}</Text>
+            <Text style={[s.statValue, { fontSize: 20 }]} numberOfLines={1}>{todayWorkout ? todayWorkout.name : '—'}</Text>
+            <Text style={s.statSub}>{todayWorkout ? `${(todayWorkout.workout_exercises ?? []).length} ex${todayWorkout.completed ? ' · done' : ' · live'}` : 'None logged'}</Text>
           </View>
 
           {/* Streak — bottom-right */}
@@ -641,21 +669,28 @@ export default function DashboardScreen() {
             <Text style={s.cardLabel}>Today's Workout</Text>
             <Text style={s.cardTag}>FORGE</Text>
           </View>
-          {workout ? (
+          {todayWorkout ? (
             <>
-              <Text style={s.workoutName}>{workout.name}</Text>
-              <Text style={s.workoutMeta}>{workout.exercises.length} exercises · ~{workout.estimatedMinutes} min{workout.completed ? ' · completed' : ''}</Text>
+              <Text style={s.workoutName}>{todayWorkout.name}</Text>
+              <Text style={s.workoutMeta}>
+                {(todayWorkout.workout_exercises ?? []).length} exercises
+                {todayWorkout.completed && todayWorkout.duration_seconds
+                  ? ` · ${Math.round(todayWorkout.duration_seconds / 60)}m · completed`
+                  : todayWorkout.completed ? ' · completed' : ' · in progress'}
+              </Text>
               <View style={s.exerciseList}>
-                {workout.exercises.map((ex, i) => (
-                  <View key={i} style={s.exerciseRow}>
-                    <Text style={s.exerciseNum}>{String(i + 1).padStart(2, '0')}</Text>
-                    <Text style={s.exerciseName}>{ex.name}</Text>
-                    <Text style={s.exerciseSets}>{ex.sets} × sets</Text>
-                  </View>
-                ))}
+                {(todayWorkout.workout_exercises ?? [])
+                  .sort((a: any, b: any) => a.position - b.position)
+                  .map((we: any, i: number) => (
+                    <View key={we.id} style={s.exerciseRow}>
+                      <Text style={s.exerciseNum}>{String(i + 1).padStart(2, '0')}</Text>
+                      <Text style={s.exerciseName}>{we.notes}</Text>
+                      <Text style={s.exerciseSets}>{(we.sets ?? []).length} × sets</Text>
+                    </View>
+                  ))}
               </View>
-              <TouchableOpacity style={s.primaryBtn} onPress={() => workout.completed && setWorkoutModalVisible(true)}>
-                <Text style={s.primaryBtnText}>{workout.completed ? 'View Workout →' : 'Start Workout →'}</Text>
+              <TouchableOpacity style={s.primaryBtn} onPress={() => todayWorkout.completed && setWorkoutModalVisible(true)}>
+                <Text style={s.primaryBtnText}>{todayWorkout.completed ? 'View Workout →' : 'In Progress →'}</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -749,21 +784,26 @@ export default function DashboardScreen() {
         <View style={s.card}>
           <View style={s.cardHeader}>
             <Text style={s.sectionTitle}>Today's Activity</Text>
-            <Text style={s.cardTag}>{feed.length} events</Text>
+            <Text style={s.cardTag}>{(activityFeed ?? []).length} events</Text>
           </View>
-          {feed.map((a, i) => (
-            <View key={i} style={[s.feedRow, i === feed.length - 1 && { borderBottomWidth: 0 }]}>
-              <Text style={s.feedTime}>{a.time}</Text>
-              <View style={[
-                s.feedIconBox,
-                a.type === 'coach' && { borderColor: COLORS.accentBorder, backgroundColor: COLORS.accentMuted },
-                a.type === 'water' && { borderColor: 'rgba(96,165,250,0.3)', backgroundColor: 'rgba(96,165,250,0.05)' },
-              ]}>
-                <ActivityIcon type={a.type} />
+          {(activityFeed ?? []).length === 0 ? (
+            <Text style={[s.metaText, { color: COLORS.text600, marginTop: 8 }]}>No activity logged today.</Text>
+          ) : (activityFeed ?? []).map((a: any, i: number) => {
+            const time = new Date(a.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+            const type = a.event_type === 'workout_complete' ? 'workout' : a.event_type;
+            const text = a.event_type === 'workout_complete'
+              ? `${a.payload?.workout_name ?? 'Workout'} — ${Math.round((a.payload?.volume_kg ?? 0))} kg·reps`
+              : a.payload?.text ?? a.event_type;
+            return (
+              <View key={a.id} style={[s.feedRow, i === (activityFeed ?? []).length - 1 && { borderBottomWidth: 0 }]}>
+                <Text style={s.feedTime}>{time}</Text>
+                <View style={[s.feedIconBox, type === 'coach' && { borderColor: COLORS.accentBorder, backgroundColor: COLORS.accentMuted }]}>
+                  <ActivityIcon type={type} />
+                </View>
+                <Text style={s.feedText} numberOfLines={1}>{text}</Text>
               </View>
-              <Text style={s.feedText} numberOfLines={1}>{a.text}</Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ScrollView>
 
@@ -772,13 +812,16 @@ export default function DashboardScreen() {
         <View style={s.modalOverlay}>
           <View style={[s.modalSheet, { paddingBottom: insets.bottom + SPACING.lg }]}>
             <View style={s.modalHandle} />
-            <Text style={s.modalTitle}>{workout?.name ?? ''}</Text>
-            <Text style={[s.metaText, { marginBottom: SPACING.lg }]}>{workout?.exercises.length ?? 0} exercises · {workout?.estimatedMinutes ?? 0} min</Text>
-            {(workout?.exercises ?? []).map((ex, i) => (
-              <View key={i} style={s.exerciseRow}>
+            <Text style={s.modalTitle}>{todayWorkout?.name ?? ''}</Text>
+            <Text style={[s.metaText, { marginBottom: SPACING.lg }]}>
+              {(todayWorkout?.workout_exercises ?? []).length} exercises
+              {todayWorkout?.duration_seconds ? ` · ${Math.round(todayWorkout.duration_seconds / 60)} min` : ''}
+            </Text>
+            {(todayWorkout?.workout_exercises ?? []).sort((a: any, b: any) => a.position - b.position).map((we: any, i: number) => (
+              <View key={we.id} style={s.exerciseRow}>
                 <Text style={s.exerciseNum}>{String(i + 1).padStart(2, '0')}</Text>
-                <Text style={s.exerciseName}>{ex.name}</Text>
-                <Text style={s.exerciseSets}>{ex.sets} × sets</Text>
+                <Text style={s.exerciseName}>{we.notes}</Text>
+                <Text style={s.exerciseSets}>{(we.sets ?? []).length} × sets</Text>
               </View>
             ))}
             <TouchableOpacity style={[s.secondaryBtn, { marginTop: SPACING.xl }]} onPress={() => setWorkoutModalVisible(false)}>
