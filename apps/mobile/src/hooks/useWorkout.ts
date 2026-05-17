@@ -172,7 +172,8 @@ export function useFinishWorkout() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['today-workout'] });
       qc.invalidateQueries({ queryKey: ['workout-history'] });
-      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['weekly-workouts'] });
+      qc.invalidateQueries({ queryKey: ['weekly-sets'] });
       qc.invalidateQueries({ queryKey: ['activity-feed'] });
     },
   });
@@ -210,27 +211,52 @@ export function useTodayWorkout() {
   return useQuery({
     queryKey: ['today-workout'],
     queryFn:  async () => {
-      const userId = await getUserId();
-      const today  = todayISO();
+      const userId       = await getUserId();
+      // Use local midnight so workouts started in evening aren't missed due to UTC offset
+      const localMidnight = new Date();
+      localMidnight.setHours(0, 0, 0, 0);
       const { data, error } = await supabase
         .from('workouts')
         .select(`
           id, name, completed, started_at, finished_at,
           duration_seconds, total_volume_kg,
           workout_exercises (
-            id, position, notes,
+            id, notes,
             sets (set_number, weight_kg, reps, completed)
           )
         `)
         .eq('user_id', userId)
-        .gte('started_at', today + 'T00:00:00')
+        .gte('started_at', localMidnight.toISOString())
         .order('started_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       if (error) throw error;
       return data;
     },
-    staleTime: 10_000,
+    staleTime: 0,
+  });
+}
+
+// ── useWeeklySets ─────────────────────────────────────────────────────────────
+export function useWeeklySets() {
+  return useQuery({
+    queryKey: ['weekly-sets'],
+    queryFn:  async () => {
+      const userId    = await getUserId();
+      const now       = new Date();
+      const monday    = new Date(now);
+      const dow       = now.getDay();
+      monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
+      monday.setHours(0, 0, 0, 0);
+      const { data, error } = await supabase
+        .from('sets')
+        .select('id')
+        .eq('user_id', userId)
+        .gte('created_at', monday.toISOString());
+      if (error) throw error;
+      return (data ?? []).length;
+    },
+    staleTime: 30_000,
   });
 }
 

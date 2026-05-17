@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { useTodayWorkout, useWeeklyWorkouts, useActivityFeed } from '../hooks/useWorkout';
+import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
+import { useTodayWorkout, useWeeklyWorkouts, useWeeklySets, useActivityFeed } from '../hooks/useWorkout';
 import {
   View,
   Text,
@@ -472,7 +474,17 @@ export default function DashboardScreen() {
   // Real-time hooks
   const { data: todayWorkout }   = useTodayWorkout();
   const { data: weeklyWorkouts } = useWeeklyWorkouts();
+  const { data: weeklySets }     = useWeeklySets();
   const { data: activityFeed }   = useActivityFeed();
+  const qc = useQueryClient();
+
+  // Refetch all dashboard queries whenever this tab gains focus
+  useFocusEffect(useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['today-workout'] });
+    qc.invalidateQueries({ queryKey: ['weekly-workouts'] });
+    qc.invalidateQueries({ queryKey: ['weekly-sets'] });
+    qc.invalidateQueries({ queryKey: ['activity-feed'] });
+  }, [qc]));
 
   // Real-time activity feed subscription
   useEffect(() => {
@@ -562,15 +574,7 @@ export default function DashboardScreen() {
         setBio(b => ({ ...b, current: brows[0].weight_kg, weekAgo, sparkline }));
       }
 
-      // Weekly sets count
-      const weekStart = new Date();
-      weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
-      const { data: sets } = await supabase
-        .from('sets')
-        .select('id')
-        .eq('user_id', user.id)
-        .gte('created_at', weekStart.toISOString());
-      if (sets) setWeekly(w => ({ ...w, totalSets: sets.length }));
+      // Weekly sets count is handled by useWeeklySets() hook above
     })();
   }, []);
 
@@ -764,7 +768,7 @@ export default function DashboardScreen() {
           <View style={[s.divider, { marginTop: SPACING.lg }]} />
           <View style={s.weekStatsGrid}>
             {([
-              { label: 'Total Sets',  value: `${weekly.totalSets}`, unit: 'sets' },
+              { label: 'Total Sets',  value: `${weeklySets ?? 0}`, unit: 'sets' },
               { label: 'Avg Daily',   value: `${fmt0(weekly.avgKcal)}`, unit: 'kcal' },
               { label: 'Avg Protein', value: `${weekly.avgProtein}`,    unit: 'g'    },
               { label: 'Streak',      value: `${weekly.streak}`,        unit: 'd'    },
