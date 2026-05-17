@@ -304,6 +304,23 @@ function ExerciseCard({ we, index, lastSession, onUpdate, onRemove, onAddSet }: 
         </View>
       </View>
 
+      {/* Last session summary */}
+      {lastSession && lastSession.sets.length > 0 && (
+        <View style={{ paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: 'rgba(20,17,15,0.6)', flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1.5, marginRight: 4 }}>LAST SESSION</Text>
+          {lastSession.sets.map((s, i) => (
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>
+                {s.weight}<Text style={{ color: COLORS.text700 }}>kg</Text> × {s.reps}
+              </Text>
+              {i < lastSession.sets.length - 1 && (
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, marginLeft: 2 }}>·</Text>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
+
       {/* Column headers */}
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(28,25,23,0.5)', gap: 8 }}>
         <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 24, textAlign: 'center', textTransform: 'uppercase' }}>SET</Text>
