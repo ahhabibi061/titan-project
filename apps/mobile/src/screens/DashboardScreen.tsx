@@ -463,40 +463,92 @@ export default function DashboardScreen() {
   const [workoutModalVisible, setWorkoutModalVisible] = useState(false);
   const [mapMode, setMapMode] = useState<'fatigue' | 'progression'>('fatigue');
   const [displayName, setDisplayName] = useState('');
-  const [tier, setTier] = useState('FREE');
+  const [tier, setTier]               = useState('FREE');
+  const [consumed, setConsumed]       = useState({ kcal: 0, protein: 0, carbs: 0, fat: 0, mealsLogged: 0 });
+  const [targets, setTargets]         = useState({ kcal: 2000, protein: 150, carbs: 200, fat: 65 });
+  const [bio, setBio]                 = useState({ current: 0, weekAgo: 0, goal: 0, sparkline: [] as number[] });
+  const [weekly, setWeekly]           = useState({ totalSets: 0, avgKcal: 0, avgProtein: 0, streak: 0 });
+  const [workout, setWorkout]         = useState<typeof MOCK_WORKOUT | null>(null);
+  const [feed, setFeed]               = useState<typeof MOCK_ACTIVITY>([]);
+  const [days, setDays]               = useState<typeof MOCK_WEEKLY>(MOCK_WEEKLY.map(d => ({
+    ...d, workout: false, meals: false, weight: false,
+  })));
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      // Try profile table first
+      const today = new Date().toISOString().split('T')[0];
+
+      // Profile
       const { data: profile } = await supabase
         .from('profiles')
-        .select('display_name, subscription_tier')
+        .select('display_name, subscription_tier, current_streak')
         .eq('id', user.id)
         .single();
-      if (profile?.display_name) {
-        setDisplayName(profile.display_name);
-      } else {
-        // Fall back to email prefix
-        setDisplayName(user.email?.split('@')[0] ?? 'Athlete');
-      }
+      setDisplayName(profile?.display_name || user.email?.split('@')[0] || 'Athlete');
       if (profile?.subscription_tier) setTier(profile.subscription_tier.toUpperCase());
-    });
+      if (profile?.current_streak != null) setWeekly(w => ({ ...w, streak: profile.current_streak }));
+
+      // Today's nutrition
+      const { data: nlogs } = await supabase
+        .from('nutrition_logs')
+        .select('calories, protein_g, carbs_g, fat_g')
+        .eq('user_id', user.id)
+        .gte('logged_at', today + 'T00:00:00')
+        .lt('logged_at', today + 'T23:59:59');
+      if (nlogs?.length) {
+        const sum = nlogs.reduce((a, r) => ({
+          kcal: a.kcal + (r.calories ?? 0),
+          protein: a.protein + (r.protein_g ?? 0),
+          carbs: a.carbs + (r.carbs_g ?? 0),
+          fat: a.fat + (r.fat_g ?? 0),
+        }), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
+        setConsumed({ ...sum, mealsLogged: nlogs.length });
+      }
+
+      // Latest biometric
+      const { data: brows } = await supabase
+        .from('biometric_entries')
+        .select('weight_kg, recorded_at')
+        .eq('user_id', user.id)
+        .order('recorded_at', { ascending: false })
+        .limit(8);
+      if (brows?.length) {
+        const sparkline = [...brows].reverse().map(r => r.weight_kg);
+        const weekAgo   = brows.length > 1 ? brows[brows.length - 1].weight_kg : brows[0].weight_kg;
+        setBio(b => ({ ...b, current: brows[0].weight_kg, weekAgo, sparkline }));
+      }
+
+      // Today's workout
+      const { data: wrows } = await supabase
+        .from('workouts')
+        .select('id, name, completed')
+        .eq('user_id', user.id)
+        .gte('created_at', today + 'T00:00:00')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (wrows?.length) {
+        setWorkout({ ...MOCK_WORKOUT, name: wrows[0].name, completed: wrows[0].completed ?? false });
+      } else {
+        setWorkout(null);
+      }
+
+      // Weekly sets count
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
+      const { data: sets } = await supabase
+        .from('sets')
+        .select('id')
+        .eq('user_id', user.id)
+        .gte('created_at', weekStart.toISOString());
+      if (sets) setWeekly(w => ({ ...w, totalSets: sets.length }));
+    })();
   }, []);
 
-  const profile  = MOCK_PROFILE;
-  const consumed = MOCK_CONSUMED;
-  const targets  = MOCK_TARGETS;
-  const workout  = MOCK_WORKOUT;
-  const coach    = MOCK_COACH;
-  const bio      = MOCK_BIO;
-  const weekly   = MOCK_WEEKLY_STATS;
-  const days     = MOCK_WEEKLY;
-  const feed     = MOCK_ACTIVITY;
-
   const remaining   = targets.kcal - consumed.kcal;
-  const weightDelta = bio.current - bio.weekAgo;
-  const initials    = getInitials(displayName || profile.display_name);
+  const weightDelta = bio.current && bio.weekAgo ? bio.current - bio.weekAgo : 0;
+  const initials    = getInitials(displayName || 'A');
 
   return (
     // FIX 1: SafeAreaView handles the top notch/status-bar gap
@@ -519,7 +571,7 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={s.greeting}>{getGreeting()}, {displayName || profile.display_name}.</Text>
+        <Text style={s.greeting}>{getGreeting()}, {displayName}.</Text>
 
         <View style={s.metaRow}>
           <View style={s.tierBadge}><Text style={s.tierText}>{tier}</Text></View>
@@ -548,8 +600,8 @@ export default function DashboardScreen() {
           {/* Today's Workout — bottom-left */}
           <View style={[s.statCard, s.statCardBL]}>
             <Text style={s.statLabel}>Workout</Text>
-            <Text style={[s.statValue, { fontSize: 20 }]} numberOfLines={1}>{workout.name}</Text>
-            <Text style={s.statSub}>{workout.exercises.length} ex · ~{workout.estimatedMinutes}m</Text>
+            <Text style={[s.statValue, { fontSize: 20 }]} numberOfLines={1}>{workout ? workout.name : '—'}</Text>
+            <Text style={s.statSub}>{workout ? `${workout.exercises.length} ex · ~${workout.estimatedMinutes}m` : 'None logged'}</Text>
           </View>
 
           {/* Streak — bottom-right */}
@@ -587,20 +639,26 @@ export default function DashboardScreen() {
             <Text style={s.cardLabel}>Today's Workout</Text>
             <Text style={s.cardTag}>FORGE</Text>
           </View>
-          <Text style={s.workoutName}>{workout.name}</Text>
-          <Text style={s.workoutMeta}>{workout.exercises.length} exercises · ~{workout.estimatedMinutes} min{workout.completed ? ' · completed' : ''}</Text>
-          <View style={s.exerciseList}>
-            {workout.exercises.map((ex, i) => (
-              <View key={i} style={s.exerciseRow}>
-                <Text style={s.exerciseNum}>{String(i + 1).padStart(2, '0')}</Text>
-                <Text style={s.exerciseName}>{ex.name}</Text>
-                <Text style={s.exerciseSets}>{ex.sets} × sets</Text>
+          {workout ? (
+            <>
+              <Text style={s.workoutName}>{workout.name}</Text>
+              <Text style={s.workoutMeta}>{workout.exercises.length} exercises · ~{workout.estimatedMinutes} min{workout.completed ? ' · completed' : ''}</Text>
+              <View style={s.exerciseList}>
+                {workout.exercises.map((ex, i) => (
+                  <View key={i} style={s.exerciseRow}>
+                    <Text style={s.exerciseNum}>{String(i + 1).padStart(2, '0')}</Text>
+                    <Text style={s.exerciseName}>{ex.name}</Text>
+                    <Text style={s.exerciseSets}>{ex.sets} × sets</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
-          <TouchableOpacity style={s.primaryBtn} onPress={() => workout.completed && setWorkoutModalVisible(true)}>
-            <Text style={s.primaryBtnText}>{workout.completed ? 'View Workout →' : 'Start Workout →'}</Text>
-          </TouchableOpacity>
+              <TouchableOpacity style={s.primaryBtn} onPress={() => workout.completed && setWorkoutModalVisible(true)}>
+                <Text style={s.primaryBtnText}>{workout.completed ? 'View Workout →' : 'Start Workout →'}</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Text style={[s.workoutMeta, { color: COLORS.text600, marginTop: 8 }]}>No workout logged today. Head to Forge to start one.</Text>
+          )}
         </View>
 
         {/* ── 5. TODAY'S MACROS CARD ─────────────────────────────────── */}
@@ -712,9 +770,9 @@ export default function DashboardScreen() {
         <View style={s.modalOverlay}>
           <View style={[s.modalSheet, { paddingBottom: insets.bottom + SPACING.lg }]}>
             <View style={s.modalHandle} />
-            <Text style={s.modalTitle}>{workout.name}</Text>
-            <Text style={[s.metaText, { marginBottom: SPACING.lg }]}>{workout.exercises.length} exercises · {workout.estimatedMinutes} min</Text>
-            {workout.exercises.map((ex, i) => (
+            <Text style={s.modalTitle}>{workout?.name ?? ''}</Text>
+            <Text style={[s.metaText, { marginBottom: SPACING.lg }]}>{workout?.exercises.length ?? 0} exercises · {workout?.estimatedMinutes ?? 0} min</Text>
+            {(workout?.exercises ?? []).map((ex, i) => (
               <View key={i} style={s.exerciseRow}>
                 <Text style={s.exerciseNum}>{String(i + 1).padStart(2, '0')}</Text>
                 <Text style={s.exerciseName}>{ex.name}</Text>
