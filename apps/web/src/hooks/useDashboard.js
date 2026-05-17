@@ -251,18 +251,18 @@ export function useDashboard(userId) {
             text: `${workoutRaw.name || 'Workout'} · ${workoutRaw.workout_exercises?.length ?? 0} exercises completed`,
           });
         }
-        // Water summary — single entry showing total vs target
+        // Water — one entry per log, each showing amount + running daily total
         const waterLogsToday = waterLogsRes.data ?? [];
-        const totalWaterMl = waterLogsToday.reduce((s, r) => s + (r.amount_ml ?? 0), 0);
-        if (totalWaterMl > 0) {
-          const waterTarget = profile?.settings?.water_target_ml ?? 2500;
-          const lastWater = waterLogsToday[waterLogsToday.length - 1];
+        const waterTarget = profile?.settings?.water_target_ml ?? 2500;
+        let runningMl = 0;
+        for (const r of waterLogsToday) {
+          runningMl += r.amount_ml ?? 0;
           activityFeed.push({
-            time: new Date(lastWater.logged_at).toLocaleTimeString('en-US', {
+            time: new Date(r.logged_at).toLocaleTimeString('en-US', {
               hour: '2-digit', minute: '2-digit', hour12: false,
             }),
             type: 'water',
-            text: `${(totalWaterMl / 1000).toFixed(1)} L water · goal ${(waterTarget / 1000).toFixed(1)} L`,
+            text: `+${r.amount_ml ?? 0} ml water · ${(runningMl / 1000).toFixed(1)} L today`,
           });
         }
         // Sort feed chronologically

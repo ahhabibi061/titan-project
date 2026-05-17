@@ -43,7 +43,7 @@ const STEPS = [
     id: 'codex',
     emoji: '📖',
     title: 'Codex — Exercise Library',
-    body: 'Browse 500+ exercises with animated demos, primary and secondary muscle targets, and equipment filters. Every exercise in Forge links to its Codex entry.',
+    body: 'Browse the exercise library with animated demos, primary and secondary muscle targets, and equipment filters. Every exercise in Forge links to its Codex entry.',
     link: '/exercises',
   },
   {
