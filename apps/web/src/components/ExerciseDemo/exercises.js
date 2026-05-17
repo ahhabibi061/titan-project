@@ -18,7 +18,7 @@ export const NO_ANIMATION_IDS = new Set([
   // Cardio / Carries
   'rowing_machine', 'assault_bike', 'sled_push', 'farmers_carry',
   // Cable / KB / Machine — shares bench animation or self-evident
-  'pallof_press', 'kb_row', 'kb_lunge', 'kb_deadlift',
+  'pallof_press', 'kb_row', 'kb_deadlift',
   'seated_leg_curl',
 ]);
 
