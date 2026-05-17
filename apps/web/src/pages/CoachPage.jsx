@@ -415,10 +415,182 @@ function PhaseStripe({ ctx }) {
   );
 }
 
+// -------------------- ORACLE TAB --------------------
+function OracleTab({ ctx, analysis }) {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput]       = useState('');
+  const [loading, setLoading]   = useState(false);
+
+  const SUGGESTIONS = [
+    'Why is my cut stalling?',
+    'Which muscles am I undertraining?',
+    'Should I deload this week?',
+    'How long until I hit my goal weight?',
+    'Is my protein intake high enough?',
+    'What does my volume trend mean?',
+  ];
+
+  const buildSystemPrompt = () => `
+You are Oracle — the AI coach inside Titan, a serious lifters' fitness app.
+You have direct access to this user's live training and nutrition data. Always answer using their specific numbers, never generic advice.
+
+USER DATA SNAPSHOT:
+- Name: ${ctx.name}
+- Goal: ${ctx.goal} (week ${ctx.programWeek} of ${ctx.programDuration})
+- Current weight: ${ctx.weightLog[ctx.weightLog.length - 1]} kg (started at ${ctx.startWeight} kg)
+- Weight slope: ${analysis.slopePctPerWeek.toFixed(2)}% body weight per week
+- Current macros: ${ctx.currentMacros.kcal} kcal / ${ctx.currentMacros.protein}g protein / ${ctx.currentMacros.carbs}g carbs / ${ctx.currentMacros.fat}g fat
+- Recommended macros: +${analysis.decision.kcalDelta} kcal delta (Coach Engine decision: ${analysis.decision.label})
+- Avg daily calories (14d): ${Math.round(ctx.calorieLog.reduce((a, b) => a + b, 0) / ctx.calorieLog.length)} kcal
+- Avg daily protein (14d): ${Math.round(ctx.proteinLog.reduce((a, b) => a + b, 0) / ctx.proteinLog.length)}g
+- Volume changes vs prior 14d: ${Object.entries(ctx.volumeChange).map(([m, v]) => `${m}: ${v > 0 ? '+' : ''}${v}%`).join(', ')}
+- Regressing muscles (>5% down): ${analysis.regressingMuscles.join(', ') || 'none'}
+- Days until next Coach analysis: ${ctx.daysUntilNext}
+
+RULES:
+- Always cite the user's actual numbers when answering
+- Be direct and athletic in tone — no wellness clichés
+- If you recommend a change, quantify it (e.g. "+100 kcal from carbs")
+- Keep answers concise: 2-4 sentences unless the question is complex
+- Never recommend anything that contradicts the Coach Engine's decision without explaining why
+- If a question is outside the data available, say so clearly
+`.trim();
+
+  const sendMessage = async (text) => {
+    const userMsg = text || input.trim();
+    if (!userMsg || loading) return;
+    setInput('');
+    setLoading(true);
+
+    const newMessages = [...messages, { role: 'user', content: userMsg }];
+    setMessages(newMessages);
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1000,
+          system: buildSystemPrompt(),
+          messages: newMessages,
+        }),
+      });
+      const data = await res.json();
+      const reply = data.content?.map(b => b.text || '').join('') || 'No response.';
+      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Please try again.' }]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-[72vh] border border-stone-800/60 bg-stone-950/40">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800/60 shrink-0">
+        <div>
+          <div className="text-[9px] uppercase tracking-[0.22em] text-orange-400 font-mono mb-0.5">AI · Grounded in your data</div>
+          <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Oracle</h2>
+        </div>
+        <div className="flex items-center gap-2 text-[10px] font-mono text-stone-600">
+          <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
+          Live context · cycle #{ctx.programWeek}
+        </div>
+      </div>
+
+      {/* Chat area */}
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        {messages.length === 0 && (
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-4">
+              Ask anything about your data
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {SUGGESTIONS.map(s => (
+                <button
+                  key={s}
+                  onClick={() => sendMessage(s)}
+                  className="text-left px-3 py-2.5 border border-stone-800/60 text-stone-400 text-xs font-mono hover:border-orange-500/40 hover:text-stone-200 transition-colors"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((m, i) => (
+          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            {m.role === 'assistant' && (
+              <div className="w-6 h-6 shrink-0 bg-orange-500/20 border border-orange-500/40 flex items-center justify-center mr-3 mt-0.5">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#ed7a2a" strokeWidth="1.5">
+                  <circle cx="6" cy="6" r="4" /><path d="M6 3v3l2 1" />
+                </svg>
+              </div>
+            )}
+            <div className={`max-w-[80%] px-4 py-3 text-sm leading-relaxed font-sans ${
+              m.role === 'user'
+                ? 'bg-stone-800/60 border border-stone-700/60 text-stone-200'
+                : 'bg-stone-950/80 border border-orange-500/20 text-stone-300'
+            }`}>
+              {m.content}
+            </div>
+          </div>
+        ))}
+
+        {loading && (
+          <div className="flex justify-start">
+            <div className="w-6 h-6 shrink-0 bg-orange-500/20 border border-orange-500/40 flex items-center justify-center mr-3">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#ed7a2a" strokeWidth="1.5">
+                <circle cx="6" cy="6" r="4" /><path d="M6 3v3l2 1" />
+              </svg>
+            </div>
+            <div className="px-4 py-3 border border-orange-500/20 bg-stone-950/80">
+              <div className="flex gap-1.5 items-center">
+                {[0, 1, 2].map(i => (
+                  <span key={i} className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse"
+                    style={{ animationDelay: `${i * 150}ms` }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Input bar */}
+      <div className="shrink-0 border-t border-stone-800/60 p-4 flex gap-3">
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && sendMessage()}
+          placeholder="Ask Oracle about your training or nutrition…"
+          disabled={loading}
+          className="flex-1 bg-stone-900/80 border border-stone-800 text-stone-100 font-mono text-sm px-4 py-2.5 placeholder:text-stone-700 focus:outline-none focus:border-orange-500/50 transition-colors"
+        />
+        <button
+          onClick={() => sendMessage()}
+          disabled={!input.trim() || loading}
+          className={`px-5 py-2.5 font-anton text-sm uppercase tracking-wider transition-colors ${
+            input.trim() && !loading
+              ? 'bg-orange-500 text-stone-950 hover:bg-orange-400'
+              : 'bg-stone-900 text-stone-700 border border-stone-800 cursor-not-allowed'
+          }`}
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // -------------------- MAIN --------------------
 export default function CoachEngine() {
   const ctx = USER_CONTEXT;
-  const [applied, setApplied] = useState(false);
+  const [applied, setApplied]     = useState(false);
+  const [activeTab, setActiveTab] = useState('analysis');
 
   const analysis = useMemo(() => decideRecommendation(ctx), []);
   const recommended = useMemo(
@@ -477,6 +649,28 @@ export default function CoachEngine() {
             <div className="font-mono text-[10px] text-stone-700 mt-0.5">7-day rolling cycle · #4</div>
           </div>
         </header>
+
+        {/* TAB BAR */}
+        <div className="flex items-center gap-0 border-b border-stone-800/60 mb-8">
+          {[
+            { id: 'analysis', label: 'Weekly Analysis' },
+            { id: 'oracle',   label: 'Oracle' },
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-6 py-3 font-anton text-sm uppercase tracking-wider transition-colors border-b-2 -mb-px ${
+                activeTab === tab.id
+                  ? 'border-orange-500 text-orange-400'
+                  : 'border-transparent text-stone-600 hover:text-stone-300'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {activeTab === 'analysis' && (<>
 
         {/* HEADLINE INSIGHT */}
         <div className="mb-10 reveal">
@@ -623,6 +817,11 @@ export default function CoachEngine() {
           <span>Oracle v0.4 · Module 5 · Cross-module synthesis</span>
           <span>Inputs: vault · nutrition · IRONLAB · 14d window</span>
         </footer>
+
+        </>)}
+
+        {activeTab === 'oracle' && <OracleTab ctx={ctx} analysis={analysis} />}
+
       </div>
     </div>
   );
