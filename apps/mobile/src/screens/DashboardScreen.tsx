@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Dimensions,
   StatusBar,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -76,6 +77,36 @@ const MOCK_GROWTH_MAP: Record<string, { status: string; growthPct: number }> = {
   glutes:      { status: 'improved',  growthPct:  2.1 },
   calves:      { status: 'improved',  growthPct:  3.0 },
   lower_back:  { status: 'regressed', growthPct: -2.0 },
+};
+
+const MUSCLE_DATA = {
+  weeklyVolume: {
+    chest: 4200, front_delts: 1800, side_delts: 900,  triceps: 2100,
+    lats: 3800,  biceps: 1600,      rear_delts: 800,  traps: 600,
+    quads: 8400, hamstrings: 4200,  glutes: 3100,     calves: 1200,
+    abs: 900,    lower_back: 1400,  forearms: 600,
+  } as Record<string, number>,
+  progression: {
+    chest: -8.2, front_delts: -3.1, side_delts: 2.4, triceps: 1.5,
+    lats: 4.2,   biceps: 0.5,       rear_delts: 1.8, traps: -1.2,
+    quads: -5.4, hamstrings: -1.8,  glutes: 2.1,     calves: 3.0,
+    abs: 0,      lower_back: -2.0,  forearms: 0,
+  } as Record<string, number>,
+};
+
+// Maps slug → data key + display name, aware of front vs back view
+const SLUG_TO_DATA: Record<string, { front: string; back: string; frontName: string; backName: string }> = {
+  chest:        { front: 'chest',       back: 'chest',      frontName: 'Chest',       backName: 'Chest'      },
+  biceps:       { front: 'biceps',      back: 'biceps',     frontName: 'Biceps',      backName: 'Biceps'     },
+  quadriceps:   { front: 'quads',       back: 'quads',      frontName: 'Quadriceps',  backName: 'Quadriceps' },
+  deltoids:     { front: 'front_delts', back: 'rear_delts', frontName: 'Front Delts', backName: 'Rear Delts' },
+  triceps:      { front: 'triceps',     back: 'triceps',    frontName: 'Triceps',     backName: 'Triceps'    },
+  calves:       { front: 'calves',      back: 'calves',     frontName: 'Calves',      backName: 'Calves'     },
+  trapezius:    { front: 'traps',       back: 'traps',      frontName: 'Trapezius',   backName: 'Trapezius'  },
+  'upper-back': { front: 'lats',        back: 'lats',       frontName: 'Lats',        backName: 'Lats'       },
+  'lower-back': { front: 'lower_back',  back: 'lower_back', frontName: 'Lower Back',  backName: 'Lower Back' },
+  hamstring:    { front: 'hamstrings',  back: 'hamstrings', frontName: 'Hamstrings',  backName: 'Hamstrings' },
+  gluteal:      { front: 'glutes',      back: 'glutes',     frontName: 'Glutes',      backName: 'Glutes'     },
 };
 
 // ─── MUSCLE MAP DATA ─────────────────────────────────────────────────────────
@@ -297,13 +328,60 @@ function WeeklyGrid({ days }: { days: DayAdherence[] }) {
 
 // ─── MUSCLE MAP ───────────────────────────────────────────────────────────────
 
-function MuscleMap({ mode, setMode }: { mode: 'fatigue' | 'progression'; setMode: (m: 'fatigue' | 'progression') => void }) {
-  const frontData = buildBodyData(mode, 'front');
-  const backData  = buildBodyData(mode, 'back');
-  const BODY_SCALE = 0.75; // 150×300px per body
+interface SelectedMuscle { slug: string; view: 'front' | 'back'; dataKey: string; name: string; }
 
-  const fatigueLegend    = [['#4ade80','Ready'],['#fbbf24','Almost'],['#f97316','Partial'],['#ef4444','Resting']] as [string,string][];
+function MuscleMap({ mode, setMode }: { mode: 'fatigue' | 'progression'; setMode: (m: 'fatigue' | 'progression') => void }) {
+  const [selected, setSelected] = useState<SelectedMuscle | null>(null);
+  const slideY   = useRef(new Animated.Value(80)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const BODY_SCALE = 0.75;
+  const fatigueLegend     = [['#4ade80','Ready'],['#fbbf24','Almost'],['#f97316','Partial'],['#ef4444','Resting']] as [string,string][];
   const progressionLegend = [['#fb923c','PR'],['#4ade80','Improved'],['#fbbf24','Regressed'],['#f87171','Dropped']] as [string,string][];
+
+  const showCard = (slug: string, view: 'front' | 'back') => {
+    const entry = SLUG_TO_DATA[slug];
+    if (!entry) return;
+    const dataKey = view === 'front' ? entry.front : entry.back;
+    const name    = view === 'front' ? entry.frontName : entry.backName;
+    setSelected({ slug, view, dataKey, name });
+    slideY.setValue(80);
+    fadeAnim.setValue(0);
+    Animated.parallel([
+      Animated.spring(slideY, { toValue: 0, useNativeDriver: true, damping: 15, stiffness: 140 }),
+      Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const dismissCard = () => {
+    Animated.parallel([
+      Animated.spring(slideY, { toValue: 80, useNativeDriver: true, damping: 15, stiffness: 140 }),
+      Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
+    ]).start(() => setSelected(null));
+  };
+
+  const handlePress = (bodyPart: any, view: 'front' | 'back') => {
+    const slug = bodyPart.slug as string;
+    if (!slug || !SLUG_TO_DATA[slug]) return;
+    if (selected?.slug === slug && selected?.view === view) dismissCard();
+    else showCard(slug, view);
+  };
+
+  const injectSelected = (data: ExtendedBodyPart[], view: 'front' | 'back'): ExtendedBodyPart[] => {
+    if (!selected || selected.view !== view) return data;
+    return [
+      ...data.filter(p => p.slug !== selected.slug),
+      { slug: selected.slug as Slug, styles: { fill: COLORS.accentHot } },
+    ];
+  };
+
+  const frontData = injectSelected(buildBodyData(mode, 'front'), 'front');
+  const backData  = injectSelected(buildBodyData(mode, 'back'),  'back');
+
+  const vol  = selected ? (MUSCLE_DATA.weeklyVolume[selected.dataKey] ?? 0) : 0;
+  const prog = selected ? (MUSCLE_DATA.progression[selected.dataKey]  ?? 0) : 0;
+  const pillColor = prog > 0 ? COLORS.accent : prog < 0 ? '#f87171' : COLORS.text600;
+  const pillBg    = prog > 0 ? COLORS.accentMuted : prog < 0 ? 'rgba(248,113,113,0.15)' : 'rgba(87,83,78,0.2)';
 
   return (
     <View style={s.card}>
@@ -317,7 +395,7 @@ function MuscleMap({ mode, setMode }: { mode: 'fatigue' | 'progression'; setMode
           <TouchableOpacity
             key={m}
             style={[s.mapToggleBtn, mode === m && s.mapToggleBtnActive]}
-            onPress={() => setMode(m)}
+            onPress={() => { setMode(m); dismissCard(); }}
           >
             <Text style={[s.mapToggleText, mode === m && s.mapToggleTextActive]}>{m.toUpperCase()}</Text>
           </TouchableOpacity>
@@ -326,16 +404,43 @@ function MuscleMap({ mode, setMode }: { mode: 'fatigue' | 'progression'; setMode
 
       <View style={s.mapBodies}>
         <View style={s.mapBodyCol}>
-          <Body data={frontData} side="front" gender="male" scale={BODY_SCALE}
-            border="none" defaultFill="#1c1917" />
+          <Body
+            data={frontData} side="front" gender="male" scale={BODY_SCALE}
+            border="none" defaultFill="#1c1917"
+            onBodyPartPress={(bp) => handlePress(bp, 'front')}
+          />
           <Text style={s.mapBodyLabel}>ANTERIOR</Text>
         </View>
         <View style={s.mapBodyCol}>
-          <Body data={backData} side="back" gender="male" scale={BODY_SCALE}
-            border="none" defaultFill="#1c1917" />
+          <Body
+            data={backData} side="back" gender="male" scale={BODY_SCALE}
+            border="none" defaultFill="#1c1917"
+            onBodyPartPress={(bp) => handlePress(bp, 'back')}
+          />
           <Text style={s.mapBodyLabel}>POSTERIOR</Text>
         </View>
       </View>
+
+      {selected && (
+        <Animated.View style={[s.muscleInfoCard, { opacity: fadeAnim, transform: [{ translateY: slideY }] }]}>
+          <View style={s.muscleInfoRow}>
+            <Text style={s.muscleInfoName}>{selected.name.toUpperCase()}</Text>
+            <View style={[s.musclePill, { backgroundColor: pillBg, borderColor: pillColor + '88' }]}>
+              <Text style={[s.musclePillText, { color: pillColor }]}>
+                {prog === 0 ? '—' : prog > 0 ? `+${prog.toFixed(1)}%` : `${prog.toFixed(1)}%`}
+              </Text>
+            </View>
+          </View>
+          <Text style={s.muscleInfoVol}>{vol.toLocaleString()} kg·reps</Text>
+          <Text style={s.muscleInfoSub}>
+            {prog === 0
+              ? 'No change vs last week'
+              : prog > 0
+              ? `↑ Progressing — ${prog.toFixed(1)}% vs last week`
+              : `↓ Regressing — ${Math.abs(prog).toFixed(1)}% vs last week`}
+          </Text>
+        </Animated.View>
+      )}
 
       <View style={[s.divider, { marginVertical: SPACING.md }]} />
       <View style={s.legendRow}>
@@ -612,7 +717,7 @@ const { width: SW } = Dimensions.get('window');
 const s = StyleSheet.create({
   root:          { flex: 1, backgroundColor: COLORS.bg },
   scroll:        { flex: 1 },
-  scrollContent: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.xxl },
+  scrollContent: { paddingHorizontal: SPACING.lg, paddingBottom: 40 },
 
   // Header
   headerRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: SPACING.lg, marginBottom: SPACING.sm },
@@ -717,6 +822,15 @@ const s = StyleSheet.create({
   mapBodies:         { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start' },
   mapBodyCol:        { alignItems: 'center' },
   mapBodyLabel:      { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: SPACING.xs },
+
+  // Muscle info card
+  muscleInfoCard: { marginTop: SPACING.md, borderWidth: 1, borderColor: COLORS.accentBorder, backgroundColor: 'rgba(237,122,42,0.07)', padding: SPACING.md },
+  muscleInfoRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.xs },
+  muscleInfoName: { fontFamily: FONTS.anton, fontSize: 22, color: COLORS.text100, textTransform: 'uppercase' },
+  muscleInfoVol:  { fontFamily: FONTS.mono, fontSize: 18, color: COLORS.orange300, letterSpacing: 0.5, marginBottom: 2 },
+  muscleInfoSub:  { fontFamily: FONTS.sans, fontSize: 12, color: COLORS.text400 },
+  musclePill:     { paddingHorizontal: SPACING.sm, paddingVertical: 3, borderWidth: 1 },
+  musclePillText: { fontFamily: FONTS.mono, fontSize: 11, letterSpacing: 1 },
 
   // Week stats
   weekStatsGrid:{ flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.lg, marginTop: SPACING.lg },
