@@ -486,13 +486,39 @@
 }
 
 /*
-  ── ORACLE CHAT INPUT — text stays white in light themes ─────
-  bg-stone-900/80 has no theme override so the input background
-  stays dark (#1c1917 at 80%) while text-stone-100 gets remapped
-  to near-black — unreadable. Pin the typed text to white.
+  ── ORACLE CHAT INPUT — text + placeholder stay white in light themes ──
+  bg-stone-900/80 has no theme override so the input background stays dark
+  (#1c1917 at 80%) while text-stone-100 gets remapped to near-black and
+  placeholder:text-stone-700 stays at the original dark stone — both unreadable.
+  Pin both to white.
   Hook: .oracle-chat-input on the <input> in CoachPage.jsx
 */
 [data-theme="neutral"] .oracle-chat-input,
 [data-theme="rose"]    .oracle-chat-input {
   color: #ffffff !important;
 }
+[data-theme="neutral"] .oracle-chat-input::placeholder,
+[data-theme="rose"]    .oracle-chat-input::placeholder {
+  color: rgba(255, 255, 255, 0.38) !important;
+}
+
+/*
+  ── ORACLE RATIONALE BOX — themed backgrounds ────────────────
+  In dark theme the box uses a dark stone gradient (fine).
+  In light themes the gradient overrides produce a generic light bg
+  with no personality. Apply soft on-brand tints + dark text.
+  Hook: .oracle-rationale on the container div, .oracle-rationale-text on <p>
+*/
+[data-theme="neutral"] .oracle-rationale {
+  background: linear-gradient(to bottom, rgba(186, 230, 253, 0.35), rgba(224, 242, 254, 0.55)) !important;
+  border-color: rgba(125, 211, 252, 0.45) !important;
+}
+[data-theme="neutral"] .oracle-rationale .text-stone-100 { color: #0c2340 !important; }
+[data-theme="neutral"] .oracle-rationale-text            { color: #1e3a5f !important; }
+
+[data-theme="rose"] .oracle-rationale {
+  background: linear-gradient(to bottom, rgba(251, 207, 232, 0.35), rgba(252, 231, 243, 0.55)) !important;
+  border-color: rgba(244, 114, 182, 0.30) !important;
+}
+[data-theme="rose"] .oracle-rationale .text-stone-100 { color: #3b0a2a !important; }
+[data-theme="rose"] .oracle-rationale-text            { color: #4a1942 !important; }

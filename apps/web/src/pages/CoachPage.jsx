@@ -1089,12 +1089,12 @@ export default function CoachEngine() {
         </div>
 
         {/* RATIONALE */}
-        <div className="border border-stone-800/60 bg-gradient-to-b from-stone-950/40 to-stone-950/80 p-6 mb-8 reveal" style={{ animationDelay: '360ms' }}>
+        <div className="oracle-rationale border border-stone-800/60 bg-gradient-to-b from-stone-950/40 to-stone-950/80 p-6 mb-8 reveal" style={{ animationDelay: '360ms' }}>
           <div className="flex items-baseline justify-between mb-3">
             <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Oracle Rationale</h2>
             <span className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono">claude · narrative layer</span>
           </div>
-          <p className="text-stone-300 leading-relaxed text-[15px] max-w-3xl">
+          <p className="oracle-rationale-text text-stone-300 leading-relaxed text-[15px] max-w-3xl">
             {rationale}
           </p>
         </div>
@@ -1122,8 +1122,97 @@ export default function CoachEngine() {
           </div>
         </div>
 
+        {/* HOW IT WORKS */}
+        <div className="mt-12 mb-8 reveal" style={{ animationDelay: '480ms' }}>
+          <div className="flex items-baseline gap-3 mb-5">
+            <div className="text-[9px] uppercase tracking-[0.22em] text-stone-600 font-mono">Under the hood</div>
+            <div className="flex-1 h-px bg-stone-800/60" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+            {/* Coach Engine */}
+            <div className="border border-stone-800/60 bg-stone-950/40 p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#ed7a2a" strokeWidth="1.5">
+                    <path d="M2 6h2l2-4 2 8 2-4h2" />
+                  </svg>
+                </div>
+                <span className="font-anton text-sm uppercase tracking-wider text-orange-300">Coach Engine</span>
+              </div>
+              <p className="text-stone-400 text-xs leading-relaxed mb-3">
+                A deterministic rule gate — pure math, no AI. It ingests 14 days of weight, calorie, protein, and volume data, runs linear regression on your weight trend, and applies a branching decision tree to output a precise macro adjustment.
+              </p>
+              <div className="space-y-1.5">
+                {[
+                  'Same inputs always produce the same output',
+                  'Fully auditable — every gate is shown in the Decision Flow',
+                  'No hallucination risk — rules are hardcoded and testable',
+                ].map(pt => (
+                  <div key={pt} className="flex items-start gap-2 text-[10px] font-mono text-stone-500">
+                    <span className="text-orange-500 shrink-0 mt-px">›</span>{pt}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Oracle AI */}
+            <div className="border border-stone-800/60 bg-stone-950/40 p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#ed7a2a" strokeWidth="1.5">
+                    <circle cx="6" cy="6" r="4" /><path d="M6 3v3l2 1" />
+                  </svg>
+                </div>
+                <span className="font-anton text-sm uppercase tracking-wider text-orange-300">Oracle AI</span>
+              </div>
+              <p className="text-stone-400 text-xs leading-relaxed mb-3">
+                Claude — Anthropic's frontier model — acts as the narrative layer. It receives the Coach Engine's decision plus your full data profile and explains the WHY in plain language. In the chat tab, it answers any question using your actual numbers, not generic advice.
+              </p>
+              <div className="space-y-1.5">
+                {[
+                  'Explains reasoning behind every recommendation',
+                  'Answers questions grounded in your specific data',
+                  'Never overrides the rule gate — AI explains, rules decide',
+                ].map(pt => (
+                  <div key={pt} className="flex items-start gap-2 text-[10px] font-mono text-stone-500">
+                    <span className="text-orange-500 shrink-0 mt-px">›</span>{pt}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Data synthesis */}
+            <div className="border border-stone-800/60 bg-stone-950/40 p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-6 h-6 bg-orange-500/15 border border-orange-500/30 flex items-center justify-center shrink-0">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#ed7a2a" strokeWidth="1.5">
+                    <rect x="1" y="1" width="4" height="4" /><rect x="7" y="1" width="4" height="4" />
+                    <rect x="1" y="7" width="4" height="4" /><rect x="7" y="7" width="4" height="4" />
+                  </svg>
+                </div>
+                <span className="font-anton text-sm uppercase tracking-wider text-orange-300">Cross-module Synthesis</span>
+              </div>
+              <p className="text-stone-400 text-xs leading-relaxed mb-3">
+                Most fitness apps analyse each metric in isolation. Titan connects all five modules — Vault, Forge, Sentinel, Codex, and Oracle — into a single unified context window. Every analysis cycle reads 6 data streams simultaneously.
+              </p>
+              <div className="space-y-1.5">
+                {[
+                  'Vault: 14-day biometric + body composition trend',
+                  'Forge: volume by muscle group, PR database, recovery',
+                  'Sentinel: calorie + protein adherence, 14-day rolling mean',
+                ].map(pt => (
+                  <div key={pt} className="flex items-start gap-2 text-[10px] font-mono text-stone-500">
+                    <span className="text-orange-500 shrink-0 mt-px">›</span>{pt}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* FOOTER */}
-        <footer className="mt-12 pt-6 border-t border-stone-800/60 flex items-center justify-between text-[10px] uppercase tracking-wider text-stone-600 font-mono">
+        <footer className="mt-4 pt-6 border-t border-stone-800/60 flex items-center justify-between text-[10px] uppercase tracking-wider text-stone-600 font-mono">
           <span>Oracle v0.4 · Module 5 · Cross-module synthesis</span>
           <span>Inputs: vault · nutrition · IRONLAB · 14d window</span>
         </footer>
