@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo, useEffect } from 'react';
+﻿import React, { useState, useMemo, useEffect, useRef } from 'react';
 import AppNav from '../components/AppNav';
 import { supabase } from '../lib/supabase';
 
@@ -34,7 +34,12 @@ const USER_CONTEXT = {
   goal: 'cut',
   programWeek: 5,
   programDuration: 12,
+  trainingAge: 6, // years lifting
   startWeight: 82.0,
+  goalWeight: 78.0,
+  height: 181, // cm
+  age: 28,
+  sex: 'male',
   currentMacros: { kcal: 2200, protein: 180, carbs: 200, fat: 70 },
   weightLog: [
     82.0, 81.9, 81.8, 81.9, 81.7, 81.6, 81.5,
@@ -48,19 +53,53 @@ const USER_CONTEXT = {
     178, 185, 182, 175, 188, 180, 178,
     182, 179, 184, 181, 177, 183, 180,
   ],
-  // % volume change last 14 days vs prior 14 days
   volumeChange: {
-    chest: -8.2,
-    front_delts: -3.1,
-    triceps: 1.5,
-    quads: -5.4,
-    glutes: 2.1,
-    lats: -2.9,
-    biceps: 0.5,
-    hamstrings: -1.8,
+    chest: -8.2, front_delts: -3.1, triceps: 1.5,
+    quads: -5.4, glutes: 2.1, lats: -2.9, biceps: 0.5, hamstrings: -1.8,
   },
+  // Weekly volume in kg·reps per muscle group
+  weeklyVolume: {
+    chest: 4200, front_delts: 1800, triceps: 2100, lats: 3800,
+    biceps: 1600, quads: 8400, hamstrings: 4200, glutes: 3100,
+  },
+  // All-time PRs (1RM estimated or actual)
+  prs: {
+    'Barbell Bench Press': { weight: 100, date: 'Week 2', reps: 1 },
+    'Back Squat':          { weight: 140, date: 'Week 1', reps: 1 },
+    'Deadlift':            { weight: 180, date: 'Week 3', reps: 1 },
+    'OHP':                 { weight: 72.5, date: 'Week 4', reps: 1 },
+    'Barbell Row':         { weight: 90, date: 'Week 2', reps: 1 },
+  },
+  // Recent session PRs and performance trends
+  recentPerformance: [
+    { exercise: 'Barbell Bench Press', trend: 'regressing', lastWeight: 95, prWeight: 100, weeksDelta: -2 },
+    { exercise: 'Back Squat',          trend: 'regressing', lastWeight: 130, prWeight: 140, weeksDelta: -3 },
+    { exercise: 'Deadlift',            trend: 'holding',    lastWeight: 175, prWeight: 180, weeksDelta: 0 },
+    { exercise: 'OHP',                 trend: 'progressing',lastWeight: 75, prWeight: 72.5, weeksDelta: 1 },
+    { exercise: 'Barbell Row',         trend: 'holding',    lastWeight: 87.5, prWeight: 90, weeksDelta: 0 },
+  ],
+  // Sleep & recovery proxy (from user self-report or wearable)
+  recoveryLog: [7, 6.5, 8, 6, 7.5, 6, 7], // hours sleep, last 7 days
+  // Workout adherence
+  adherence: { workoutsCompleted: 4, workoutsScheduled: 5, mealsLogged: 6, mealsTarget: 7 },
+  // Body composition estimates
+  bodyComp: {
+    startBodyFatPct: 18.2,
+    currentBodyFatPct: 16.8,
+    leanMassStart: 67.1,
+    leanMassCurrent: 67.5,
+  },
+  // Program structure
+  splits: ['Push', 'Pull', 'Legs', 'Push', 'Pull'],
   daysUntilNext: 2,
   lastAnalyzed: '2 minutes ago',
+  // Historical coach cycles
+  coachHistory: [
+    { cycle: 1, decision: 'Hold course', kcalDelta: 0, outcome: 'On target -0.5% bw/wk' },
+    { cycle: 2, decision: 'Increase deficit', kcalDelta: -100, outcome: 'Stall broken, -0.6% bw/wk' },
+    { cycle: 3, decision: 'Hold course', kcalDelta: 0, outcome: 'Holding -0.55% bw/wk' },
+    { cycle: 4, decision: 'Add calories', kcalDelta: +100, outcome: 'Volume recovered' },
+  ],
 };
 
 // -------------------- LOGIC --------------------
@@ -416,45 +455,201 @@ function PhaseStripe({ ctx }) {
   );
 }
 
+// -------------------- PROACTIVE INSIGHTS ENGINE --------------------
+function generateProactiveInsights(ctx, analysis) {
+  const insights = [];
+
+  // Strength regression warning
+  const regressingLifts = ctx.recentPerformance.filter(p => p.trend === 'regressing');
+  if (regressingLifts.length >= 2) {
+    insights.push({
+      id: 'strength_regress',
+      severity: 'warning',
+      icon: 'trend_down',
+      title: `${regressingLifts.length} lifts regressing`,
+      body: `${regressingLifts.map(l => l.exercise.split(' ').pop()).join(' and ')} are down from PR. Cut-induced strength loss detected in week ${ctx.programWeek} — typical threshold is week 6-8. Still manageable.`,
+      module: 'Titan',
+      action: 'View exercise trends →',
+    });
+  }
+
+  // Goal ETA
+  const goalDate = new Date();
+  goalDate.setDate(goalDate.getDate() + Math.round(Math.abs((ctx.weightLog[ctx.weightLog.length - 1] - ctx.goalWeight) / (analysis.slopeKgPerWeek || -0.5))));
+  const goalDateStr = goalDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  insights.push({
+    id: 'goal_eta',
+    severity: 'info',
+    icon: 'flag',
+    title: `Goal weight by ${goalDateStr}`,
+    body: `At current slope of ${analysis.slopePctPerWeek.toFixed(2)}% bw/wk, you reach ${ctx.goalWeight} kg in approximately ${Math.abs(Math.round((ctx.weightLog[ctx.weightLog.length - 1] - ctx.goalWeight) / (analysis.slopeKgPerWeek || -0.5)))} weeks. That's ${Math.round(ctx.programDuration - ctx.programWeek)} weeks ahead of program end — ahead of schedule.`,
+    module: 'Vault',
+    action: 'View projection →',
+  });
+
+  // Lean mass preservation
+  const leanMassDelta = ctx.bodyComp.leanMassCurrent - ctx.bodyComp.leanMassStart;
+  if (leanMassDelta > 0) {
+    insights.push({
+      id: 'lean_mass',
+      severity: 'positive',
+      icon: 'muscle',
+      title: `+${leanMassDelta.toFixed(1)} kg lean mass preserved`,
+      body: `Body fat dropped ${(ctx.bodyComp.startBodyFatPct - ctx.bodyComp.currentBodyFatPct).toFixed(1)}% while lean mass actually increased ${leanMassDelta.toFixed(1)} kg. This is a body recomposition signal — protein and training stimulus are dialled in. Body fat now ${ctx.bodyComp.currentBodyFatPct}%.`,
+      module: 'Vault',
+      action: 'View body comp →',
+    });
+  }
+
+  // Sleep / recovery flag
+  const avgSleep = ctx.recoveryLog.reduce((a, b) => a + b, 0) / ctx.recoveryLog.length;
+  if (avgSleep < 7) {
+    insights.push({
+      id: 'sleep',
+      severity: 'warning',
+      icon: 'sleep',
+      title: `Avg sleep ${avgSleep.toFixed(1)}h — below threshold`,
+      body: `Sub-7h sleep during a caloric deficit accelerates cortisol-driven muscle catabolism. Research suggests sleep restriction can increase muscle loss by up to 60% during a cut. Recovery is the variable most likely to explain the current strength regression.`,
+      module: 'Recovery',
+      action: 'Log recovery →',
+    });
+  }
+
+  // Volume imbalance
+  const pushVol = (ctx.weeklyVolume.chest || 0) + (ctx.weeklyVolume.front_delts || 0) + (ctx.weeklyVolume.triceps || 0);
+  const pullVol = (ctx.weeklyVolume.lats || 0) + (ctx.weeklyVolume.biceps || 0);
+  const ratio = pushVol / (pullVol || 1);
+  if (ratio > 1.4) {
+    insights.push({
+      id: 'push_pull_imbalance',
+      severity: 'warning',
+      icon: 'balance',
+      title: `Push:Pull ratio ${ratio.toFixed(1)}:1 — imbalanced`,
+      body: `Push volume is ${ratio.toFixed(1)}× your pull volume this week. A ratio above 1.2:1 sustained over multiple weeks is associated with anterior shoulder tightness and elevated rotator cuff injury risk. Add 1-2 pulling sets to balance.`,
+      module: 'Titan',
+      action: 'Adjust program →',
+    });
+  }
+
+  // Protein adherence
+  const avgProtein = ctx.proteinLog.reduce((a, b) => a + b, 0) / ctx.proteinLog.length;
+  const proteinTarget = ctx.currentMacros.protein;
+  if (avgProtein >= proteinTarget * 0.98) {
+    insights.push({
+      id: 'protein_adherence',
+      severity: 'positive',
+      icon: 'check',
+      title: `Protein adherence ${Math.round((avgProtein / proteinTarget) * 100)}%`,
+      body: `Averaging ${Math.round(avgProtein)}g protein vs ${proteinTarget}g target — ${(avgProtein / (ctx.weightLog[ctx.weightLog.length - 1])).toFixed(2)}g per kg body weight. This is textbook for muscle preservation during a cut. The lean mass data confirms it's working.`,
+      module: 'Nutrition',
+      action: null,
+    });
+  }
+
+  return insights;
+}
+
 // -------------------- ORACLE TAB --------------------
 function OracleTab({ ctx, analysis }) {
-  const [messages, setMessages] = useState([]);
-  const [input, setInput]       = useState('');
-  const [loading, setLoading]   = useState(false);
+  const [messages, setMessages]   = useState([]);
+  const [input, setInput]         = useState('');
+  const [loading, setLoading]     = useState(false);
+  const [activeInsight, setActiveInsight] = useState(null);
+  const [showInsights, setShowInsights]   = useState(true);
+  const messagesEndRef = useRef(null);
+
+  const insights = useMemo(() => generateProactiveInsights(ctx, analysis), []);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
 
   const SUGGESTIONS = [
-    'Why is my cut stalling?',
-    'Which muscles am I undertraining?',
-    'Should I deload this week?',
-    'How long until I hit my goal weight?',
-    'Is my protein intake high enough?',
-    'What does my volume trend mean?',
+    { label: 'Why is my bench dropping?',              icon: '📉' },
+    { label: 'Am I losing muscle?',                    icon: '💪' },
+    { label: 'Should I deload this week?',             icon: '🔄' },
+    { label: 'How long until I hit goal weight?',      icon: '🎯' },
+    { label: "What's my biggest weak point right now?", icon: '🔍' },
+    { label: 'Optimise my split for this cut',         icon: '📋' },
+    { label: 'Explain my push:pull imbalance',         icon: '⚖️' },
+    { label: 'Is my recovery enough?',                 icon: '😴' },
   ];
 
+  const SEVERITY_STYLES = {
+    warning:  { border: 'border-amber-500/40',  bg: 'bg-amber-500/5',  text: 'text-amber-300',  dot: 'bg-amber-400' },
+    positive: { border: 'border-green-500/40',  bg: 'bg-green-500/5',  text: 'text-green-300',  dot: 'bg-green-400' },
+    info:     { border: 'border-orange-500/40', bg: 'bg-orange-500/5', text: 'text-orange-300', dot: 'bg-orange-400' },
+    critical: { border: 'border-red-500/40',    bg: 'bg-red-500/5',    text: 'text-red-300',    dot: 'bg-red-400' },
+  };
+
   const buildSystemPrompt = () => `
-You are Oracle — the AI coach inside Titan, a serious lifters' fitness app.
-You have direct access to this user's live training and nutrition data. Always answer using their specific numbers, never generic advice.
+You are Oracle — the AI coaching intelligence inside Titan, a data-driven fitness app for serious lifters. You have complete access to this user's training, nutrition, and biometric data. You are not a generic fitness chatbot — you are a specialist who has read every number this athlete has ever logged.
 
-USER DATA SNAPSHOT:
-- Name: ${ctx.name}
-- Goal: ${ctx.goal} (week ${ctx.programWeek} of ${ctx.programDuration})
-- Current weight: ${ctx.weightLog[ctx.weightLog.length - 1]} kg (started at ${ctx.startWeight} kg)
-- Weight slope: ${analysis.slopePctPerWeek.toFixed(2)}% body weight per week
-- Current macros: ${ctx.currentMacros.kcal} kcal / ${ctx.currentMacros.protein}g protein / ${ctx.currentMacros.carbs}g carbs / ${ctx.currentMacros.fat}g fat
-- Recommended macros: +${analysis.decision.kcalDelta} kcal delta (Coach Engine decision: ${analysis.decision.label})
-- Avg daily calories (14d): ${Math.round(ctx.calorieLog.reduce((a, b) => a + b, 0) / ctx.calorieLog.length)} kcal
-- Avg daily protein (14d): ${Math.round(ctx.proteinLog.reduce((a, b) => a + b, 0) / ctx.proteinLog.length)}g
-- Volume changes vs prior 14d: ${Object.entries(ctx.volumeChange).map(([m, v]) => `${m}: ${v > 0 ? '+' : ''}${v}%`).join(', ')}
-- Regressing muscles (>5% down): ${analysis.regressingMuscles.join(', ') || 'none'}
-- Days until next Coach analysis: ${ctx.daysUntilNext}
+Your role: answer with surgical precision using the user's actual data. Reference specific numbers, dates, trends. Never give generic advice when you have real data to work from.
 
-RULES:
-- Always cite the user's actual numbers when answering
-- Be direct and athletic in tone — no wellness clichés
-- If you recommend a change, quantify it (e.g. "+100 kcal from carbs")
-- Keep answers concise: 2-4 sentences unless the question is complex
-- Never recommend anything that contradicts the Coach Engine's decision without explaining why
-- If a question is outside the data available, say so clearly
+Tone: direct, athletic, intelligent. No wellness clichés. Treat the user as a serious athlete who wants real answers. Think: the world's best strength coach who also has a PhD in sports science and has been tracking this specific athlete for months.
+
+═══════════════════════════════════════
+USER PROFILE
+═══════════════════════════════════════
+Name: ${ctx.name} | Age: ${ctx.age} | Sex: ${ctx.sex} | Height: ${ctx.height}cm
+Training age: ${ctx.trainingAge} years
+Goal: ${ctx.goal.toUpperCase()} | Program week: ${ctx.programWeek}/${ctx.programDuration}
+
+═══════════════════════════════════════
+BODY COMPOSITION (Biometric Vault)
+═══════════════════════════════════════
+Start weight: ${ctx.startWeight} kg | Current: ${ctx.weightLog[ctx.weightLog.length - 1]} kg | Goal: ${ctx.goalWeight} kg
+Weight slope: ${analysis.slopePctPerWeek.toFixed(2)}% body weight/week (safe cut range: -0.3% to -0.7%)
+Body fat: ${ctx.bodyComp.startBodyFatPct}% → ${ctx.bodyComp.currentBodyFatPct}% (Δ ${(ctx.bodyComp.startBodyFatPct - ctx.bodyComp.currentBodyFatPct).toFixed(1)}%)
+Lean mass: ${ctx.bodyComp.leanMassStart} kg → ${ctx.bodyComp.leanMassCurrent} kg (Δ +${(ctx.bodyComp.leanMassCurrent - ctx.bodyComp.leanMassStart).toFixed(1)} kg)
+
+═══════════════════════════════════════
+NUTRITION (14-day average)
+═══════════════════════════════════════
+Calories: ${Math.round(ctx.calorieLog.reduce((a, b) => a + b, 0) / ctx.calorieLog.length)} kcal/day (target: ${ctx.currentMacros.kcal})
+Protein: ${Math.round(ctx.proteinLog.reduce((a, b) => a + b, 0) / ctx.proteinLog.length)}g/day (target: ${ctx.currentMacros.protein}g | ${((Math.round(ctx.proteinLog.reduce((a, b) => a + b, 0) / ctx.proteinLog.length)) / ctx.weightLog[ctx.weightLog.length - 1]).toFixed(2)}g/kg)
+Carbs: ${ctx.currentMacros.carbs}g | Fat: ${ctx.currentMacros.fat}g
+Coach decision this cycle: ${analysis.decision.label} (${analysis.decision.kcalDelta > 0 ? '+' : ''}${analysis.decision.kcalDelta} kcal)
+
+═══════════════════════════════════════
+TRAINING STIMULUS (Titan Logger — 14d vs prior 14d)
+═══════════════════════════════════════
+Volume changes by muscle:
+${Object.entries(ctx.volumeChange).map(([m, v]) => `  ${m}: ${v > 0 ? '+' : ''}${v}%${v < -5 ? ' ⚠ REGRESSING' : ''}`).join('\n')}
+Regressing muscles (>5% drop): ${analysis.regressingMuscles.join(', ') || 'none'}
+
+Weekly volume (kg·reps):
+${Object.entries(ctx.weeklyVolume).map(([m, v]) => `  ${m}: ${v.toLocaleString()}`).join('\n')}
+
+═══════════════════════════════════════
+STRENGTH / PR STATUS
+═══════════════════════════════════════
+${ctx.recentPerformance.map(p => `  ${p.exercise}: ${p.lastWeight}kg (PR: ${p.prWeight}kg) — ${p.trend.toUpperCase()}`).join('\n')}
+
+═══════════════════════════════════════
+RECOVERY
+═══════════════════════════════════════
+Sleep last 7 nights: ${ctx.recoveryLog.join(', ')}h
+Average: ${(ctx.recoveryLog.reduce((a, b) => a + b, 0) / ctx.recoveryLog.length).toFixed(1)}h/night
+Workout adherence: ${ctx.adherence.workoutsCompleted}/${ctx.adherence.workoutsScheduled} this week
+Meal logging: ${ctx.adherence.mealsLogged}/${ctx.adherence.mealsTarget} days
+
+═══════════════════════════════════════
+COACH HISTORY (previous cycles)
+═══════════════════════════════════════
+${ctx.coachHistory.map(c => `  Cycle ${c.cycle}: ${c.decision} (${c.kcalDelta > 0 ? '+' : ''}${c.kcalDelta} kcal) → ${c.outcome}`).join('\n')}
+
+═══════════════════════════════════════
+RESPONSE FORMAT RULES
+═══════════════════════════════════════
+- Lead with the most important number or finding
+- Always cite specific data points from above when relevant
+- If recommending a change: quantify it precisely (e.g. "+1 pulling set on Wednesday")
+- If the question requires a prediction: show your working (e.g. "at -0.54% bw/wk, you need X more weeks")
+- Keep responses 3-6 sentences unless complexity demands more
+- End with a single actionable next step when appropriate
+- Never hedge with "consult a doctor" unless there is a genuine medical concern
 `.trim();
 
   const sendMessage = async (text) => {
@@ -462,6 +657,7 @@ RULES:
     if (!userMsg || loading) return;
     setInput('');
     setLoading(true);
+    setShowInsights(false);
 
     const newMessages = [...messages, { role: 'user', content: userMsg }];
     setMessages(newMessages);
@@ -470,111 +666,231 @@ RULES:
       const { data, error } = await supabase.functions.invoke('oracle-chat', {
         body: { messages: newMessages, systemPrompt: buildSystemPrompt() },
       });
-      if (error || !data?.reply) throw new Error(error?.message ?? 'empty response');
+      if (error) {
+        let detail = error.message;
+        try { const body = await error.context.json(); detail = body.message ?? body.error ?? detail; } catch (_) {}
+        throw new Error(detail);
+      }
+      if (!data?.reply) throw new Error('empty response from function');
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
     } catch (err) {
-      console.error('[oracle-chat]', err);
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Oracle is unavailable right now — make sure ANTHROPIC_API_KEY is set in your Supabase project secrets.' }]);
+      const msg = err?.message ?? String(err);
+      console.error('[oracle-chat]', msg);
+      setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${msg}` }]);
     } finally {
       setLoading(false);
     }
   };
 
+  const clearChat = () => {
+    setMessages([]);
+    setShowInsights(true);
+  };
+
   return (
-    <div className="flex flex-col h-[72vh] border border-stone-800/60 bg-stone-950/40">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800/60 shrink-0">
-        <div>
-          <div className="text-[9px] uppercase tracking-[0.22em] text-orange-400 font-mono mb-0.5">AI · Grounded in your data</div>
-          <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Oracle</h2>
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      {/* ── LEFT PANEL: Proactive Insights ── */}
+      <div className="lg:col-span-4 space-y-4">
+        <div className="flex items-baseline justify-between">
+          <div>
+            <div className="text-[9px] uppercase tracking-[0.22em] text-orange-400 font-mono">Auto-detected</div>
+            <h3 className="font-anton text-xl uppercase tracking-tight text-stone-100">Insights</h3>
+          </div>
+          <span className="text-[9px] font-mono text-stone-600 uppercase tracking-wider">{insights.length} findings</span>
         </div>
-        <div className="flex items-center gap-2 text-[10px] font-mono text-stone-600">
-          <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
-          Live context · cycle #{ctx.programWeek}
+
+        {insights.map(ins => {
+          const s = SEVERITY_STYLES[ins.severity];
+          const isActive = activeInsight === ins.id;
+          return (
+            <div
+              key={ins.id}
+              onClick={() => {
+                setActiveInsight(isActive ? null : ins.id);
+                if (!isActive) sendMessage(`Tell me more about this finding: "${ins.title}" — ${ins.body}`);
+              }}
+              className={`border ${s.border} ${s.bg} p-4 cursor-pointer transition-all hover:opacity-90 ${isActive ? 'ring-1 ring-orange-500/30' : ''}`}
+            >
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1 ${s.dot}`} />
+                  <span className={`text-[10px] uppercase tracking-[0.18em] font-mono font-medium ${s.text}`}>
+                    {ins.severity === 'positive' ? '✓ ' : ins.severity === 'warning' ? '⚠ ' : ''}{ins.title}
+                  </span>
+                </div>
+                <span className="text-[9px] font-mono text-stone-700 uppercase shrink-0">{ins.module}</span>
+              </div>
+              <p className="text-stone-400 text-xs leading-relaxed">{ins.body}</p>
+              {ins.action && (
+                <div className={`mt-2 text-[9px] font-mono uppercase tracking-wider ${s.text} opacity-70`}>
+                  Ask Oracle → {ins.title}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Data context panel */}
+        <div className="border border-stone-800/60 bg-stone-950/40 p-4">
+          <div className="text-[9px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-3">Oracle is reading</div>
+          {[
+            { label: 'Biometric Vault', value: '14 days of weight', active: true },
+            { label: 'Titan Logger',    value: '8 muscle groups',   active: true },
+            { label: 'Nutrition',       value: '14-day calorie log', active: true },
+            { label: 'PR Database',     value: '5 compound lifts',  active: true },
+            { label: 'Recovery',        value: '7 nights sleep',    active: true },
+            { label: 'Coach History',   value: '4 prior cycles',    active: true },
+          ].map(d => (
+            <div key={d.label} className="flex items-center justify-between py-1.5 border-b border-stone-900/80 last:border-b-0">
+              <div className="flex items-center gap-2">
+                <span className={`w-1 h-1 rounded-full ${d.active ? 'bg-orange-400' : 'bg-stone-700'}`} />
+                <span className="text-[10px] font-mono text-stone-500 uppercase tracking-wider">{d.label}</span>
+              </div>
+              <span className="text-[10px] font-mono text-stone-600">{d.value}</span>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Chat area */}
-      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-        {messages.length === 0 && (
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-4">
-              Ask anything about your data
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {SUGGESTIONS.map(s => (
-                <button
-                  key={s}
-                  onClick={() => sendMessage(s)}
-                  className="text-left px-3 py-2.5 border border-stone-800/60 text-stone-400 text-xs font-mono hover:border-orange-500/40 hover:text-stone-200 transition-colors"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+      {/* ── RIGHT PANEL: Chat ── */}
+      <div className="lg:col-span-8 flex flex-col border border-stone-800/60 bg-stone-950/40" style={{ minHeight: '70vh' }}>
 
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            {m.role === 'assistant' && (
-              <div className="w-6 h-6 shrink-0 bg-orange-500/20 border border-orange-500/40 flex items-center justify-center mr-3 mt-0.5">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#ed7a2a" strokeWidth="1.5">
-                  <circle cx="6" cy="6" r="4" /><path d="M6 3v3l2 1" />
-                </svg>
-              </div>
-            )}
-            <div className={`max-w-[80%] px-4 py-3 text-sm leading-relaxed font-sans ${
-              m.role === 'user'
-                ? 'bg-stone-800/60 border border-stone-700/60 text-stone-200'
-                : 'bg-stone-950/80 border border-orange-500/20 text-stone-300'
-            }`}>
-              {m.content}
-            </div>
-          </div>
-        ))}
-
-        {loading && (
-          <div className="flex justify-start">
-            <div className="w-6 h-6 shrink-0 bg-orange-500/20 border border-orange-500/40 flex items-center justify-center mr-3">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#ed7a2a" strokeWidth="1.5">
-                <circle cx="6" cy="6" r="4" /><path d="M6 3v3l2 1" />
+        {/* Chat header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800/60 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-700 flex items-center justify-center">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth="1.5">
+                <circle cx="7" cy="7" r="5" /><path d="M7 4v3l2 1" />
               </svg>
             </div>
-            <div className="px-4 py-3 border border-orange-500/20 bg-stone-950/80">
-              <div className="flex gap-1.5 items-center">
-                {[0, 1, 2].map(i => (
-                  <span key={i} className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse"
-                    style={{ animationDelay: `${i * 150}ms` }} />
+            <div>
+              <div className="font-anton text-lg uppercase tracking-tight text-stone-100 leading-none">Oracle</div>
+              <div className="text-[9px] font-mono text-stone-600 uppercase tracking-wider mt-0.5">
+                Grounded in {ctx.name}'s data · cycle #{ctx.programWeek}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {messages.length > 0 && (
+              <button
+                onClick={clearChat}
+                className="text-[9px] uppercase tracking-wider font-mono text-stone-600 hover:text-stone-400 transition-colors"
+              >
+                Clear
+              </button>
+            )}
+            <div className="flex items-center gap-1.5 text-[10px] font-mono text-stone-600">
+              <span className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
+              Live
+            </div>
+          </div>
+        </div>
+
+        {/* Messages area */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+
+          {/* Empty state — suggestions */}
+          {messages.length === 0 && showInsights && (
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-stone-600 font-mono mb-4">
+                Ask anything about your training
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-6">
+                {SUGGESTIONS.map(s => (
+                  <button
+                    key={s.label}
+                    onClick={() => sendMessage(s.label)}
+                    className="text-left px-4 py-3 border border-stone-800/60 text-stone-400 text-xs font-mono hover:border-orange-500/40 hover:text-stone-200 hover:bg-orange-500/5 transition-all flex items-center gap-2"
+                  >
+                    <span className="text-base">{s.icon}</span>
+                    {s.label}
+                  </button>
                 ))}
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
 
-      {/* Input bar */}
-      <div className="shrink-0 border-t border-stone-800/60 p-4 flex gap-3">
-        <input
-          type="text"
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && sendMessage()}
-          placeholder="Ask Oracle about your training or nutrition…"
-          disabled={loading}
-          className="flex-1 bg-stone-900/80 border border-stone-800 text-stone-100 font-mono text-sm px-4 py-2.5 placeholder:text-stone-700 focus:outline-none focus:border-orange-500/50 transition-colors"
-        />
-        <button
-          onClick={() => sendMessage()}
-          disabled={!input.trim() || loading}
-          className={`px-5 py-2.5 font-anton text-sm uppercase tracking-wider transition-colors ${
-            input.trim() && !loading
-              ? 'bg-orange-500 text-stone-950 hover:bg-orange-400'
-              : 'bg-stone-900 text-stone-700 border border-stone-800 cursor-not-allowed'
-          }`}
-        >
-          Send
-        </button>
+          {/* Message thread */}
+          {messages.map((m, i) => (
+            <div key={i} className={`flex gap-3 ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+              {m.role === 'assistant' ? (
+                <div className="w-7 h-7 shrink-0 bg-gradient-to-br from-orange-500 to-red-700 flex items-center justify-center mt-0.5">
+                  <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth="1.5">
+                    <circle cx="7" cy="7" r="5" /><path d="M7 4v3l2 1" />
+                  </svg>
+                </div>
+              ) : (
+                <div className="w-7 h-7 shrink-0 bg-stone-700/60 border border-stone-600/40 flex items-center justify-center font-anton text-xs text-stone-300 mt-0.5">
+                  {ctx.name[0]}
+                </div>
+              )}
+              <div className={`max-w-[82%] ${m.role === 'user' ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
+                <div className={`px-4 py-3 text-sm leading-relaxed ${
+                  m.role === 'user'
+                    ? 'bg-stone-800/80 border border-stone-700/60 text-stone-200 font-sans'
+                    : 'bg-stone-950/60 border border-orange-500/20 text-stone-300 font-sans'
+                }`}>
+                  {m.content}
+                </div>
+                <div className="text-[9px] font-mono text-stone-700 px-1">
+                  {m.role === 'assistant' ? 'Oracle · grounded in your data' : 'You'}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {/* Thinking state */}
+          {loading && (
+            <div className="flex gap-3">
+              <div className="w-7 h-7 shrink-0 bg-gradient-to-br from-orange-500 to-red-700 flex items-center justify-center">
+                <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="white" strokeWidth="1.5">
+                  <circle cx="7" cy="7" r="5" /><path d="M7 4v3l2 1" />
+                </svg>
+              </div>
+              <div className="px-4 py-3 border border-orange-500/20 bg-stone-950/60">
+                <div className="flex items-center gap-2">
+                  <div className="text-[10px] font-mono text-stone-600 uppercase tracking-wider mr-2">Analysing your data</div>
+                  {[0, 1, 2].map(i => (
+                    <span key={i} className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse"
+                      style={{ animationDelay: `${i * 180}ms` }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input bar */}
+        <div className="shrink-0 border-t border-stone-800/60 p-4">
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+              placeholder={`Ask Oracle about ${ctx.name}'s training, nutrition, or recovery…`}
+              disabled={loading}
+              className="flex-1 bg-stone-900/80 border border-stone-800 text-stone-100 font-mono text-sm px-4 py-3 placeholder:text-stone-700 focus:outline-none focus:border-orange-500/50 transition-colors disabled:opacity-50"
+            />
+            <button
+              onClick={() => sendMessage()}
+              disabled={!input.trim() || loading}
+              className={`px-6 py-3 font-anton text-sm uppercase tracking-wider transition-all shrink-0 ${
+                input.trim() && !loading
+                  ? 'bg-orange-500 text-stone-950 hover:bg-orange-400'
+                  : 'bg-stone-900 text-stone-700 border border-stone-800 cursor-not-allowed'
+              }`}
+            >
+              Ask →
+            </button>
+          </div>
+          <div className="mt-2 text-[9px] font-mono text-stone-700 uppercase tracking-wider">
+            Oracle reads all 6 data sources in real time · answers grounded in your numbers only
+          </div>
+        </div>
       </div>
     </div>
   );
