@@ -504,7 +504,7 @@ function ExerciseCard({ we, exercise, onUpdate, onRemove, onAddSet, index, weigh
 }
 
 // -------------------- ADD EXERCISE PICKER --------------------
-function AddExercisePicker({ library, onAdd, used }) {
+function AddExercisePicker({ library, onAdd, used, onCreateExercise }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const ref = useRef(null);
@@ -538,7 +538,17 @@ function AddExercisePicker({ library, onAdd, used }) {
           />
           <ul className="max-h-72 overflow-y-auto">
             {available.length === 0 && (
-              <li className="px-4 py-3 text-stone-600 text-sm font-mono">No exercises found.</li>
+              <li className="px-4 py-3">
+                <div className="text-stone-600 text-sm font-mono mb-2">No exercises found in Codex.</div>
+                {onCreateExercise && (
+                  <button
+                    onClick={() => { setOpen(false); setQuery(''); onCreateExercise(); }}
+                    className="text-[10px] font-mono text-orange-400 hover:text-orange-300 border border-orange-500/30 hover:border-orange-500/60 px-3 py-1.5 uppercase tracking-wider transition-colors"
+                  >
+                    + Create Custom Exercise
+                  </button>
+                )}
+              </li>
             )}
             {available.map(ex => (
               <li key={ex.id}>
@@ -553,9 +563,169 @@ function AddExercisePicker({ library, onAdd, used }) {
                 </button>
               </li>
             ))}
+            {onCreateExercise && available.length > 0 && (
+              <li className="border-t border-stone-800/60">
+                <button
+                  onClick={() => { setOpen(false); setQuery(''); onCreateExercise(); }}
+                  className="w-full text-left px-4 py-2.5 text-stone-600 hover:text-orange-300 font-mono text-[10px] uppercase tracking-wider transition-colors"
+                >
+                  + Create Custom Exercise (not in Codex)
+                </button>
+              </li>
+            )}
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+// -------------------- CREATE EXERCISE MODAL --------------------
+function CreateExerciseModal({ userId, onCreated, onClose }) {
+  const [exName, setExName]                     = useState('');
+  const [primaryMuscle, setPrimaryMuscle]       = useState('');
+  const [secondaryMuscles, setSecondaryMuscles] = useState([]);
+  const [equipment, setEquipment]               = useState('');
+  const [saving, setSaving]                     = useState(false);
+  const [error, setError]                       = useState('');
+
+  function toggleSecondary(key) {
+    setSecondaryMuscles(prev =>
+      prev.includes(key) ? prev.filter(m => m !== key) : [...prev, key]
+    );
+  }
+
+  async function handleSave() {
+    if (!exName.trim())   { setError('Exercise name is required.'); return; }
+    if (!primaryMuscle)   { setError('Select a primary muscle.'); return; }
+    setError('');
+    setSaving(true);
+    const id = `custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const secondary = secondaryMuscles.filter(m => m !== primaryMuscle);
+    const { data, error: dbErr } = await supabase
+      .from('exercises')
+      .insert({
+        id,
+        name:              exName.trim(),
+        primary_muscle:    primaryMuscle,
+        secondary_muscles: secondary,
+        equipment:         equipment.trim() || null,
+        premium:           false,
+        created_by:        userId,
+      })
+      .select()
+      .single();
+    setSaving(false);
+    if (dbErr) { setError('Could not save — try again.'); console.error(dbErr); return; }
+    onCreated({
+      id:        data.id,
+      name:      data.name,
+      primary:   [data.primary_muscle].filter(Boolean),
+      secondary: Array.isArray(data.secondary_muscles) ? data.secondary_muscles : [],
+    });
+  }
+
+  const allMuscleKeys = Object.keys(MUSCLES);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-stone-950/90 flex items-center justify-center px-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-md border border-stone-800 bg-[#0a0908] p-6 space-y-5 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">Create Exercise</h2>
+          <button onClick={onClose} className="text-stone-600 hover:text-stone-300 font-mono text-xs">✕</button>
+        </div>
+
+        {/* Codex reminder */}
+        <div className="border border-amber-500/30 bg-amber-500/5 px-4 py-3 flex gap-3">
+          <span className="text-amber-400 text-sm shrink-0">⚠</span>
+          <p className="text-[11px] font-mono text-amber-300/80 leading-relaxed">
+            Only create a custom exercise if you <strong>can't find it in Codex</strong>.
+            Codex has 60+ exercises with muscle mapping already built in — check there first.
+          </p>
+        </div>
+
+        {/* Name */}
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-2">Exercise Name *</label>
+          <input
+            autoFocus
+            value={exName}
+            onChange={e => setExName(e.target.value)}
+            placeholder="e.g. Zercher Squat, Landmine Press…"
+            className="w-full bg-stone-950/60 border border-stone-800 px-4 py-3 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors placeholder:text-stone-700"
+          />
+        </div>
+
+        {/* Primary muscle */}
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-1">
+            Primary Muscle * <span className="text-stone-700 normal-case tracking-normal">— what it hits most</span>
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {allMuscleKeys.map(key => (
+              <button
+                key={key}
+                onClick={() => setPrimaryMuscle(key)}
+                className={`px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider border transition-colors ${
+                  primaryMuscle === key
+                    ? 'border-orange-500/60 text-orange-300 bg-orange-500/15'
+                    : 'border-stone-700 text-stone-500 hover:border-stone-500 hover:text-stone-300'
+                }`}
+              >
+                {MUSCLES[key]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Secondary muscles */}
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-1">
+            Secondary Muscles <span className="text-stone-700 normal-case tracking-normal">— optional, also worked</span>
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {allMuscleKeys.filter(k => k !== primaryMuscle).map(key => (
+              <button
+                key={key}
+                onClick={() => toggleSecondary(key)}
+                className={`px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider border transition-colors ${
+                  secondaryMuscles.includes(key)
+                    ? 'border-stone-500 text-stone-200 bg-stone-800/60'
+                    : 'border-stone-800 text-stone-600 hover:border-stone-600 hover:text-stone-400'
+                }`}
+              >
+                {MUSCLES[key]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Equipment */}
+        <div>
+          <label className="block text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-2">
+            Equipment <span className="text-stone-700 normal-case tracking-normal">— optional</span>
+          </label>
+          <input
+            value={equipment}
+            onChange={e => setEquipment(e.target.value)}
+            placeholder="e.g. barbell, dumbbell, cable, bodyweight…"
+            className="w-full bg-stone-950/60 border border-stone-800 px-4 py-3 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors placeholder:text-stone-700"
+          />
+        </div>
+
+        {error && <p className="text-[11px] font-mono text-red-400">{error}</p>}
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 transition-colors">Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 px-4 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Create & Add'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1001,6 +1171,351 @@ function Backdrop() {
   );
 }
 
+// -------------------- CREATE SPLIT MODAL --------------------
+const mkDay = () => ({ _id: `d_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`, label: '', exerciseIds: [] });
+
+function CreateSplitModal({ library, userId, existingSplit, onSaved, onClose }) {
+  const [splitName, setSplitName] = useState(existingSplit?.name || '');
+  const [days, setDays] = useState(
+    existingSplit?.days?.length
+      ? existingSplit.days.map(d => ({ ...d, _id: `d_${Date.now()}_${Math.random().toString(36).slice(2, 5)}` }))
+      : [mkDay()]
+  );
+  const [dayQueries, setDayQueries] = useState({});
+  const [saving, setSaving]         = useState(false);
+  const [error, setError]           = useState('');
+
+  function addDay() { setDays(prev => [...prev, mkDay()]); }
+
+  function removeDay(id) { setDays(prev => prev.filter(d => d._id !== id)); }
+
+  function updateLabel(id, label) {
+    setDays(prev => prev.map(d => d._id === id ? { ...d, label } : d));
+  }
+
+  function moveDay(idx, dir) {
+    setDays(prev => {
+      const arr = [...prev];
+      const t = idx + dir;
+      if (t < 0 || t >= arr.length) return arr;
+      [arr[idx], arr[t]] = [arr[t], arr[idx]];
+      return arr;
+    });
+  }
+
+  function addExToDay(dayId, exId) {
+    setDays(prev => prev.map(d => {
+      if (d._id !== dayId || d.exerciseIds.includes(exId)) return d;
+      return { ...d, exerciseIds: [...d.exerciseIds, exId] };
+    }));
+    setDayQueries(prev => ({ ...prev, [dayId]: '' }));
+  }
+
+  function removeExFromDay(dayId, exId) {
+    setDays(prev => prev.map(d =>
+      d._id === dayId ? { ...d, exerciseIds: d.exerciseIds.filter(id => id !== exId) } : d
+    ));
+  }
+
+  async function handleSave() {
+    if (!splitName.trim())               { setError('Split name is required.'); return; }
+    if (days.every(d => !d.label.trim())) { setError('Name at least one day.'); return; }
+    setError('');
+    setSaving(true);
+    const cleanDays = days
+      .filter(d => d.label.trim() || d.exerciseIds.length)
+      .map(({ label, exerciseIds }) => ({ label: label.trim() || 'Day', exerciseIds }));
+
+    let dbErr;
+    if (existingSplit?.id) {
+      ({ error: dbErr } = await supabase
+        .from('custom_splits')
+        .update({ name: splitName.trim(), days: cleanDays, updated_at: new Date().toISOString() })
+        .eq('id', existingSplit.id));
+    } else {
+      ({ error: dbErr } = await supabase
+        .from('custom_splits')
+        .insert({ user_id: userId, name: splitName.trim(), days: cleanDays }));
+    }
+
+    setSaving(false);
+    if (dbErr) { setError('Could not save — try again.'); console.error(dbErr); return; }
+    onSaved();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-stone-950/92 flex flex-col justify-end md:items-center md:justify-center px-0 md:px-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg bg-[#0a0908] border-t border-stone-800 md:border flex flex-col max-h-[92vh] md:max-h-[88vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800 shrink-0">
+          <div>
+            <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">
+              {existingSplit ? 'Edit Split' : 'Create Split'}
+            </h2>
+            <div className="text-[9px] font-mono text-stone-600 uppercase tracking-wider mt-0.5">
+              Organize your training week your way
+            </div>
+          </div>
+          <button onClick={onClose} className="text-stone-600 hover:text-stone-300 font-mono text-sm">✕</button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          <div>
+            <label className="block text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono mb-2">Split Name *</label>
+            <input
+              autoFocus
+              value={splitName}
+              onChange={e => setSplitName(e.target.value)}
+              placeholder="e.g. My PPL, Strength Block, Hybrid…"
+              className="w-full bg-stone-950/60 border border-stone-800 px-4 py-3 text-stone-100 font-mono text-sm focus:outline-none focus:border-orange-500/60 transition-colors placeholder:text-stone-700"
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-[10px] uppercase tracking-[0.18em] text-stone-500 font-mono">Days ({days.length})</label>
+              <button
+                onClick={addDay}
+                className="text-[9px] font-mono uppercase tracking-wider text-orange-400 hover:text-orange-300 border border-orange-500/30 hover:border-orange-500/60 px-2.5 py-1 transition-colors"
+              >
+                + Add Day
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {days.map((day, idx) => {
+                const q = dayQueries[day._id] || '';
+                const filteredEx = library
+                  .filter(e => !day.exerciseIds.includes(e.id) && e.name.toLowerCase().includes(q.toLowerCase()))
+                  .slice(0, 8);
+
+                return (
+                  <div key={day._id} className="border border-stone-800 bg-stone-950/40">
+                    {/* Day header row */}
+                    <div className="flex items-center gap-2 px-3 py-2 border-b border-stone-800/60 bg-stone-900/30">
+                      <span className="font-mono text-[9px] text-stone-600 tabular-nums w-5 shrink-0">
+                        {String(idx + 1).padStart(2, '0')}
+                      </span>
+                      <input
+                        value={day.label}
+                        onChange={e => updateLabel(day._id, e.target.value)}
+                        placeholder="Day name — e.g. Push, Pull, Legs, Upper…"
+                        className="flex-1 bg-transparent text-stone-200 font-mono text-sm focus:outline-none placeholder:text-stone-700 min-w-0"
+                      />
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => moveDay(idx, -1)} disabled={idx === 0}
+                          className="w-6 h-6 flex items-center justify-center text-stone-600 hover:text-stone-300 disabled:opacity-20 font-mono text-[10px]">↑</button>
+                        <button onClick={() => moveDay(idx, 1)} disabled={idx === days.length - 1}
+                          className="w-6 h-6 flex items-center justify-center text-stone-600 hover:text-stone-300 disabled:opacity-20 font-mono text-[10px]">↓</button>
+                        <button onClick={() => removeDay(day._id)} disabled={days.length === 1}
+                          className="w-6 h-6 flex items-center justify-center text-stone-600 hover:text-red-400 disabled:opacity-20 font-mono text-[10px]">✕</button>
+                      </div>
+                    </div>
+
+                    {/* Selected exercises */}
+                    {day.exerciseIds.length > 0 && (
+                      <div className="px-3 py-2 border-b border-stone-800/40 flex flex-wrap gap-1.5">
+                        {day.exerciseIds.map(exId => {
+                          const ex = library.find(e => e.id === exId);
+                          return ex ? (
+                            <span key={exId} className="inline-flex items-center gap-1 px-2 py-0.5 bg-stone-800/60 border border-stone-700/60 text-[9px] font-mono text-stone-300 uppercase tracking-wider">
+                              {ex.name}
+                              <button onClick={() => removeExFromDay(day._id, exId)}
+                                className="text-stone-600 hover:text-red-400 transition-colors ml-0.5">×</button>
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+
+                    {/* Exercise search */}
+                    <div className="relative">
+                      <input
+                        value={q}
+                        onChange={e => setDayQueries(prev => ({ ...prev, [day._id]: e.target.value }))}
+                        placeholder="Search exercises to add to this day…"
+                        className="w-full bg-transparent px-3 py-2 text-stone-400 font-mono text-xs focus:outline-none focus:text-stone-200 placeholder:text-stone-700"
+                      />
+                      {q && filteredEx.length > 0 && (
+                        <ul className="border-t border-stone-800/40 max-h-32 overflow-y-auto">
+                          {filteredEx.map(ex => (
+                            <li key={ex.id}>
+                              <button
+                                onClick={() => addExToDay(day._id, ex.id)}
+                                className="w-full text-left px-3 py-1.5 hover:bg-orange-500/10 hover:text-orange-200 text-stone-400 font-mono text-[11px] transition-colors border-b border-stone-900/40 last:border-0 flex items-center justify-between gap-3"
+                              >
+                                <span>{ex.name}</span>
+                                <span className="text-[9px] text-stone-700 shrink-0">{ex.primary?.map(m => MUSCLES[m]).join(', ')}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {q && filteredEx.length === 0 && (
+                        <div className="px-3 py-2 text-stone-700 font-mono text-[11px] border-t border-stone-800/40">No exercises match</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {error && <p className="text-[11px] font-mono text-red-400">{error}</p>}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-stone-800 shrink-0 flex gap-3">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-stone-500 transition-colors">Cancel</button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 px-4 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors disabled:opacity-50"
+          >
+            {saving ? 'Saving…' : 'Save Split'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -------------------- CUSTOM SPLITS PICKER --------------------
+function CustomSplitsPicker({ splits, loading, library, onLoadDay, onClose, onEdit, onDelete, onCreateNew }) {
+  const [expanded, setExpanded]         = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end bg-stone-950/80 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-[#0a0908] border-t border-stone-800 max-h-[75vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-stone-800 shrink-0">
+          <div>
+            <h2 className="font-anton text-2xl uppercase tracking-tight text-stone-100">My Splits</h2>
+            <div className="text-[9px] uppercase tracking-[0.18em] text-stone-600 font-mono mt-0.5">custom training programs</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onCreateNew}
+              className="px-3 py-1.5 border border-orange-500/40 text-orange-300 font-mono text-[10px] uppercase tracking-wider hover:bg-orange-500/10 transition-colors"
+            >
+              + New Split
+            </button>
+            <button onClick={onClose} className="text-stone-600 hover:text-stone-300 font-mono text-sm">✕</button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center py-12">
+            <div className="text-stone-600 font-mono text-xs uppercase tracking-wider">Loading…</div>
+          </div>
+        ) : splits.length === 0 ? (
+          <div className="flex-1 flex flex-col items-center justify-center py-12 px-6 gap-5 text-center">
+            <div className="text-stone-600 font-mono text-xs uppercase tracking-wider leading-relaxed">
+              No custom splits yet<br />
+              <span className="text-stone-700">Build a split to organize your week</span>
+            </div>
+            <button
+              onClick={onCreateNew}
+              className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors"
+            >
+              Create First Split
+            </button>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto">
+            {splits.map(split => (
+              <div key={split.id} className="border-b border-stone-800/40 last:border-b-0">
+                {/* Split header */}
+                <div className="flex items-center gap-3 px-6 py-4">
+                  <button
+                    className="flex-1 text-left"
+                    onClick={() => setExpanded(expanded === split.id ? null : split.id)}
+                  >
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-anton text-lg uppercase text-stone-100">{split.name}</span>
+                      <span className="text-[9px] font-mono text-stone-600">{split.days?.length ?? 0} days</span>
+                      <span className="text-stone-700 font-mono text-[9px]">{expanded === split.id ? '▲' : '▼'}</span>
+                    </div>
+                    {(split.days ?? []).slice(0, 4).length > 0 && (
+                      <div className="text-[9px] font-mono text-stone-600 mt-0.5">
+                        {split.days.slice(0, 4).map(d => d.label).join(' · ')}
+                        {split.days.length > 4 && ` · +${split.days.length - 4}`}
+                      </div>
+                    )}
+                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => onEdit(split)}
+                      className="text-[9px] font-mono text-stone-600 hover:text-stone-300 px-2 py-1 border border-stone-800 hover:border-stone-600 transition-colors uppercase tracking-wider"
+                    >Edit</button>
+                    {deleteConfirm === split.id ? (
+                      <>
+                        <button onClick={() => { onDelete(split.id); setDeleteConfirm(null); }}
+                          className="text-[9px] font-mono px-2 py-1 border border-red-500/50 text-red-400 hover:bg-red-500/10 transition-colors">Delete</button>
+                        <button onClick={() => setDeleteConfirm(null)}
+                          className="text-[9px] font-mono px-2 py-1 border border-stone-700 text-stone-500 hover:bg-stone-800 transition-colors">Cancel</button>
+                      </>
+                    ) : (
+                      <button onClick={() => setDeleteConfirm(split.id)} className="text-stone-700 hover:text-red-400 transition-colors p-1">
+                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M2 3.5h10M5.5 3.5V2.5h3v1M11 3.5l-.75 8.5H3.75L3 3.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Expanded — day list */}
+                {expanded === split.id && (
+                  <div className="px-6 pb-4 space-y-2">
+                    {(split.days ?? []).map((day, i) => {
+                      const exCount = day.exerciseIds?.length ?? 0;
+                      const exNames = (day.exerciseIds ?? [])
+                        .slice(0, 4)
+                        .map(id => library.find(e => e.id === id)?.name ?? id);
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => onLoadDay(split, day)}
+                          className="w-full text-left border border-stone-800 hover:border-orange-500/40 hover:bg-orange-500/5 px-4 py-3 transition-colors group"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-baseline gap-2">
+                                <span className="font-mono text-[9px] text-stone-600">{String(i + 1).padStart(2, '0')}</span>
+                                <span className="font-anton text-base uppercase text-stone-200 group-hover:text-orange-200 transition-colors">
+                                  {day.label || `Day ${i + 1}`}
+                                </span>
+                              </div>
+                              {exCount > 0 ? (
+                                <div className="text-[9px] font-mono text-stone-600 mt-0.5 truncate">
+                                  {exCount} exercise{exCount !== 1 ? 's' : ''} · {exNames.join(' · ')}
+                                  {day.exerciseIds.length > 4 && ` +${day.exerciseIds.length - 4}`}
+                                </div>
+                              ) : (
+                                <div className="text-[9px] font-mono text-stone-700 mt-0.5">No exercises added</div>
+                              )}
+                            </div>
+                            <span className="text-[9px] font-mono text-orange-500/60 group-hover:text-orange-400 uppercase tracking-wider shrink-0 transition-colors">
+                              Start →
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // -------------------- SAVE TEMPLATE MODAL --------------------
 const SPLIT_TYPES = ['PPL', 'Upper-Lower', 'Full Body', 'Custom'];
 
@@ -1295,6 +1810,17 @@ export default function IronLabLogger() {
   const [pastWorkouts, setPastWorkouts]               = useState([]);
   const [pastWorkoutsLoading, setPastWorkoutsLoading] = useState(false);
 
+  // Custom splits
+  const [customSplits, setCustomSplits]               = useState([]);
+  const [customSplitsLoading, setCustomSplitsLoading] = useState(false);
+  const [showCustomSplits, setShowCustomSplits]       = useState(false);
+  const [showCreateSplit, setShowCreateSplit]         = useState(false);
+  const [editingSplit, setEditingSplit]               = useState(null);
+
+  // Custom exercises (newly created this session, pre-merged into library)
+  const [localCustomExs, setLocalCustomExs]           = useState([]);
+  const [showCreateExercise, setShowCreateExercise]   = useState(false);
+
   // Today's sessions (multi-session support)
   const [todaySessions, setTodaySessions]               = useState([]);
   const [todaySessionsLoading, setTodaySessionsLoading] = useState(true);
@@ -1337,11 +1863,48 @@ export default function IronLabLogger() {
     return () => clearTimeout(t);
   }, [logger.completed, navigate]);
 
-  // Load today's completed sessions for multi-session view
+  // Load today's completed sessions + custom splits on mount
   useEffect(() => {
     if (!userId) return;
     loadTodaySessions();
+    fetchCustomSplits();
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function fetchCustomSplits() {
+    setCustomSplitsLoading(true);
+    const { data } = await supabase
+      .from('custom_splits')
+      .select('*')
+      .order('created_at', { ascending: false });
+    setCustomSplits(data ?? []);
+    setCustomSplitsLoading(false);
+  }
+
+  function handleCreatedExercise(ex) {
+    setLocalCustomExs(prev => [...prev, ex]);
+    setShowCreateExercise(false);
+    hookAdd(ex);
+  }
+
+  async function handleDeleteSplit(splitId) {
+    await supabase.from('custom_splits').delete().eq('id', splitId);
+    setCustomSplits(prev => prev.filter(s => s.id !== splitId));
+  }
+
+  function handleLoadSplitDay(split, day) {
+    setShowCustomSplits(false);
+    const workoutName = day.label ? `${split.name} — ${day.label}` : split.name;
+    const exercises = (day.exerciseIds ?? []).map(id => library.find(e => e.id === id)).filter(Boolean);
+    if (logger.workout) {
+      // Active workout — add exercises directly
+      exercises.forEach(ex => hookAdd(ex));
+    } else {
+      // No active workout — start one, queue exercises via pendingTemplate
+      logger.startWorkout(workoutName);
+      setName(workoutName);
+      setPendingTemplate({ name: workoutName, exercises: exercises.map(e => ({ exercise_id: e.id })) });
+    }
+  }
 
   // Handle template load after workout starts
   useEffect(() => {
@@ -1355,15 +1918,15 @@ export default function IronLabLogger() {
     })();
   }, [logger.workout?.id]); // eslint-disable-line
 
-  // Full 73-exercise library as base; merge any DB-only entries, deduplicate by id
+  // Full exercise library: hardcoded base + DB catalog + any exercises created this session
   const library = useMemo(() => {
     const seen = new Set();
     const result = [];
-    for (const e of [...EXERCISE_LIBRARY, ...logger.allExercises]) {
+    for (const e of [...EXERCISE_LIBRARY, ...logger.allExercises, ...localCustomExs]) {
       if (!seen.has(e.id)) { seen.add(e.id); result.push(e); }
     }
     return result;
-  }, [logger.allExercises]);
+  }, [logger.allExercises, localCustomExs]);
 
   const workout    = logger.exercises;
   const volumes    = useMemo(() => muscleVolumes(workout, library), [workout, library]);
@@ -1646,7 +2209,7 @@ export default function IronLabLogger() {
 
           <div className="fixed bottom-0 left-0 right-0 z-40 bg-stone-950 border-t border-stone-800 px-6 py-4 flex items-center justify-between gap-4">
             <span className="font-mono text-xs text-stone-500 uppercase tracking-wider hidden sm:block">Add another session today</span>
-            <div className="flex gap-3 ml-auto">
+            <div className="flex gap-3 ml-auto flex-wrap justify-end">
               <button
                 onClick={() => { loadPastWorkouts(); setShowPastSessions(true); }}
                 className="px-5 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
@@ -1654,7 +2217,11 @@ export default function IronLabLogger() {
               <button
                 onClick={() => setShowLoadTemplate(true)}
                 className="px-5 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
-              >Load Template</button>
+              >Templates</button>
+              <button
+                onClick={() => setShowCustomSplits(true)}
+                className="px-5 py-2.5 border border-orange-500/30 text-orange-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/60 hover:bg-orange-500/5 transition-colors"
+              >My Splits</button>
               <button
                 onClick={startNewWorkout}
                 className="px-5 py-2.5 bg-orange-500 text-stone-950 font-anton text-sm uppercase tracking-wider hover:bg-orange-400 transition-colors"
@@ -1676,6 +2243,27 @@ export default function IronLabLogger() {
               workouts={pastWorkouts}
               loading={pastWorkoutsLoading}
               onClose={() => setShowPastSessions(false)}
+            />
+          )}
+          {showCustomSplits && (
+            <CustomSplitsPicker
+              splits={customSplits}
+              loading={customSplitsLoading}
+              library={library}
+              onLoadDay={handleLoadSplitDay}
+              onClose={() => setShowCustomSplits(false)}
+              onEdit={(s) => { setEditingSplit(s); setShowCustomSplits(false); setShowCreateSplit(true); }}
+              onDelete={handleDeleteSplit}
+              onCreateNew={() => { setEditingSplit(null); setShowCustomSplits(false); setShowCreateSplit(true); }}
+            />
+          )}
+          {showCreateSplit && (
+            <CreateSplitModal
+              library={library}
+              userId={userId}
+              existingSplit={editingSplit}
+              onSaved={() => { setShowCreateSplit(false); setEditingSplit(null); fetchCustomSplits(); }}
+              onClose={() => { setShowCreateSplit(false); setEditingSplit(null); }}
             />
           )}
         </div>
@@ -1703,7 +2291,7 @@ export default function IronLabLogger() {
         {/* NON-BLOCKING BOTTOM BANNER */}
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-stone-950 border-t border-stone-800 px-6 py-4 flex items-center justify-between gap-4">
           <span className="font-mono text-xs text-stone-500 uppercase tracking-wider hidden sm:block">Start your session</span>
-          <div className="flex gap-3 ml-auto">
+          <div className="flex gap-3 ml-auto flex-wrap justify-end">
             <button
               onClick={() => { loadPastWorkouts(); setShowPastSessions(true); }}
               className="px-5 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
@@ -1714,7 +2302,13 @@ export default function IronLabLogger() {
               onClick={() => setShowLoadTemplate(true)}
               className="px-5 py-2.5 border border-stone-700 text-stone-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/40 hover:text-orange-300 transition-colors"
             >
-              Load Template
+              Templates
+            </button>
+            <button
+              onClick={() => setShowCustomSplits(true)}
+              className="px-5 py-2.5 border border-orange-500/30 text-orange-400 font-mono text-xs uppercase tracking-wider hover:border-orange-500/60 hover:bg-orange-500/5 transition-colors"
+            >
+              My Splits
             </button>
             <button
               onClick={startNewWorkout}
@@ -1738,6 +2332,27 @@ export default function IronLabLogger() {
             workouts={pastWorkouts}
             loading={pastWorkoutsLoading}
             onClose={() => setShowPastSessions(false)}
+          />
+        )}
+        {showCustomSplits && (
+          <CustomSplitsPicker
+            splits={customSplits}
+            loading={customSplitsLoading}
+            library={library}
+            onLoadDay={handleLoadSplitDay}
+            onClose={() => setShowCustomSplits(false)}
+            onEdit={(s) => { setEditingSplit(s); setShowCustomSplits(false); setShowCreateSplit(true); }}
+            onDelete={handleDeleteSplit}
+            onCreateNew={() => { setEditingSplit(null); setShowCustomSplits(false); setShowCreateSplit(true); }}
+          />
+        )}
+        {showCreateSplit && (
+          <CreateSplitModal
+            library={library}
+            userId={userId}
+            existingSplit={editingSplit}
+            onSaved={() => { setShowCreateSplit(false); setEditingSplit(null); fetchCustomSplits(); }}
+            onClose={() => { setShowCreateSplit(false); setEditingSplit(null); }}
           />
         )}
       </div>
@@ -1992,7 +2607,7 @@ export default function IronLabLogger() {
                 />
               );
             })}
-            <AddExercisePicker library={library} onAdd={hookAdd} used={usedIds} />
+            <AddExercisePicker library={library} onAdd={hookAdd} used={usedIds} onCreateExercise={() => setShowCreateExercise(true)} />
           </main>
 
           {/* RIGHT — MUSCLE MAP + BREAKDOWN */}
@@ -2070,6 +2685,40 @@ export default function IronLabLogger() {
           workouts={pastWorkouts}
           loading={pastWorkoutsLoading}
           onClose={() => setShowPastSessions(false)}
+        />
+      )}
+
+      {/* CREATE EXERCISE MODAL */}
+      {showCreateExercise && (
+        <CreateExerciseModal
+          userId={userId}
+          onCreated={handleCreatedExercise}
+          onClose={() => setShowCreateExercise(false)}
+        />
+      )}
+
+      {/* CUSTOM SPLITS PICKER */}
+      {showCustomSplits && (
+        <CustomSplitsPicker
+          splits={customSplits}
+          loading={customSplitsLoading}
+          library={library}
+          onLoadDay={handleLoadSplitDay}
+          onClose={() => setShowCustomSplits(false)}
+          onEdit={(s) => { setEditingSplit(s); setShowCustomSplits(false); setShowCreateSplit(true); }}
+          onDelete={handleDeleteSplit}
+          onCreateNew={() => { setEditingSplit(null); setShowCustomSplits(false); setShowCreateSplit(true); }}
+        />
+      )}
+
+      {/* CREATE / EDIT SPLIT MODAL */}
+      {showCreateSplit && (
+        <CreateSplitModal
+          library={library}
+          userId={userId}
+          existingSplit={editingSplit}
+          onSaved={() => { setShowCreateSplit(false); setEditingSplit(null); fetchCustomSplits(); }}
+          onClose={() => { setShowCreateSplit(false); setEditingSplit(null); }}
         />
       )}
     </div>
