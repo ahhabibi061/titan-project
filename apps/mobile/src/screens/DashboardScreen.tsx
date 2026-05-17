@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { supabase } from '../lib/supabase';
 import {
   View,
   Text,
@@ -493,9 +494,9 @@ export default function DashboardScreen() {
             </Svg>
             <Text style={s.wordmark}>IRONLAB</Text>
           </View>
-          <View style={s.avatar}>
+          <TouchableOpacity style={s.avatar} onPress={() => supabase.auth.signOut()}>
             <Text style={s.avatarText}>{initials}</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         <Text style={s.greeting}>{getGreeting()}, {profile.display_name}.</Text>
