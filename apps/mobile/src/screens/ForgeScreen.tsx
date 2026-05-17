@@ -20,33 +20,6 @@ import {
 // ─── Domain ──────────────────────────────────────────────────────────────────
 const MUSCLE_GROUPS = Object.keys(MUSCLES);
 
-const INITIAL_WORKOUT = [
-  { id: 'we1', exerciseId: 'bench', sets: [
-    { id: 's11', reps: 10, weight: 60,   rir: 2, done: false, prevReps: 10, prevWeight: 57.5 },
-    { id: 's12', reps: 10, weight: 60,   rir: 2, done: false, prevReps: 9,  prevWeight: 57.5 },
-    { id: 's13', reps: 8,  weight: 60,   rir: 2, done: false, prevReps: 8,  prevWeight: 57.5 },
-  ]},
-  { id: 'we2', exerciseId: 'incline_db', sets: [
-    { id: 's21', reps: 10, weight: 22.5, rir: 2, done: false, prevReps: 10, prevWeight: 22.5 },
-    { id: 's22', reps: 10, weight: 22.5, rir: 2, done: false, prevReps: 9,  prevWeight: 22.5 },
-    { id: 's23', reps: 9,  weight: 22.5, rir: 2, done: false, prevReps: 8,  prevWeight: 22.5 },
-  ]},
-  { id: 'we3', exerciseId: 'ohp', sets: [
-    { id: 's31', reps: 8,  weight: 40,   rir: 2, done: false, prevReps: 8,  prevWeight: 37.5 },
-    { id: 's32', reps: 8,  weight: 40,   rir: 2, done: false, prevReps: 7,  prevWeight: 37.5 },
-    { id: 's33', reps: 6,  weight: 40,   rir: 2, done: false, prevReps: 6,  prevWeight: 37.5 },
-  ]},
-  { id: 'we4', exerciseId: 'lateral_raise', sets: [
-    { id: 's41', reps: 12, weight: 10,   rir: 2, done: false, prevReps: 12, prevWeight: 10 },
-    { id: 's42', reps: 12, weight: 10,   rir: 2, done: false, prevReps: 12, prevWeight: 10 },
-    { id: 's43', reps: 10, weight: 10,   rir: 2, done: false, prevReps: 10, prevWeight: 10 },
-  ]},
-  { id: 'we5', exerciseId: 'tricep_pushdown', sets: [
-    { id: 's51', reps: 12, weight: 25,   rir: 2, done: false, prevReps: 12, prevWeight: 22.5 },
-    { id: 's52', reps: 12, weight: 25,   rir: 2, done: false, prevReps: 11, prevWeight: 22.5 },
-    { id: 's53', reps: 10, weight: 25,   rir: 2, done: false, prevReps: 10, prevWeight: 22.5 },
-  ]},
-];
 
 // ─── Types & Logic ────────────────────────────────────────────────────────────
 interface SetData {
@@ -587,7 +560,7 @@ function Toast({ message }: { message: string }) {
 export default function ForgeScreen() {
   const navigation = useNavigation<any>();
 
-  const [workout, setWorkout]           = useState<WorkoutEntry[]>(INITIAL_WORKOUT as any);
+  const [workout, setWorkout]           = useState<WorkoutEntry[]>([]);
   const [elapsed, setElapsed]           = useState(0);
   const [sessionStarted, setStarted]    = useState(false);
   const [workoutId, setWorkoutId]       = useState<string | null>(null);
@@ -703,7 +676,7 @@ export default function ForgeScreen() {
   async function handleConfirmFinish() {
     if (!workoutId) {
       // Session was never started — just reset
-      setWorkout(INITIAL_WORKOUT as any);
+      setWorkout([]);
       setFinishSheet(false);
       setElapsed(0);
       return;
@@ -719,7 +692,7 @@ export default function ForgeScreen() {
         caloriesBurned,
       });
       setFinishSheet(false);
-      setWorkout(INITIAL_WORKOUT as any);
+      setWorkout([]);
       setElapsed(0);
       setStarted(false);
       setWorkoutId(null);
@@ -827,7 +800,7 @@ export default function ForgeScreen() {
       <FinishConfirmSheet
         visible={showFinishSheet}
         onConfirm={handleConfirmFinish}
-        onDiscard={() => { setWorkout(INITIAL_WORKOUT as any); setFinishSheet(false); setElapsed(0); setStarted(false); setWorkoutId(null); setWeIdMap(new Map()); }}
+        onDiscard={() => { setWorkout([]); setFinishSheet(false); setElapsed(0); setStarted(false); setWorkoutId(null); setWeIdMap(new Map()); }}
         onClose={() => setFinishSheet(false)}
         totalVolume={totalVolume} doneSets={doneSets} totalSets={totalSets} elapsed={elapsed} volumes={volumes}
         saving={finishing} calories={Math.round((elapsed / 60) * 7)}
