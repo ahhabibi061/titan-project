@@ -156,7 +156,7 @@ export function useFinishWorkout() {
       if (wErr) throw wErr;
 
       // Update streak (fire-and-forget — don't block on failure)
-      supabase.rpc('update_streak', { p_user_id: userId, p_date: today }).catch(() => {});
+      try { await supabase.rpc('update_streak', { p_user_id: userId, p_date: today }); } catch {}
 
       // Write activity feed entry
       await supabase.from('activity_feed').insert({
