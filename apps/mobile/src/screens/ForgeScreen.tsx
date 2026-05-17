@@ -1,11 +1,10 @@
-// FORGE — Workout Logger · Phase 2
-// Port from titan_logger.jsx — correct location: src/screens/ForgeScreen.tsx
+// FORGE — Workout Logger · Pass 2
 import React, {
   useState, useMemo, useRef, useEffect, useCallback,
 } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput, Modal,
-  Animated, PanResponder, KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
@@ -14,13 +13,10 @@ import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS } from '../constants/theme';
 import { MUSCLES, EXERCISE_LIBRARY } from '../constants/exercises';
 import {
-  useStartWorkout, useAddWorkoutExercise, useLogSet, useFinishWorkout,
+  useStartWorkout, useAddWorkoutExercise, useLogSet, useFinishWorkout, useWorkoutHistory,
 } from '../hooks/useWorkout';
 
 // ─── Domain ──────────────────────────────────────────────────────────────────
-const MUSCLE_GROUPS = Object.keys(MUSCLES);
-
-// Exercise filter categories for the Add Sheet
 const CARDIO_IDS  = new Set(['rowing_machine', 'assault_bike', 'sled_push']);
 const KB_IDS      = new Set(['kb_swing', 'kb_clean', 'kb_turkish_getup', 'farmers_carry', 'kb_goblet_squat', 'kb_lunge', 'kb_deadlift', 'kb_row', 'kb_press']);
 const MACHINE_IDS = new Set(['chest_press', 'hack_squat', 'leg_press', 'adductor_machine', 'leg_curl', 'lat_pulldown', 'cable_row', 'cable_lateral', 'cable_fly', 'cable_curl', 'cable_woodchop', 'tricep_pushdown', 'preacher_curl', 'machine_pullover', 'smith_ohp', 'cable_pull_through', 'seated_calf']);
@@ -40,21 +36,25 @@ const FILTER_CATS: { key: string; label: string; muscles: string[] | null; ids: 
 const FILTER_ROW1 = ['all', 'chest', 'back', 'shoulders', 'arms'];
 const FILTER_ROW2 = ['legs', 'core', 'cardio', 'kettlebell', 'machine'];
 
-// ─── Types & Logic ────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface SetData {
-  id: string; reps: number | string; weight: number | string;
-  rir: number; done: boolean; prevReps: number; prevWeight: number;
+  id: string;
+  weight: number | string;
+  reps:   number | string;
 }
 interface WorkoutEntry { id: string; exerciseId: string; sets: SetData[]; }
+interface LastSessionExercise {
+  sets:     Array<{ weight: number; reps: number }>;
+  totalVol: number;
+}
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt0 = (n: number) => Math.round(n).toLocaleString('en-US');
 
-function setVolume(s: SetData)  { return (Number(s.reps) || 0) * (Number(s.weight) || 0); }
+function setVolume(s: SetData) { return (Number(s.reps) || 0) * (Number(s.weight) || 0); }
 
-function exerciseVolume(we: WorkoutEntry, completedOnly = true) {
-  return we.sets
-    .filter(s => !completedOnly || s.done)
-    .reduce((acc, s) => acc + setVolume(s), 0);
+function exerciseVolume(we: WorkoutEntry) {
+  return we.sets.reduce((acc, s) => acc + setVolume(s), 0);
 }
 
 function muscleVolumes(workout: WorkoutEntry[]) {
@@ -62,7 +62,7 @@ function muscleVolumes(workout: WorkoutEntry[]) {
   for (const we of workout) {
     const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
     if (!ex) continue;
-    const vol = exerciseVolume(we, true);
+    const vol = exerciseVolume(we);
     if (vol === 0) continue;
     ex.primary.forEach(m   => { v[m] = (v[m] || 0) + vol; });
     ex.secondary.forEach(m => { v[m] = (v[m] || 0) + vol * 0.5; });
@@ -91,6 +91,18 @@ function volumeToFill(volume: number, max: number) {
   }
   const last = stops[stops.length - 1].c;
   return `rgb(${last[0]},${last[1]},${last[2]})`;
+}
+
+function fmtRestTime(secs: number) {
+  const m = String(Math.floor(Math.max(0, secs) / 60)).padStart(2, '0');
+  const s = String(Math.max(0, secs) % 60).padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function fmtPreset(secs: number) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 // ─── SVG Muscle Paths (viewBox 220×460) ──────────────────────────────────────
@@ -161,7 +173,7 @@ function MuscleHeatmap({ volumes, max }: { volumes: Record<string,number>; max: 
           <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600 }}>0 → {fmt0(max)}</Text>
         </View>
         <View style={{ height: 6, flexDirection: 'row' }}>
-          {(['rgba(44,36,30,0.8)','rgb(98,42,18)','rgb(186,74,28)','rgb(240,110,38)'] as const).map((c, i) => (
+          {(['rgba(44,36,30,0.8)', 'rgb(98,42,18)', 'rgb(186,74,28)', 'rgb(240,110,38)'] as const).map((c, i) => (
             <View key={i} style={{ flex: 1, backgroundColor: c }} />
           ))}
         </View>
@@ -171,132 +183,106 @@ function MuscleHeatmap({ volumes, max }: { volumes: Record<string,number>; max: 
 }
 
 // ─── Set Row ──────────────────────────────────────────────────────────────────
-function SetRow({ set, idx, onUpdate, onToggle, onDelete, isLast, onSetComplete, onSetUncomplete }: {
+function SetRow({ set, idx, lastSet, onUpdate, onDelete, isLast }: {
   set: SetData; idx: number;
+  lastSet?: { weight: number; reps: number };
   onUpdate: (patch: Partial<SetData>) => void;
-  onToggle: () => void; onDelete: () => void;
+  onDelete: () => void;
   isLast: boolean;
-  onSetComplete: (set: SetData, idx: number) => void;
-  onSetUncomplete: () => void;
 }) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const [revealed, setRevealed] = useState(false);
-
-  const pan = useRef(PanResponder.create({
-    onMoveShouldSetPanResponder: (_, { dx, dy }) => Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 6,
-    onPanResponderMove: (_, { dx }) => {
-      if (dx < 0) translateX.setValue(Math.max(dx, -72));
-      else if (revealed) translateX.setValue(Math.min(dx - 72, 0));
-    },
-    onPanResponderRelease: (_, { dx }) => {
-      if ((!revealed && dx < -36) || (revealed && dx < 0)) {
-        Animated.spring(translateX, { toValue: -72, useNativeDriver: true }).start();
-        setRevealed(true);
-      } else {
-        Animated.spring(translateX, { toValue: 0, useNativeDriver: true }).start();
-        setRevealed(false);
-      }
-    },
-  })).current;
-
-  function handleDonePress() {
-    if (!set.done) {
-      onToggle();
-      onSetComplete(set, idx);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    } else {
-      onToggle();
-      onSetUncomplete();
-    }
+  function getRef(): { text: string; color: string } {
+    if (!lastSet) return { text: 'NEW', color: COLORS.text700 };
+    const lastStr = `${lastSet.weight}×${lastSet.reps}`;
+    const curW = Number(set.weight);
+    const curR = Number(set.reps);
+    if (!curW || !curR) return { text: `● ${lastStr}`, color: COLORS.text600 };
+    const curVol  = curW * curR;
+    const lastVol = lastSet.weight * lastSet.reps;
+    if (curVol > lastVol) return { text: `↑ ${lastStr}`, color: '#4ade80' };
+    if (curVol < lastVol) return { text: `↓ ${lastStr}`, color: '#f87171' };
+    return { text: `● ${lastStr}`, color: COLORS.text500 };
   }
 
+  const ref = getRef();
+
   return (
-    <View style={{ position: 'relative', overflow: 'hidden', opacity: set.done ? 0.5 : 1 }}>
-      <TouchableOpacity onPress={() => { if (!isLast) onDelete(); }}
-        style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 72,
-          backgroundColor: isLast ? '#1c1917' : '#7f1d1d',
-          alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: isLast ? COLORS.text600 : '#fca5a5', textTransform: 'uppercase', letterSpacing: 1 }}>DELETE</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 12, paddingVertical: 4, gap: 8, borderTopWidth: 1, borderTopColor: COLORS.borderLight }}>
+      {/* Set # */}
+      <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text600, width: 24, textAlign: 'center' }}>
+        {idx + 1}
+      </Text>
+
+      {/* Last session reference */}
+      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: ref.color, width: 64 }} numberOfLines={1}>
+        {ref.text}
+      </Text>
+
+      {/* KG Input */}
+      <TextInput
+        style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, height: 38, width: 62, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, lineHeight: 20, paddingTop: 2 }}
+        value={String(set.weight)}
+        onChangeText={v => onUpdate({ weight: v === '' ? '' : Number(v) })}
+        keyboardType="decimal-pad"
+        placeholder="0"
+        placeholderTextColor={COLORS.text700}
+      />
+
+      {/* Reps Input */}
+      <TextInput
+        style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, height: 38, width: 62, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, lineHeight: 20, paddingTop: 2 }}
+        value={String(set.reps)}
+        onChangeText={v => onUpdate({ reps: v === '' ? '' : Number(v) })}
+        keyboardType="number-pad"
+        placeholder="0"
+        placeholderTextColor={COLORS.text700}
+      />
+
+      {/* × Remove */}
+      <TouchableOpacity
+        onPress={() => { if (!isLast) onDelete(); }}
+        style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center', opacity: isLast ? 0.2 : 1 }}>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 16, color: '#f87171', lineHeight: 20 }}>×</Text>
       </TouchableOpacity>
-
-      <Animated.View style={{ transform: [{ translateX }], backgroundColor: set.done ? 'rgba(237,122,42,0.04)' : COLORS.bg }}
-        {...pan.panHandlers}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 64, paddingHorizontal: 12, paddingVertical: 6, gap: 8, borderTopWidth: 1, borderTopColor: COLORS.borderLight }}>
-
-          {/* Set number */}
-          <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text600, width: 32, lineHeight: 20, paddingTop: 2 }}>
-            {String(idx + 1).padStart(2, '0')}
-          </Text>
-
-          {/* Weight */}
-          <TextInput
-            style={{ fontFamily: FONTS.anton, fontSize: 22, color: COLORS.text100, height: 52, width: 80, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border }}
-            value={String(set.weight)}
-            onChangeText={v => onUpdate({ weight: v === '' ? '' : Number(v) })}
-            keyboardType="decimal-pad"
-            editable={!set.done}
-          />
-
-          {/* × separator */}
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 14, color: COLORS.text600, width: 12, textAlign: 'center' }}>×</Text>
-
-          {/* Reps */}
-          <TextInput
-            style={{ fontFamily: FONTS.anton, fontSize: 22, color: COLORS.text100, height: 52, width: 80, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border }}
-            value={String(set.reps)}
-            onChangeText={v => onUpdate({ reps: v === '' ? '' : Number(v) })}
-            keyboardType="number-pad"
-            editable={!set.done}
-          />
-
-          <View style={{ flex: 1 }} />
-
-          {/* RIR — tap to cycle 0→5 */}
-          <TouchableOpacity
-            onPress={() => { if (!set.done) onUpdate({ rir: (set.rir + 1) % 6 }); }}
-            style={{ height: 52, width: 52, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>RIR</Text>
-            <Text style={{ fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text100, lineHeight: 24, paddingTop: 2 }}>{set.rir}</Text>
-          </TouchableOpacity>
-
-          {/* Done button */}
-          <TouchableOpacity onPress={handleDonePress}
-            style={{ height: 52, width: 52, borderWidth: 1,
-              borderColor: set.done ? COLORS.accent : COLORS.border,
-              backgroundColor: set.done ? COLORS.accent : 'transparent',
-              alignItems: 'center', justifyContent: 'center' }}>
-            {set.done
-              ? <Text style={{ color: COLORS.bg, fontSize: 22, fontWeight: '700' }}>✓</Text>
-              : <View style={{ width: 18, height: 18, borderWidth: 1.5, borderColor: COLORS.text600 }} />
-            }
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
     </View>
   );
 }
 
 // ─── Exercise Card ────────────────────────────────────────────────────────────
-function ExerciseCard({ we, index, onUpdate, onRemove, onAddSet, onSetComplete, onSetUncomplete }: {
+function ExerciseCard({ we, index, lastSession, onUpdate, onRemove, onAddSet }: {
   we: WorkoutEntry; index: number;
+  lastSession?: LastSessionExercise;
   onUpdate: (u: WorkoutEntry) => void; onRemove: () => void;
   onAddSet: () => void;
-  onSetComplete: (we: WorkoutEntry, set: SetData, setIdx: number) => void;
-  onSetUncomplete: () => void;
 }) {
-  const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
+  const ex  = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
   if (!ex) return null;
-  const doneVol  = exerciseVolume(we, true);
-  const doneSets = we.sets.filter(s => s.done).length;
+  const vol = exerciseVolume(we);
+
+  function getProgression(): { label: string; color: string } | null {
+    if (!lastSession || lastSession.totalVol === 0) return { label: 'NEW', color: COLORS.text600 };
+    if (vol === 0) return null;
+    const ratio = vol / lastSession.totalVol;
+    if (ratio > 1.03) return { label: '↑ Progressing', color: '#4ade80' };
+    if (ratio < 0.97) return { label: '↓ Down',        color: '#f87171' };
+    return                     { label: '→ Holding',   color: COLORS.text500 };
+  }
+  const progression = getProgression();
 
   return (
     <View style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 12 }}>
       {/* Exercise header */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
         <View style={{ flex: 1, marginRight: 8 }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, marginBottom: 2 }}>{String(index + 1).padStart(2,'0')}</Text>
-          <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 24, paddingTop: 2 }}>{ex.name.toUpperCase()}</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, marginBottom: 2 }}>{String(index + 1).padStart(2, '0')}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+            <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 24, paddingTop: 2 }}>{ex.name.toUpperCase()}</Text>
+            {progression && (
+              <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: `${progression.color}55`, backgroundColor: `${progression.color}18` }}>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: progression.color, letterSpacing: 0.5 }}>{progression.label}</Text>
+              </View>
+            )}
+          </View>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
             {ex.primary.map(m => (
               <View key={m} style={{ paddingHorizontal: 6, paddingVertical: 2, backgroundColor: COLORS.accentMuted, borderWidth: 1, borderColor: COLORS.accentBorder }}>
                 <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.orange400, textTransform: 'uppercase', letterSpacing: 0.8 }}>{MUSCLES[m]}</Text>
@@ -313,29 +299,25 @@ function ExerciseCard({ we, index, onUpdate, onRemove, onAddSet, onSetComplete, 
           <TouchableOpacity onPress={onRemove} style={{ padding: 4 }}>
             <Text style={{ color: COLORS.text600, fontSize: 14 }}>✕</Text>
           </TouchableOpacity>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>{doneSets}/{we.sets.length} sets</Text>
-          <Text style={{ fontFamily: FONTS.anton, fontSize: 14, color: COLORS.orange400, lineHeight: 18, paddingTop: 2 }}>{fmt0(doneVol)}</Text>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>{we.sets.length} sets</Text>
+          <Text style={{ fontFamily: FONTS.anton, fontSize: 14, color: COLORS.orange400, lineHeight: 18, paddingTop: 2 }}>{fmt0(vol)}</Text>
         </View>
       </View>
 
-      {/* Column headers — widths match SetRow layout */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, backgroundColor: 'rgba(28,25,23,0.5)', gap: 8 }}>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700, width: 32, textTransform: 'uppercase' }}>SET</Text>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700, width: 80, textAlign: 'center', textTransform: 'uppercase' }}>KG</Text>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700, width: 12, textAlign: 'center' }}>—</Text>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700, width: 80, textAlign: 'center', textTransform: 'uppercase' }}>REPS</Text>
-        <View style={{ flex: 1 }} />
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700, width: 52, textAlign: 'center', textTransform: 'uppercase' }}>RIR</Text>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700, width: 52, textAlign: 'center' }}>✓</Text>
+      {/* Column headers */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(28,25,23,0.5)', gap: 8 }}>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 24, textAlign: 'center', textTransform: 'uppercase' }}>SET</Text>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 64, textTransform: 'uppercase' }}>LAST</Text>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 62, textAlign: 'center', textTransform: 'uppercase' }}>KG</Text>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 62, textAlign: 'center', textTransform: 'uppercase' }}>REPS</Text>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 24, textAlign: 'center' }}>×</Text>
       </View>
 
       {we.sets.map((s, idx) => (
         <SetRow key={s.id} set={s} idx={idx} isLast={we.sets.length === 1}
+          lastSet={lastSession?.sets[idx]}
           onUpdate={patch => onUpdate({ ...we, sets: we.sets.map(x => x.id === s.id ? { ...x, ...patch } : x) })}
-          onToggle={() => onUpdate({ ...we, sets: we.sets.map(x => x.id === s.id ? { ...x, done: !x.done } : x) })}
           onDelete={() => onUpdate({ ...we, sets: we.sets.filter(x => x.id !== s.id) })}
-          onSetComplete={(set, idx) => onSetComplete(we, set, idx)}
-          onSetUncomplete={onSetUncomplete}
         />
       ))}
 
@@ -375,21 +357,16 @@ function AddExerciseSheet({ visible, onClose, onAdd, usedIds }: {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={{ backgroundColor: '#111110', borderTopWidth: 1, borderTopColor: '#292524', maxHeight: '90%' }}>
             <View style={{ paddingHorizontal: 16, paddingTop: 20, paddingBottom: 0 }}>
-              {/* Title row */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <Text style={{ fontFamily: FONTS.anton, fontSize: 22, color: COLORS.text100, lineHeight: 28, paddingTop: 2 }}>ADD EXERCISE</Text>
                 <TouchableOpacity onPress={onClose}>
                   <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase' }}>CLOSE</Text>
                 </TouchableOpacity>
               </View>
-
-              {/* Search input */}
               <TextInput ref={searchRef}
                 style={{ fontFamily: FONTS.mono, fontSize: 13, color: COLORS.text100, borderWidth: 1, borderColor: '#292524', backgroundColor: '#1c1917', paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10 }}
                 placeholder="Search exercises…" placeholderTextColor={COLORS.text700}
                 value={query} onChangeText={setQuery} />
-
-              {/* Filter pills — two fixed rows, no scroll */}
               {[FILTER_ROW1, FILTER_ROW2].map((row, ri) => (
                 <View key={ri} style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
                   {row.map(key => {
@@ -411,7 +388,6 @@ function AddExerciseSheet({ visible, onClose, onAdd, usedIds }: {
               ))}
               <View style={{ height: 8 }} />
             </View>
-
             <ScrollView style={{ maxHeight: 340 }} keyboardShouldPersistTaps="handled">
               {filtered.length === 0
                 ? <View style={{ padding: 24, alignItems: 'center' }}>
@@ -436,9 +412,9 @@ function AddExerciseSheet({ visible, onClose, onAdd, usedIds }: {
 }
 
 // ─── Finish Confirm Sheet ─────────────────────────────────────────────────────
-function FinishConfirmSheet({ visible, onConfirm, onDiscard, onClose, totalVolume, doneSets, totalSets, elapsed, volumes, saving, calories }: {
+function FinishConfirmSheet({ visible, onConfirm, onDiscard, onClose, totalVolume, totalSets, elapsed, volumes, saving, calories }: {
   visible: boolean; onConfirm: () => void; onDiscard: () => void; onClose: () => void;
-  totalVolume: number; doneSets: number; totalSets: number; elapsed: number;
+  totalVolume: number; totalSets: number; elapsed: number;
   volumes: Record<string, number>; saving: boolean; calories: number;
 }) {
   const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
@@ -455,9 +431,9 @@ function FinishConfirmSheet({ visible, onConfirm, onDiscard, onClose, totalVolum
           <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: COLORS.border, marginBottom: 16 }}>
             {[
               { label: 'Volume', value: fmt0(totalVolume), sub: 'kg·reps' },
-              { label: 'Sets',   value: `${doneSets}/${totalSets}`, sub: 'completed' },
-              { label: 'Time',   value: `${mins}:${secs}`, sub: 'elapsed' },
-              { label: 'Kcal',   value: `~${calories}`, sub: 'est. burned' },
+              { label: 'Sets',   value: String(totalSets),  sub: 'logged' },
+              { label: 'Time',   value: `${mins}:${secs}`,  sub: 'elapsed' },
+              { label: 'Kcal',   value: `~${calories}`,     sub: 'est. burned' },
             ].map((s, i) => (
               <View key={s.label} style={{ flex: 1, padding: 10, borderRightWidth: i < 3 ? 1 : 0, borderRightColor: COLORS.border, alignItems: 'center' }}>
                 <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</Text>
@@ -498,102 +474,63 @@ function FinishConfirmSheet({ visible, onConfirm, onDiscard, onClose, totalVolum
   );
 }
 
-// ─── Rest Timer Banner ────────────────────────────────────────────────────────
-function RestTimerBanner({ exerciseName, onDismiss }: { exerciseName: string; onDismiss: () => void }) {
-  const [display, setDisplay]   = useState(90);
-  const [duration, setDuration] = useState(90);
-  const remainingRef  = useRef(90);
-  const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
-  const warned10      = useRef(false);
-  const slideY        = useRef(new Animated.Value(80)).current;
-
-  const clearTimer = useCallback(() => {
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-  }, []);
-
-  const startTimer = useCallback((secs: number) => {
-    clearTimer();
-    remainingRef.current = secs;
-    warned10.current = false;
-    setDisplay(secs);
-    intervalRef.current = setInterval(() => {
-      remainingRef.current -= 1;
-      setDisplay(remainingRef.current);
-      if (remainingRef.current === 10 && !warned10.current) {
-        warned10.current = true;
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-      if (remainingRef.current <= 0) {
-        clearTimer();
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        setTimeout(() => {
-          Animated.timing(slideY, { toValue: 80, duration: 200, useNativeDriver: true }).start(onDismiss);
-        }, 1200);
-      }
-    }, 1000);
-  }, [clearTimer, slideY, onDismiss]);
-
-  useEffect(() => {
-    Animated.spring(slideY, { toValue: 0, useNativeDriver: true, damping: 15, stiffness: 120 }).start();
-    startTimer(90);
-    return clearTimer;
-  }, []);
-
-  function handleChangeDuration(secs: number) {
-    setDuration(secs);
-    startTimer(secs);
-  }
-
-  function dismiss() {
-    clearTimer();
-    Animated.timing(slideY, { toValue: 80, duration: 200, useNativeDriver: true }).start(onDismiss);
-  }
-
-  const finished = display <= 0;
-  const r = 20, circ = 2 * Math.PI * r;
-  const dash = Math.max(0, display / duration) * circ;
-  const mm = String(Math.floor(Math.max(0, display) / 60)).padStart(2, '0');
-  const ss = String(Math.max(0, display) % 60).padStart(2, '0');
-
+// ─── Rest Timer Sheet ─────────────────────────────────────────────────────────
+function RestTimerSheet({ visible, onClose, running, display, duration, onStart, onStop, onSetDuration }: {
+  visible: boolean; onClose: () => void;
+  running: boolean; display: string; duration: number;
+  onStart: (secs: number) => void; onStop: () => void;
+  onSetDuration: (secs: number) => void;
+}) {
   return (
-    <Animated.View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 72, transform: [{ translateY: slideY }] }}>
-      <TouchableOpacity activeOpacity={0.95} onPress={dismiss} style={{ flex: 1 }}>
-        <View style={{ flex: 1, backgroundColor: COLORS.bgCard, borderTopWidth: 2, borderTopColor: COLORS.accent, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, gap: 12 }}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.75)' }}>
+        <View style={{ backgroundColor: '#111110', borderTopWidth: 1, borderTopColor: '#292524', paddingHorizontal: 20, paddingTop: 24, paddingBottom: 44 }}>
 
-          {/* Ring + countdown */}
-          <View style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}>
-            <Svg width={48} height={48} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
-              <Circle cx={24} cy={24} r={r} stroke="rgba(41,37,36,0.9)" strokeWidth={3} fill="none" />
-              <Circle cx={24} cy={24} r={r} stroke={finished ? COLORS.green400 : COLORS.accent}
-                strokeWidth={3} fill="none"
-                strokeDasharray={`${dash.toFixed(1)} ${circ.toFixed(1)}`}
-                strokeLinecap="round" />
-            </Svg>
-            <Text style={{ fontFamily: FONTS.anton, fontSize: 15, color: finished ? COLORS.green400 : COLORS.text100, lineHeight: 19, paddingTop: 2 }}>
-              {finished ? 'GO' : `${mm}:${ss}`}
+          {/* Header */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+            <Text style={{ fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text100, lineHeight: 26, paddingTop: 2 }}>REST TIMER</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase' }}>CLOSE</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Countdown */}
+          <View style={{ alignItems: 'center', marginBottom: 28 }}>
+            <Text style={{ fontFamily: FONTS.anton, fontSize: 64, color: running ? COLORS.accent : COLORS.text400, lineHeight: 72, paddingTop: 4 }}>
+              {display}
             </Text>
           </View>
 
-          {/* Center: REST label + exercise name */}
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.accent, textTransform: 'uppercase', letterSpacing: 2 }}>REST</Text>
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text300 }} numberOfLines={1}>{exerciseName}</Text>
+          {/* Preset buttons */}
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+            {[60, 90, 120, 180].map(opt => {
+              const active = duration === opt && !running;
+              return (
+                <TouchableOpacity key={opt} onPress={() => onSetDuration(opt)}
+                  style={{ flex: 1, paddingVertical: 10, borderWidth: 1, alignItems: 'center',
+                    borderColor: duration === opt ? COLORS.accent : COLORS.border,
+                    backgroundColor: duration === opt ? COLORS.accentMuted : 'transparent' }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: duration === opt ? COLORS.accent : COLORS.text600 }}>
+                    {fmtPreset(opt)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
-          {/* Preset duration buttons */}
-          <View style={{ flexDirection: 'row', gap: 4 }}>
-            {[60, 90, 120].map(opt => (
-              <TouchableOpacity key={opt} onPress={() => handleChangeDuration(opt)}
-                style={{ paddingHorizontal: 8, paddingVertical: 6, borderWidth: 1,
-                  borderColor: duration === opt ? COLORS.accent : COLORS.border,
-                  backgroundColor: duration === opt ? COLORS.accentMuted : 'transparent' }}>
-                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: duration === opt ? COLORS.accent : COLORS.text600 }}>{opt}s</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {/* START / STOP */}
+          <TouchableOpacity
+            onPress={() => running ? onStop() : onStart(duration)}
+            style={{ paddingVertical: 16, alignItems: 'center',
+              backgroundColor: running ? 'rgba(41,37,36,0.8)' : COLORS.accent,
+              borderWidth: running ? 1 : 0, borderColor: COLORS.accent }}>
+            <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: running ? COLORS.accent : COLORS.bg, letterSpacing: 2 }}>
+              {running ? 'STOP' : 'START'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      </TouchableOpacity>
-    </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
@@ -617,31 +554,93 @@ export default function ForgeScreen() {
   const [weIdMap, setWeIdMap]             = useState<Map<string, string>>(new Map());
   const [showAddSheet, setShowAddSheet]   = useState(false);
   const [showFinishSheet, setFinishSheet] = useState(false);
-  const [showRestTimer, setShowRestTimer] = useState(false);
-  const [restExerciseName, setRestName]   = useState('');
+  const [showRestSheet, setShowRestSheet] = useState(false);
+  const [restRunning, setRestRunning]     = useState(false);
+  const [restDisplay, setRestDisplay]     = useState('01:30');
+  const [restDuration, setRestDuration]   = useState(90);
   const [toast, setToast]                 = useState<string | null>(null);
+
+  const restRemainingRef = useRef(90);
+  const restIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { mutateAsync: startWorkout,  isPending: starting  } = useStartWorkout();
   const { mutateAsync: addWeToDb }                           = useAddWorkoutExercise();
   const { mutateAsync: logSet }                              = useLogSet();
   const { mutateAsync: finishWorkout, isPending: finishing  } = useFinishWorkout();
+  const { data: historyData }                                = useWorkoutHistory();
+
+  // Build last-session map: exercise name (lower) → { sets, totalVol }
+  const lastSessionMap = useMemo(() => {
+    const map = new Map<string, LastSessionExercise>();
+    if (!historyData) return map;
+    for (const w of historyData) {
+      for (const we of (w as any).workout_exercises ?? []) {
+        const name = ((we.notes as string) ?? '').toLowerCase().trim();
+        if (map.has(name)) continue;
+        const sortedSets: Array<{ weight: number; reps: number }> = ((we.sets ?? []) as any[])
+          .sort((a: any, b: any) => a.set_number - b.set_number)
+          .map((s: any) => ({ weight: s.weight_kg ?? 0, reps: s.reps ?? 0 }));
+        const totalVol = sortedSets.reduce((a, s) => a + s.weight * s.reps, 0);
+        map.set(name, { sets: sortedSets, totalVol });
+      }
+    }
+    return map;
+  }, [historyData]);
 
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
   }
 
+  // Session elapsed timer
   useEffect(() => {
     if (!sessionStarted) return;
     const i = setInterval(() => setElapsed(s => s + 1), 1000);
     return () => clearInterval(i);
   }, [sessionStarted]);
 
+  // Clean up rest timer on unmount
+  useEffect(() => {
+    return () => { if (restIntervalRef.current) clearInterval(restIntervalRef.current); };
+  }, []);
+
+  // Rest timer controls
+  function stopRestTimer() {
+    if (restIntervalRef.current) { clearInterval(restIntervalRef.current); restIntervalRef.current = null; }
+    setRestRunning(false);
+  }
+
+  function startRestTimer(secs: number) {
+    if (restIntervalRef.current) { clearInterval(restIntervalRef.current); restIntervalRef.current = null; }
+    restRemainingRef.current = secs;
+    setRestDisplay(fmtRestTime(secs));
+    setRestRunning(true);
+    restIntervalRef.current = setInterval(() => {
+      restRemainingRef.current -= 1;
+      setRestDisplay(fmtRestTime(restRemainingRef.current));
+      if (restRemainingRef.current <= 0) {
+        if (restIntervalRef.current) { clearInterval(restIntervalRef.current); restIntervalRef.current = null; }
+        setRestRunning(false);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      }
+    }, 1000);
+  }
+
+  function handleSetRestDuration(secs: number) {
+    setRestDuration(secs);
+    if (restRunning) {
+      startRestTimer(secs);
+    } else {
+      restRemainingRef.current = secs;
+      setRestDisplay(fmtRestTime(secs));
+    }
+  }
+
   const volumes     = useMemo(() => muscleVolumes(workout), [workout]);
   const maxVol      = useMemo(() => Math.max(800, ...Object.values(volumes)), [volumes]);
-  const doneSets    = useMemo(() => workout.reduce((a, we) => a + we.sets.filter(s => s.done).length, 0), [workout]);
   const totalSets   = useMemo(() => workout.reduce((a, we) => a + we.sets.length, 0), [workout]);
-  const totalVolume = useMemo(() => workout.reduce((a, we) => a + exerciseVolume(we, true), 0), [workout]);
+  const doneSets    = useMemo(() => workout.reduce((a, we) => a + we.sets.filter(s => Number(s.weight) > 0 && Number(s.reps) > 0).length, 0), [workout]);
+  const totalVolume = useMemo(() => workout.reduce((a, we) => a + exerciseVolume(we), 0), [workout]);
   const usedIds     = useMemo(() => new Set(workout.map(we => we.exerciseId)), [workout]);
   const progressPct = totalSets > 0 ? doneSets / totalSets : 0;
   const mm          = String(Math.floor(elapsed / 60)).padStart(2, '0');
@@ -655,14 +654,14 @@ export default function ForgeScreen() {
     setWorkout(w => w.map(we => {
       if (we.id !== weId) return we;
       const last = we.sets[we.sets.length - 1];
-      return { ...we, sets: [...we.sets, { id: `s-${Date.now()}`, reps: last?.reps ?? 8, weight: last?.weight ?? 0, rir: last?.rir ?? 2, done: false, prevReps: last?.prevReps ?? 0, prevWeight: last?.prevWeight ?? 0 }] };
+      return { ...we, sets: [...we.sets, { id: `s-${Date.now()}`, reps: last?.reps ?? 8, weight: last?.weight ?? 0 }] };
     })), []);
 
   const addExercise = useCallback(async (exerciseId: string) => {
     const newId = `we-${Date.now()}`;
     const newWe: WorkoutEntry = {
       id: newId, exerciseId,
-      sets: [{ id: `s-${Date.now()}-1`, reps: 8, weight: 0, rir: 2, done: false, prevReps: 0, prevWeight: 0 }],
+      sets: [{ id: `s-${Date.now()}-1`, reps: 8, weight: 0 }],
     };
     setWorkout(w => [...w, newWe]);
 
@@ -704,53 +703,54 @@ export default function ForgeScreen() {
     }
   }
 
-  function handleSetComplete(we: WorkoutEntry, set: SetData, setIdx: number) {
-    const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
-    setRestName(ex?.name ?? '');
-    setShowRestTimer(true);
-    const supabaseWeId = weIdMap.get(we.id);
-    if (!supabaseWeId) return;
-    logSet({
-      workoutExerciseId: supabaseWeId,
-      setNumber:         setIdx + 1,
-      weightKg:          Number(set.weight) || 0,
-      reps:              Number(set.reps)   || 0,
-      rir:               set.rir,
-    }).catch(() => showToast('Set logged locally — sync failed. Will retry on finish.'));
-  }
-
-  function handleSetUncomplete() {
-    setShowRestTimer(false);
-  }
-
   async function handleFinishTap() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setFinishSheet(true);
   }
 
+  function resetSession() {
+    stopRestTimer();
+    setWorkout([]);
+    setElapsed(0);
+    setStarted(false);
+    setWorkoutId(null);
+    setWeIdMap(new Map());
+  }
+
   async function handleConfirmFinish() {
     if (!workoutId) {
-      setWorkout([]);
+      resetSession();
       setFinishSheet(false);
-      setElapsed(0);
       return;
     }
     try {
+      // Log all sets to Supabase
+      for (const we of workout) {
+        const supabaseWeId = weIdMap.get(we.id);
+        if (!supabaseWeId) continue;
+        for (let idx = 0; idx < we.sets.length; idx++) {
+          const s = we.sets[idx];
+          const w = Number(s.weight);
+          const r = Number(s.reps);
+          if (!w && !r) continue;
+          try {
+            await logSet({ workoutExerciseId: supabaseWeId, setNumber: idx + 1, weightKg: w, reps: r, rir: 0 });
+          } catch {}
+        }
+      }
+
       const caloriesBurned = Math.round((elapsed / 60) * 7);
       await finishWorkout({
         workoutId,
         durationSeconds: elapsed,
         totalVolumeKg:   totalVolume,
         workoutName:     'Workout',
-        doneSets,
+        doneSets:        totalSets,
         caloriesBurned,
       });
+
       setFinishSheet(false);
-      setWorkout([]);
-      setElapsed(0);
-      setStarted(false);
-      setWorkoutId(null);
-      setWeIdMap(new Map());
+      resetSession();
       navigation.navigate('Home');
     } catch (e: any) {
       Alert.alert('Save Failed', e?.message ?? 'Unknown error. Keep this sheet open and try again.');
@@ -789,16 +789,28 @@ export default function ForgeScreen() {
                 <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 2 }}>Volume</Text>
                 <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.orange400, lineHeight: 20, paddingTop: 2 }}>{fmt0(totalVolume)}</Text>
               </View>
+              <View>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 2 }}>Time</Text>
+                <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, lineHeight: 20, paddingTop: 2 }}>{mm}:{ss}</Text>
+              </View>
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 2 }}>Time</Text>
-              <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, lineHeight: 20, paddingTop: 2 }}>{mm}:{ss}</Text>
-            </View>
+
+            {/* REST TIMER button */}
+            <TouchableOpacity
+              onPress={() => setShowRestSheet(true)}
+              style={{ paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1,
+                borderColor: restRunning ? COLORS.accent : COLORS.border,
+                backgroundColor: restRunning ? COLORS.accentMuted : 'transparent' }}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: restRunning ? COLORS.accent : COLORS.text600, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                {restRunning ? `REST ${restDisplay}` : 'REST TIMER'}
+              </Text>
+            </TouchableOpacity>
           </View>
+
           <View style={{ height: 3, backgroundColor: '#1c1917' }}>
             <View style={{ height: '100%', width: `${progressPct * 100}%` as any, backgroundColor: COLORS.accent }} />
           </View>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, marginTop: 4 }}>{Math.round(progressPct * 100)}% complete</Text>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, marginTop: 4 }}>{Math.round(progressPct * 100)}% with values</Text>
         </View>
 
         {/* Exercise list */}
@@ -810,15 +822,18 @@ export default function ForgeScreen() {
             </View>
           )}
 
-          {workout.map((we, idx) => (
-            <ExerciseCard key={we.id} we={we} index={idx}
-              onUpdate={updated => updateExercise(we.id, updated)}
-              onRemove={() => setWorkout(w => w.filter(x => x.id !== we.id))}
-              onAddSet={() => addSet(we.id)}
-              onSetComplete={handleSetComplete}
-              onSetUncomplete={handleSetUncomplete}
-            />
-          ))}
+          {workout.map((we, idx) => {
+            const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
+            const lastSession = ex ? lastSessionMap.get(ex.name.toLowerCase().trim()) : undefined;
+            return (
+              <ExerciseCard key={we.id} we={we} index={idx}
+                lastSession={lastSession}
+                onUpdate={updated => updateExercise(we.id, updated)}
+                onRemove={() => setWorkout(w => w.filter(x => x.id !== we.id))}
+                onAddSet={() => addSet(we.id)}
+              />
+            );
+          })}
 
           {/* Muscle Heatmap */}
           {workout.length > 0 && (
@@ -859,21 +874,27 @@ export default function ForgeScreen() {
       </SafeAreaView>
 
       {toast && <Toast message={toast} />}
-      {showRestTimer && (
-        <RestTimerBanner
-          exerciseName={restExerciseName}
-          onDismiss={() => setShowRestTimer(false)}
-        />
-      )}
 
       <AddExerciseSheet visible={showAddSheet} onClose={() => setShowAddSheet(false)} onAdd={addExercise} usedIds={usedIds} />
+
       <FinishConfirmSheet
         visible={showFinishSheet}
         onConfirm={handleConfirmFinish}
-        onDiscard={() => { setWorkout([]); setFinishSheet(false); setElapsed(0); setStarted(false); setWorkoutId(null); setWeIdMap(new Map()); }}
+        onDiscard={() => { resetSession(); setFinishSheet(false); }}
         onClose={() => setFinishSheet(false)}
-        totalVolume={totalVolume} doneSets={doneSets} totalSets={totalSets} elapsed={elapsed} volumes={volumes}
+        totalVolume={totalVolume} totalSets={totalSets} elapsed={elapsed} volumes={volumes}
         saving={finishing} calories={Math.round((elapsed / 60) * 7)}
+      />
+
+      <RestTimerSheet
+        visible={showRestSheet}
+        onClose={() => setShowRestSheet(false)}
+        running={restRunning}
+        display={restDisplay}
+        duration={restDuration}
+        onStart={startRestTimer}
+        onStop={stopRestTimer}
+        onSetDuration={handleSetRestDuration}
       />
     </View>
   );
