@@ -1,5 +1,6 @@
 ﻿import React, { useState, useMemo, useEffect } from 'react';
 import AppNav from '../components/AppNav';
+import { supabase } from '../lib/supabase';
 
 /* =========================================================================
  * COACH ENGINE — Module 5 Proof-of-Concept
@@ -466,21 +467,14 @@ RULES:
     setMessages(newMessages);
 
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1000,
-          system: buildSystemPrompt(),
-          messages: newMessages,
-        }),
+      const { data, error } = await supabase.functions.invoke('oracle-chat', {
+        body: { messages: newMessages, systemPrompt: buildSystemPrompt() },
       });
-      const data = await res.json();
-      const reply = data.content?.map(b => b.text || '').join('') || 'No response.';
-      setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
+      if (error || !data?.reply) throw new Error(error?.message ?? 'empty response');
+      setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
     } catch (err) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Please try again.' }]);
+      console.error('[oracle-chat]', err);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Oracle is unavailable right now — make sure ANTHROPIC_API_KEY is set in your Supabase project secrets.' }]);
     } finally {
       setLoading(false);
     }
