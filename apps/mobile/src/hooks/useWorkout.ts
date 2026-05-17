@@ -64,7 +64,6 @@ export function useStartWorkout() {
       const rows = params.exercises.map(ex => ({
         workout_id:  workout.id,
         exercise_id: nameToId.get(ex.exerciseName.toLowerCase().trim()) ?? null,
-        position:    ex.position,
         sets_target: ex.setsTarget,
         notes:       ex.exerciseName,
       }));
@@ -100,7 +99,6 @@ export function useAddWorkoutExercise() {
         .insert({
           workout_id:  params.workoutId,
           exercise_id: exercises?.[0]?.id ?? null,
-          position:    params.position,
           sets_target: params.setsTarget,
           notes:       params.exerciseName,
         })
