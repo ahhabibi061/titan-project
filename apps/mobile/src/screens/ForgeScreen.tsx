@@ -20,7 +20,7 @@ import {
 // ─── Domain ──────────────────────────────────────────────────────────────────
 const CARDIO_IDS  = new Set(['rowing_machine', 'assault_bike', 'sled_push']);
 const KB_IDS      = new Set(['kb_swing', 'kb_clean', 'kb_turkish_getup', 'farmers_carry', 'kb_goblet_squat', 'kb_lunge', 'kb_deadlift', 'kb_row', 'kb_press']);
-const MACHINE_IDS = new Set(['chest_press', 'hack_squat', 'leg_press', 'adductor_machine', 'leg_curl', 'lat_pulldown', 'cable_row', 'cable_lateral', 'cable_fly', 'cable_curl', 'cable_woodchop', 'tricep_pushdown', 'preacher_curl', 'machine_pullover', 'smith_ohp', 'cable_pull_through', 'seated_calf']);
+const MACHINE_IDS = new Set(['chest_press', 'hack_squat', 'leg_press', 'adductor_machine', 'abductor_machine', 'leg_curl', 'lat_pulldown', 'cable_row', 'cable_lateral', 'cable_fly', 'cable_curl', 'cable_woodchop', 'tricep_pushdown', 'preacher_curl', 'machine_pullover', 'smith_ohp', 'cable_pull_through', 'seated_calf']);
 
 const FILTER_CATS: { key: string; label: string; muscles: string[] | null; ids: Set<string> | null }[] = [
   { key: 'all',        label: 'All',        muscles: null,                                               ids: null        },

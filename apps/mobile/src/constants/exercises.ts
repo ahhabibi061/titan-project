@@ -62,6 +62,7 @@ export const EXERCISE_LIBRARY = [
   { id: 'hip_thrust',          name: 'Barbell Hip Thrust',         primary: ['glutes'],        secondary: ['hamstrings'] },
   { id: 'glute_bridge',        name: 'Glute Bridge',               primary: ['glutes'],        secondary: ['hamstrings','lower_back'] },
   { id: 'adductor_machine',    name: 'Hip Adduction Machine',      primary: ['adductors'],     secondary: ['glutes'] },
+  { id: 'abductor_machine',    name: 'Hip Abduction Machine',      primary: ['abductors'],     secondary: ['glutes'] },
   { id: 'cable_pull_through',  name: 'Cable Pull-Through',         primary: ['glutes'],        secondary: ['hamstrings','lower_back'] },
   { id: 'calf_raise',          name: 'Standing Calf Raise',        primary: ['calves'],        secondary: [] },
   { id: 'seated_calf',         name: 'Seated Calf Raise',          primary: ['calves'],        secondary: [] },

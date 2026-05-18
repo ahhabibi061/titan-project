@@ -122,10 +122,18 @@ function toBodyParts(
   }));
 }
 
+// Resolves a library slug + tap side to the correct internal muscle key.
+// deltoids covers three heads; the back view only shows rear_delts.
+function resolveInternalKey(slug: string, side: 'front' | 'back'): string {
+  if (slug === 'deltoids') return side === 'back' ? 'rear_delts' : 'front_delts';
+  return Object.entries(MUSCLE_MAP).find(([, s]) => s === slug)?.[0] ?? slug;
+}
+
 // ── MuscleTooltip ─────────────────────────────────────────────────────────────
 
 interface MuscleTooltipProps {
   muscle:           string | null;
+  internalKey:      string | null;
   recoveryData:     Record<string, any>;
   growthData:       Record<string, any>;
   mode:             'recovery' | 'growth';
@@ -134,13 +142,12 @@ interface MuscleTooltipProps {
   onExercisePress?: (exerciseId: string) => void;
 }
 
-function MuscleTooltip({ muscle, recoveryData, growthData, mode, slideY, fadeAnim, onExercisePress }: MuscleTooltipProps) {
+function MuscleTooltip({ muscle, internalKey, recoveryData, growthData, mode, slideY, fadeAnim, onExercisePress }: MuscleTooltipProps) {
   const [showModal, setShowModal] = useState(false);
 
   if (!muscle) return null;
 
   const displayName = MUSCLE_DISPLAY_NAMES[muscle] || muscle.replace(/-/g, ' ').toUpperCase();
-  const internalKey = Object.entries(MUSCLE_MAP).find(([, s]) => s === muscle)?.[0];
   let value: number | null = null;
   let line2: string | null = null;
   let statusStr: string | null = null;
@@ -180,12 +187,13 @@ function MuscleTooltip({ muscle, recoveryData, growthData, mode, slideY, fadeAni
   const status: { label: string; color: string } = (statusStr ? lookup[statusStr] : null) ?? { label: 'NO DATA', color: '#78716c' };
 
   // All internal keys that map to this slug (e.g. deltoids → front_delts, side_delts, rear_delts)
-  const internalKeys = Object.entries(MUSCLE_MAP)
+  // Used for the exercise pill list (show all exercises for the region).
+  const allInternalKeys = Object.entries(MUSCLE_MAP)
     .filter(([, s]) => s === muscle)
     .map(([k]) => k);
 
   const matchedExercises = EXERCISE_LIBRARY.filter(ex =>
-    internalKeys.some(key =>
+    allInternalKeys.some(key =>
       (ex.primary as string[]).includes(key) || (ex.secondary as string[]).includes(key),
     ),
   );
@@ -309,21 +317,22 @@ export interface BodyMapDualProps {
 export function BodyMapDual({ recoveryMap, growthMap, mode, setMode, onExercisePress }: BodyMapDualProps) {
   const slideY   = useRef(new Animated.Value(80)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const [tooltip, setTooltip] = useState<string | null>(null);
+  const [tooltip, setTooltip] = useState<{ slug: string; internalKey: string } | null>(null);
 
   const highlightedColors = mode === 'recovery' ? RECOVERY_HIGHLIGHTED : GROWTH_HIGHLIGHTED;
   const modelData = buildModelData(recoveryMap, growthMap, mode);
   const data      = toBodyParts(modelData, highlightedColors);
 
-  function handleMuscleClick(muscleStats: { muscle: string }) {
-    if (!muscleStats?.muscle) return;
-    if (tooltip === muscleStats.muscle) {
+  function handleMuscleClick(slug: string, side: 'front' | 'back') {
+    if (!slug) return;
+    const internalKey = resolveInternalKey(slug, side);
+    if (tooltip?.slug === slug && tooltip?.internalKey === internalKey) {
       Animated.parallel([
         Animated.spring(slideY, { toValue: 80, useNativeDriver: true, damping: 15, stiffness: 140 }),
         Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
       ]).start(() => setTooltip(null));
     } else {
-      setTooltip(muscleStats.muscle);
+      setTooltip({ slug, internalKey });
       slideY.setValue(80);
       fadeAnim.setValue(0);
       Animated.parallel([
@@ -386,7 +395,7 @@ export function BodyMapDual({ recoveryMap, growthMap, mode, setMode, onExerciseP
           <Body
             data={data} side="front" gender="male" scale={0.75}
             border="none" defaultFill="#1c1917"
-            onBodyPartPress={(bp: any) => handleMuscleClick({ muscle: bp.slug })}
+            onBodyPartPress={(bp: any) => handleMuscleClick(bp.slug, 'front')}
           />
           <Text style={{ fontFamily: FONTS.mono, fontSize: 9, letterSpacing: 1.5, color: '#57534e', textTransform: 'uppercase', marginTop: 6 }}>
             ANTERIOR
@@ -396,7 +405,7 @@ export function BodyMapDual({ recoveryMap, growthMap, mode, setMode, onExerciseP
           <Body
             data={data} side="back" gender="male" scale={0.75}
             border="none" defaultFill="#1c1917"
-            onBodyPartPress={(bp: any) => handleMuscleClick({ muscle: bp.slug })}
+            onBodyPartPress={(bp: any) => handleMuscleClick(bp.slug, 'back')}
           />
           <Text style={{ fontFamily: FONTS.mono, fontSize: 9, letterSpacing: 1.5, color: '#57534e', textTransform: 'uppercase', marginTop: 6 }}>
             POSTERIOR
@@ -407,7 +416,8 @@ export function BodyMapDual({ recoveryMap, growthMap, mode, setMode, onExerciseP
       {/* Tooltip */}
       {tooltip && (
         <MuscleTooltip
-          muscle={tooltip}
+          muscle={tooltip.slug}
+          internalKey={tooltip.internalKey}
           recoveryData={recoveryMap}
           growthData={growthMap}
           mode={mode}
