@@ -797,7 +797,7 @@ function SessionSelector({
             <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text700, textAlign: 'center', marginBottom: 24 }}>Build your workout from scratch.</Text>
             <TouchableOpacity onPress={onNewSession}
               style={{ paddingVertical: 14, paddingHorizontal: 32, borderWidth: 1, borderColor: COLORS.accent, backgroundColor: COLORS.accentMuted }}>
-              <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.accent, letterSpacing: 2 }}>START BLANK</Text>
+              <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.accent, letterSpacing: 2 }}>START TRAINING</Text>
             </TouchableOpacity>
           </View>
         )}
