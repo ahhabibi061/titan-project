@@ -503,7 +503,9 @@ export default function DashboardScreen() {
         </View>
 
         {/* ── MUSCLE MAP ─────────────────────────────────────────────── */}
-        <BodyMapDual recoveryMap={MOCK_RECOVERY_MAP} growthMap={MOCK_GROWTH_MAP} mode={mapMode} setMode={setMapMode} />
+        <View style={{ marginBottom: SPACING.xl }}>
+          <BodyMapDual recoveryMap={MOCK_RECOVERY_MAP} growthMap={MOCK_GROWTH_MAP} mode={mapMode} setMode={setMapMode} />
+        </View>
 
         {/* ── 4. TODAY'S WORKOUT CARD ────────────────────────────────── */}
         <View style={s.card}>
