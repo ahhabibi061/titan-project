@@ -433,7 +433,7 @@ export default function DashboardScreen() {
           {/* Today's Workout — bottom-left */}
           <View style={[s.statCard, s.statCardBL]}>
             <Text style={s.statLabel}>Workout</Text>
-            <Text style={[s.statValue, { fontSize: 20 }]} numberOfLines={1}>{todayWorkout ? todayWorkout.name : '—'}</Text>
+            <Text style={[s.statValue, { fontSize: 16 }]} numberOfLines={1}>{todayWorkout ? todayWorkout.name : '—'}</Text>
             <Text style={s.statSub}>{todayWorkout ? `${(todayWorkout.workout_exercises ?? []).length} ex${todayWorkout.completed ? ' · done' : ' · live'}` : 'None logged'}</Text>
           </View>
 
@@ -465,6 +465,42 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
         )}
+
+        {/* ── 5. TODAY'S MACROS CARD ─────────────────────────────────── */}
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <Text style={s.cardLabel}>Today's Macros</Text>
+            <Text style={s.cardTag}>→ SENTINEL</Text>
+          </View>
+          <View style={s.macrosTop}>
+            <CalorieRing consumed={consumed.kcal} target={targets.kcal} />
+            <View style={s.macrosSide}>
+              <Text style={[s.statValue, { color: COLORS.orange300, fontSize: 28 }]}>{fmt0(remaining)}</Text>
+              <Text style={s.statLabel}>KCAL REMAINING</Text>
+              <Text style={[s.statSub, { marginTop: 4 }]}>{consumed.mealsLogged} meals logged</Text>
+            </View>
+          </View>
+          <View style={s.macrosBars}>
+            {([
+              { l: 'Protein', c: consumed.protein, t: targets.protein, color: COLORS.accent  },
+              { l: 'Carbs',   c: consumed.carbs,   t: targets.carbs,   color: COLORS.blue400 },
+              { l: 'Fat',     c: consumed.fat,      t: targets.fat,    color: '#fbbf24'       },
+            ]).map(m => (
+              <View key={m.l} style={s.macroRow}>
+                <View style={s.macroLabelRow}>
+                  <Text style={s.macroLabel}>{m.l}</Text>
+                  <Text style={s.macroValue}><Text style={{ color: COLORS.text300 }}>{m.c}</Text><Text style={{ color: COLORS.text600 }}> / {m.t}g</Text></Text>
+                </View>
+                <View style={s.macroBarBg}>
+                  <View style={[s.macroBarFill, { width: `${Math.min((m.c / (m.t || 1)) * 100, 100)}%` as any, backgroundColor: m.color }]} />
+                </View>
+              </View>
+            ))}
+          </View>
+          <TouchableOpacity style={s.secondaryBtn}>
+            <Text style={s.secondaryBtnText}>Scan Meal</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* ── 4. TODAY'S WORKOUT CARD ────────────────────────────────── */}
         <View style={s.card}>
@@ -509,61 +545,8 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        {/* ── 5. TODAY'S MACROS CARD ─────────────────────────────────── */}
-        <View style={s.card}>
-          <View style={s.cardHeader}>
-            <Text style={s.cardLabel}>Today's Macros</Text>
-            <Text style={s.cardTag}>→ SENTINEL</Text>
-          </View>
-          <View style={s.macrosTop}>
-            <CalorieRing consumed={consumed.kcal} target={targets.kcal} />
-            <View style={s.macrosSide}>
-              <Text style={[s.statValue, { color: COLORS.orange300, fontSize: 28 }]}>{fmt0(remaining)}</Text>
-              <Text style={s.statLabel}>KCAL REMAINING</Text>
-              <Text style={[s.statSub, { marginTop: 4 }]}>{consumed.mealsLogged} meals logged</Text>
-            </View>
-          </View>
-          <View style={s.macrosBars}>
-            {([
-              { l: 'Protein', c: consumed.protein, t: targets.protein, color: COLORS.accent  },
-              { l: 'Carbs',   c: consumed.carbs,   t: targets.carbs,   color: COLORS.blue400 },
-              { l: 'Fat',     c: consumed.fat,      t: targets.fat,    color: '#fbbf24'       },
-            ]).map(m => (
-              <View key={m.l} style={s.macroRow}>
-                <View style={s.macroLabelRow}>
-                  <Text style={s.macroLabel}>{m.l}</Text>
-                  <Text style={s.macroValue}><Text style={{ color: COLORS.text300 }}>{m.c}</Text><Text style={{ color: COLORS.text600 }}> / {m.t}g</Text></Text>
-                </View>
-                <View style={s.macroBarBg}>
-                  <View style={[s.macroBarFill, { width: `${Math.min((m.c / (m.t || 1)) * 100, 100)}%` as any, backgroundColor: m.color }]} />
-                </View>
-              </View>
-            ))}
-          </View>
-          <TouchableOpacity style={s.secondaryBtn}>
-            <Text style={s.secondaryBtnText}>Scan Meal</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ── 6. WEIGHT TREND CARD ───────────────────────────────────── */}
-        <View style={s.card}>
-          <View style={s.cardHeader}>
-            <Text style={s.cardLabel}>Body Comp</Text>
-            <Text style={s.cardTag}>→ VAULT</Text>
-          </View>
-          <Text style={s.bigWeight}>{bio.current}<Text style={[s.statUnit, { fontSize: 22 }]}> kg</Text></Text>
-          <View style={s.weightDeltaRow}>
-            <Text style={[s.metaText, { color: COLORS.orange300 }]}>{weightDelta < 0 ? '↓' : '↑'} {Math.abs(weightDelta).toFixed(1)} kg</Text>
-            <Text style={[s.metaText, { marginLeft: SPACING.sm }]}>last 7d</Text>
-          </View>
-          <View style={{ height: 30, marginVertical: SPACING.md }}><MiniSparkline values={bio.sparkline} /></View>
-          <View style={s.divider} />
-          <View style={s.weightGoalRow}>
-            <Text style={s.goalLabel}>Goal</Text>
-            <Text style={[s.metaText, { color: COLORS.orange300 }]}>{bio.goal} kg</Text>
-            <Text style={s.goalSub}>{Math.abs(bio.current - bio.goal).toFixed(1)} to go</Text>
-          </View>
-        </View>
+        {/* ── FIX 2: MUSCLE MAP ──────────────────────────────────────── */}
+        <BodyMapDual recoveryMap={MOCK_RECOVERY_MAP} growthMap={MOCK_GROWTH_MAP} mode={mapMode} setMode={setMapMode} />
 
         {/* ── 7. THIS WEEK GRID ──────────────────────────────────────── */}
         <View style={s.card}>
@@ -588,8 +571,25 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* ── FIX 2: MUSCLE MAP — between This Week and Activity Feed ── */}
-        <BodyMapDual recoveryMap={MOCK_RECOVERY_MAP} growthMap={MOCK_GROWTH_MAP} mode={mapMode} setMode={setMapMode} />
+        {/* ── 6. WEIGHT TREND CARD ───────────────────────────────────── */}
+        <View style={s.card}>
+          <View style={s.cardHeader}>
+            <Text style={s.cardLabel}>Body Comp</Text>
+            <Text style={s.cardTag}>→ VAULT</Text>
+          </View>
+          <Text style={s.bigWeight}>{bio.current}<Text style={[s.statUnit, { fontSize: 22 }]}> kg</Text></Text>
+          <View style={s.weightDeltaRow}>
+            <Text style={[s.metaText, { color: COLORS.orange300 }]}>{weightDelta < 0 ? '↓' : '↑'} {Math.abs(weightDelta).toFixed(1)} kg</Text>
+            <Text style={[s.metaText, { marginLeft: SPACING.sm }]}>last 7d</Text>
+          </View>
+          <View style={{ height: 30, marginVertical: SPACING.md }}><MiniSparkline values={bio.sparkline} /></View>
+          <View style={s.divider} />
+          <View style={s.weightGoalRow}>
+            <Text style={s.goalLabel}>Goal</Text>
+            <Text style={[s.metaText, { color: COLORS.orange300 }]}>{bio.goal} kg</Text>
+            <Text style={s.goalSub}>{Math.abs(bio.current - bio.goal).toFixed(1)} to go</Text>
+          </View>
+        </View>
 
         {/* ── 8. TODAY'S ACTIVITY FEED ───────────────────────────────── */}
         <View style={s.card}>
@@ -646,15 +646,15 @@ const s = StyleSheet.create({
 
   // FIX 4: 2×2 stat grid
   statGrid:   { borderWidth: 1, borderColor: COLORS.border, flexDirection: 'row', flexWrap: 'wrap', marginBottom: SPACING.xl },
-  statCard:   { width: '50%', paddingHorizontal: SPACING.md, paddingVertical: SPACING.md, backgroundColor: COLORS.bgCard },
+  statCard:   { width: '50%', paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.bgCard },
   statCardTL: { borderRightWidth: 1, borderBottomWidth: 1, borderColor: COLORS.border },
   statCardTR: { borderBottomWidth: 1, borderColor: COLORS.border },
   statCardBL: { borderRightWidth: 1, borderColor: COLORS.border },
   statCardBR: {},
-  statLabel:  { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.8, marginBottom: 4 },
-  statValue:  { fontFamily: FONTS.anton, fontSize: 28, color: COLORS.text100, lineHeight: 35, paddingTop: 2 },
-  statUnit:   { fontFamily: FONTS.anton, fontSize: 14, color: COLORS.text500 },
-  statSub:    { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.orange300, marginTop: 2 },
+  statLabel:  { fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.8, marginBottom: 4 },
+  statValue:  { fontFamily: FONTS.anton, fontSize: 24, color: COLORS.text100, lineHeight: 30, paddingTop: 2 },
+  statUnit:   { fontFamily: FONTS.anton, fontSize: 10, color: COLORS.text500 },
+  statSub:    { fontFamily: FONTS.mono, fontSize: 8, color: COLORS.orange300, marginTop: 2 },
 
   // Coach banner
   coachBanner:   { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, borderWidth: 1, borderColor: COLORS.accentBorder, backgroundColor: 'rgba(237,122,42,0.07)', padding: SPACING.md, marginBottom: SPACING.xl },
