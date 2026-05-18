@@ -185,13 +185,31 @@ function buildBodyData(volumes: Record<string, number>, maxVol: number, view: 'f
   return result;
 }
 
-function buildProgressionBodyData(progressionPcts: Record<string,number>, view: 'front' | 'back'): ExtendedBodyPart[] {
+function buildRecoveryBodyData(recoveryMap: Record<string, { status: string; pct: number }>, view: 'front' | 'back'): ExtendedBodyPart[] {
+  const colorMap: Record<string, string> = { ready: '#4ade80', almost: '#a3e635', partial: '#fb923c', resting: '#f87171' };
   const result: ExtendedBodyPart[] = [];
   for (const entry of SLUG_MAP) {
     if (!entry.views.includes(view)) continue;
-    const pct = progressionPcts[entry.dataKey] ?? 0;
-    if (pct === 0) continue;
-    result.push({ slug: entry.slug, styles: { fill: pct > 0 ? '#4ade80' : '#f87171' } });
+    const rec = recoveryMap[entry.dataKey];
+    if (!rec) continue;
+    const color = colorMap[rec.status];
+    if (color) result.push({ slug: entry.slug, styles: { fill: color } });
+  }
+  return result;
+}
+
+function buildGrowthBodyData(growthMap: Record<string, { status: string; growthPct: number }>, view: 'front' | 'back'): ExtendedBodyPart[] {
+  const result: ExtendedBodyPart[] = [];
+  for (const entry of SLUG_MAP) {
+    if (!entry.views.includes(view)) continue;
+    const g = growthMap[entry.dataKey];
+    if (!g) continue;
+    let color: string;
+    if (g.growthPct >= 3)       color = '#4ade80';
+    else if (g.growthPct >= 0)  color = '#a3e635';
+    else if (g.growthPct >= -3) color = '#fb923c';
+    else                         color = '#f87171';
+    result.push({ slug: entry.slug, styles: { fill: color } });
   }
   return result;
 }
@@ -360,16 +378,18 @@ function WeeklyGrid({ days }: { days: DayAdherence[] }) {
 
 interface SelectedMuscle { slug: string; view: 'front' | 'back'; dataKey: string; name: string; }
 
+const RECOVERY_LEGEND: [string, string][] = [['#4ade80','READY'],['#a3e635','ALMOST'],['#fb923c','PARTIAL'],['#f87171','RESTING']];
+const GROWTH_LEGEND:   [string, string][] = [['#4ade80','HIGH'],['#a3e635','MODERATE'],['#fb923c','LOW'],['#f87171','DECLINING']];
+
 function MuscleMap({ mode, setMode, volumes, maxVol }: {
-  mode: 'fatigue' | 'progression'; setMode: (m: 'fatigue' | 'progression') => void;
+  mode: 'recovery' | 'growth'; setMode: (m: 'recovery' | 'growth') => void;
   volumes: Record<string, number>; maxVol: number;
 }) {
   const [selected, setSelected] = useState<SelectedMuscle | null>(null);
   const slideY   = useRef(new Animated.Value(80)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const BODY_SCALE  = 0.75;
-  const volumeLegend = [['rgb(98,42,18)','Low'],['rgb(186,74,28)','Mid'],['rgb(240,110,38)','High'],['rgb(255,78,38)','Peak']] as [string,string][];
+  const BODY_SCALE = 0.75;
 
   const showCard = (slug: string, view: 'front' | 'back') => {
     const entry = SLUG_TO_DATA[slug];
@@ -408,30 +428,43 @@ function MuscleMap({ mode, setMode, volumes, maxVol }: {
   };
 
   const frontData = injectSelected(
-    mode === 'fatigue'
-      ? buildBodyData(volumes, maxVol, 'front')
-      : buildProgressionBodyData(MUSCLE_DATA.progression, 'front'),
+    mode === 'recovery'
+      ? buildRecoveryBodyData(MOCK_RECOVERY_MAP, 'front')
+      : buildGrowthBodyData(MOCK_GROWTH_MAP, 'front'),
     'front'
   );
   const backData = injectSelected(
-    mode === 'fatigue'
-      ? buildBodyData(volumes, maxVol, 'back')
-      : buildProgressionBodyData(MUSCLE_DATA.progression, 'back'),
+    mode === 'recovery'
+      ? buildRecoveryBodyData(MOCK_RECOVERY_MAP, 'back')
+      : buildGrowthBodyData(MOCK_GROWTH_MAP, 'back'),
     'back'
   );
 
-  const vol = selected ? (volumes[selected.dataKey] ?? 0) : 0;
-  const progPct = selected ? (MUSCLE_DATA.progression[selected.dataKey] ?? null) : null;
+  const recData  = selected ? MOCK_RECOVERY_MAP[selected.dataKey] : null;
+  const growData = selected ? MOCK_GROWTH_MAP[selected.dataKey]   : null;
+
+  // Most Fatigued / Top Gains summaries
+  const mostFatigued = Object.entries(MOCK_RECOVERY_MAP)
+    .filter(([, v]) => v.status === 'resting' || v.status === 'partial')
+    .sort((a, b) => a[1].pct - b[1].pct)
+    .slice(0, 3)
+    .map(([k, v]) => ({ name: k.replace(/_/g, ' '), hrs: v.hoursRemaining }));
+
+  const topGains = Object.entries(MOCK_GROWTH_MAP)
+    .filter(([, v]) => v.growthPct > 0)
+    .sort((a, b) => b[1].growthPct - a[1].growthPct)
+    .slice(0, 3)
+    .map(([k, v]) => ({ name: k.replace(/_/g, ' '), pct: v.growthPct }));
 
   return (
     <View style={s.card}>
       <View style={s.cardHeader}>
-        <Text style={s.sectionTitle}>Weekly Volume</Text>
-        <Text style={s.cardTag}>KG·REPS</Text>
+        <Text style={s.sectionTitle}>Muscle Map</Text>
+        <Text style={s.cardTag}>{mode === 'recovery' ? 'RECOVERY' : 'GROWTH'}</Text>
       </View>
 
       <View style={s.mapToggle}>
-        {(['fatigue', 'progression'] as const).map(m => (
+        {(['recovery', 'growth'] as const).map(m => (
           <TouchableOpacity
             key={m}
             style={[s.mapToggleBtn, mode === m && s.mapToggleBtnActive]}
@@ -465,17 +498,19 @@ function MuscleMap({ mode, setMode, volumes, maxVol }: {
         <Animated.View style={[s.muscleInfoCard, { opacity: fadeAnim, transform: [{ translateY: slideY }] }]}>
           <View style={s.muscleInfoRow}>
             <Text style={s.muscleInfoName}>{selected.name.toUpperCase()}</Text>
-            <Text style={[s.musclePillText, { color: COLORS.text600 }]}>{mode === 'fatigue' ? '7d volume' : 'vs last week'}</Text>
+            <Text style={[s.musclePillText, { color: COLORS.text600 }]}>{mode === 'recovery' ? 'recovery' : 'growth'}</Text>
           </View>
-          {mode === 'fatigue' ? (
+          {mode === 'recovery' ? (
             <>
-              <Text style={s.muscleInfoVol}>{vol > 0 ? vol.toLocaleString() : '0'} kg·reps</Text>
-              <Text style={s.muscleInfoSub}>{vol > 0 ? 'Volume logged in the last 7 days' : 'No volume logged for this muscle in last 7 days'}</Text>
+              <Text style={[s.muscleInfoVol, { color: recData?.status === 'ready' ? '#4ade80' : recData?.status === 'almost' ? '#a3e635' : recData?.status === 'partial' ? '#fb923c' : '#f87171' }]}>
+                {recData ? recData.status.toUpperCase() : '—'}
+              </Text>
+              <Text style={s.muscleInfoSub}>{recData && recData.hoursRemaining > 0 ? `~${recData.hoursRemaining}h until ready` : 'Ready to train'}</Text>
             </>
           ) : (
             <>
-              <Text style={[s.muscleInfoVol, { color: progPct !== null && progPct > 0 ? '#4ade80' : '#f87171' }]}>
-                {progPct !== null ? `${progPct > 0 ? '+' : ''}${progPct.toFixed(1)}%` : '—'}
+              <Text style={[s.muscleInfoVol, { color: growData && growData.growthPct > 0 ? '#4ade80' : '#f87171' }]}>
+                {growData ? `${growData.growthPct > 0 ? '+' : ''}${growData.growthPct.toFixed(1)}%` : '—'}
               </Text>
               <Text style={s.muscleInfoSub}>vs last week</Text>
             </>
@@ -484,25 +519,37 @@ function MuscleMap({ mode, setMode, volumes, maxVol }: {
       )}
 
       <View style={[s.divider, { marginVertical: SPACING.md }]} />
-      {mode === 'fatigue' ? (
-        <View style={s.legendRow}>
-          {volumeLegend.map(([color, label]) => (
-            <View key={label} style={s.legendItem}>
-              <View style={[s.legendDot, { backgroundColor: color }]} />
-              <Text style={s.legendLabel}>{label}</Text>
+
+      <View style={s.legendRow}>
+        {(mode === 'recovery' ? RECOVERY_LEGEND : GROWTH_LEGEND).map(([color, label]) => (
+          <View key={label} style={s.legendItem}>
+            <View style={[s.legendDot, { backgroundColor: color }]} />
+            <Text style={s.legendLabel}>{label}</Text>
+          </View>
+        ))}
+      </View>
+
+      {mode === 'recovery' && mostFatigued.length > 0 && (
+        <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(68,64,60,0.3)' }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 6 }}>Most Fatigued</Text>
+          {mostFatigued.map(m => (
+            <View key={m.name} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400, textTransform: 'capitalize' }}>{m.name}</Text>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: '#fb923c' }}>{m.hrs > 0 ? `${m.hrs}h est.` : 'Ready'}</Text>
             </View>
           ))}
         </View>
-      ) : (
-        <View style={s.legendRow}>
-          <View style={s.legendItem}>
-            <View style={[s.legendDot, { backgroundColor: '#4ade80' }]} />
-            <Text style={s.legendLabel}>Progressing</Text>
-          </View>
-          <View style={s.legendItem}>
-            <View style={[s.legendDot, { backgroundColor: '#f87171' }]} />
-            <Text style={s.legendLabel}>Down</Text>
-          </View>
+      )}
+
+      {mode === 'growth' && topGains.length > 0 && (
+        <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(68,64,60,0.3)' }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 6 }}>Top Gains</Text>
+          {topGains.map(m => (
+            <View key={m.name} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400, textTransform: 'capitalize' }}>{m.name}</Text>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: '#4ade80' }}>+{m.pct.toFixed(1)}%</Text>
+            </View>
+          ))}
         </View>
       )}
     </View>
@@ -519,7 +566,7 @@ export default function DashboardScreen() {
   const [savingChanges, setSavingChanges] = useState(false);
   const [savedMsg, setSavedMsg] = useState(false);
   const { mutateAsync: updateSet } = useUpdateSet();
-  const [mapMode, setMapMode] = useState<'fatigue' | 'progression'>('fatigue');
+  const [mapMode, setMapMode] = useState<'recovery' | 'growth'>('recovery');
   const [displayName, setDisplayName] = useState('');
   const [tier, setTier]               = useState('BASIC');
   const [consumed, setConsumed]       = useState({ kcal: 0, protein: 0, carbs: 0, fat: 0, mealsLogged: 0 });

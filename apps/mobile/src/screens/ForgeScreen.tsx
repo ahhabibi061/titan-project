@@ -1,7 +1,8 @@
-// FORGE — Workout Logger · Pass 2
+// FORGE — Workout Logger · Pass 4
 import React, {
   useState, useMemo, useRef, useEffect, useCallback,
 } from 'react';
+import { supabase } from '../lib/supabase';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput, Modal,
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
@@ -35,6 +36,13 @@ const FILTER_CATS: { key: string; label: string; muscles: string[] | null; ids: 
 ];
 const FILTER_ROW1 = ['all', 'chest', 'back', 'shoulders', 'arms'];
 const FILTER_ROW2 = ['legs', 'core', 'cardio', 'kettlebell', 'machine'];
+
+// ─── User Split / Template ────────────────────────────────────────────────────
+interface UserSplit {
+  id: string;
+  name: string;
+  exercises: { exerciseId: string; setsTarget: number }[];
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface SetData {
@@ -105,6 +113,36 @@ function fmtPreset(secs: number) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+const MUSCLE_RECOVERY_HOURS: Record<string, number> = {
+  chest: 72, lats: 72, lower_back: 72, glutes: 72, quads: 72, hamstrings: 72,
+  front_delts: 48, rear_delts: 48, side_delts: 48, biceps: 48, triceps: 48,
+  calves: 36, traps: 36, forearms: 36, abs: 24, obliques: 24,
+};
+
+function volumeToRecoveryColor(vol: number, maxVol: number): string | null {
+  if (!vol || vol <= 0) return null;
+  const t = vol / Math.max(maxVol, 1);
+  if (t >= 0.67) return '#f87171';
+  if (t >= 0.34) return '#fb923c';
+  if (t >= 0.10) return '#a3e635';
+  return '#4ade80';
+}
+
+function volumeToGrowthColor(vol: number, maxVol: number): string | null {
+  if (!vol || vol <= 0) return null;
+  const t = vol / Math.max(maxVol, 1);
+  if (t >= 0.67) return '#4ade80';
+  if (t >= 0.34) return '#a3e635';
+  return '#fb923c';
+}
+
+const STATUS_CONFIG = {
+  new:   { label: '+ NEW',   color: '#ed7a2a', bg: 'rgba(237,122,42,0.15)',   border: 'rgba(237,122,42,0.30)'  },
+  up:    { label: '▲ UP',    color: '#4ade80', bg: 'rgba(74,222,128,0.12)',   border: 'rgba(74,222,128,0.35)'  },
+  match: { label: '= MATCH', color: '#78716c', bg: 'rgba(87,83,78,0.12)',     border: 'rgba(87,83,78,0.35)'    },
+  down:  { label: '▼ DOWN',  color: '#f87171', bg: 'rgba(248,113,113,0.10)',  border: 'rgba(248,113,113,0.35)' },
+};
+
 // ─── Forge Body Map ───────────────────────────────────────────────────────────
 const FORGE_SLUG_MAP: { slug: Slug; dataKey: string; views: ('front'|'back')[] }[] = [
   { slug: 'chest',      dataKey: 'chest',       views: ['front']         },
@@ -121,36 +159,96 @@ const FORGE_SLUG_MAP: { slug: Slug; dataKey: string; views: ('front'|'back')[] }
   { slug: 'trapezius',  dataKey: 'traps',        views: ['front', 'back'] },
 ];
 
-function buildForgeBodyData(volumes: Record<string,number>, maxVol: number, view: 'front'|'back'): ExtendedBodyPart[] {
+function buildForgeBodyData(
+  volumes: Record<string,number>, maxVol: number, view: 'front'|'back',
+  colorFn: (v: number, max: number) => string | null,
+): ExtendedBodyPart[] {
   const result: ExtendedBodyPart[] = [];
   for (const entry of FORGE_SLUG_MAP) {
     if (!entry.views.includes(view)) continue;
-    const color = volumeToFill(volumes[entry.dataKey] ?? 0, maxVol);
-    if (color && color !== 'rgba(255,255,255,0.025)') {
-      result.push({ slug: entry.slug, styles: { fill: color } });
-    }
+    const color = colorFn(volumes[entry.dataKey] ?? 0, maxVol);
+    if (color) result.push({ slug: entry.slug, styles: { fill: color } });
   }
   return result;
 }
 
 function ForgeBodyMap({ volumes, maxVol }: { volumes: Record<string,number>; maxVol: number }) {
+  const [mode, setMode] = useState<'recovery' | 'growth'>('recovery');
+  const colorFn = mode === 'recovery' ? volumeToRecoveryColor : volumeToGrowthColor;
+
+  const RECOVERY_LEGEND: [string, string][] = [['#4ade80','READY'],['#a3e635','ALMOST'],['#fb923c','PARTIAL'],['#f87171','RESTING']];
+  const GROWTH_LEGEND:   [string, string][] = [['#4ade80','HIGH'],['#a3e635','MODERATE'],['#fb923c','LOW'],['#57534e','UNDERTRAINED']];
+  const legend = mode === 'recovery' ? RECOVERY_LEGEND : GROWTH_LEGEND;
+
+  const sortedMuscles = useMemo(() =>
+    Object.entries(volumes).filter(([,v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 3),
+    [volumes],
+  );
+
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start' }}>
-      {(['front', 'back'] as const).map(side => (
-        <View key={side} style={{ alignItems: 'center' }}>
-          <Body
-            data={buildForgeBodyData(volumes, maxVol, side)}
-            side={side}
-            gender="male"
-            scale={0.65}
-            border="none"
-            defaultFill="#1c1917"
-          />
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>
-            {side === 'front' ? 'ANTERIOR' : 'POSTERIOR'}
+    <View>
+      {/* Mode toggle */}
+      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+        {(['recovery', 'growth'] as const).map(m => (
+          <TouchableOpacity key={m} onPress={() => setMode(m)}
+            style={{ flex: 1, paddingVertical: 7, borderWidth: 1, alignItems: 'center',
+              borderColor: mode === m ? COLORS.accent : COLORS.border,
+              backgroundColor: mode === m ? COLORS.accentMuted : 'transparent' }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: mode === m ? COLORS.accent : COLORS.text600, textTransform: 'uppercase', letterSpacing: 1 }}>
+              {m.toUpperCase()}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Bodies */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start' }}>
+        {(['front', 'back'] as const).map(side => (
+          <View key={side} style={{ alignItems: 'center' }}>
+            <Body data={buildForgeBodyData(volumes, maxVol, side, colorFn)} side={side} gender="male" scale={0.65} border="none" defaultFill="#1c1917" />
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>
+              {side === 'front' ? 'ANTERIOR' : 'POSTERIOR'}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Legend */}
+      <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+        {legend.map(([color, label]) => (
+          <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* Summary */}
+      {sortedMuscles.length > 0 && (
+        <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
+            {mode === 'recovery' ? 'MOST FATIGUED' : 'TOP GAINS'}
           </Text>
+          {sortedMuscles.map(([muscle, vol]) => {
+            const dotColor = colorFn(vol, maxVol) ?? COLORS.text700;
+            const hours = mode === 'recovery'
+              ? Math.round((MUSCLE_RECOVERY_HOURS[muscle] ?? 48) * (vol / Math.max(maxVol, 1)))
+              : null;
+            return (
+              <View key={muscle} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dotColor }} />
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400 }}>{MUSCLES[muscle] ?? muscle}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text300 }}>{fmt0(vol)}</Text>
+                  {hours !== null && <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>{hours}h est.</Text>}
+                </View>
+              </View>
+            );
+          })}
         </View>
-      ))}
+      )}
     </View>
   );
 }
@@ -163,46 +261,44 @@ function SetRow({ set, idx, lastSet, onUpdate, onDelete, isLast }: {
   onDelete: () => void;
   isLast: boolean;
 }) {
-  function getRef(): { text: string; color: string } {
-    if (!lastSet) return { text: 'NEW', color: COLORS.text700 };
-    const lastStr = `${lastSet.weight}×${lastSet.reps}`;
-    const curW = Number(set.weight);
-    const curR = Number(set.reps);
-    if (!curW || !curR) return { text: `● ${lastStr}`, color: COLORS.text600 };
-    const curVol  = curW * curR;
-    const lastVol = lastSet.weight * lastSet.reps;
-    if (curVol > lastVol) return { text: `↑ ${lastStr}`, color: '#4ade80' };
-    if (curVol < lastVol) return { text: `↓ ${lastStr}`, color: '#f87171' };
-    return { text: `● ${lastStr}`, color: COLORS.text500 };
-  }
+  const curR   = Number(set.reps)   || 0;
+  const curW   = Number(set.weight) || 0;
+  const curVol = curR * curW;
+  const prevVol = lastSet ? lastSet.reps * lastSet.weight : 0;
 
-  const ref = getRef();
+  const kind: keyof typeof STATUS_CONFIG =
+    curVol === 0            ? 'new'   :
+    prevVol === 0           ? 'new'   :
+    curVol > prevVol        ? 'up'    :
+    curVol === prevVol      ? 'match' : 'down';
+  const status = STATUS_CONFIG[kind];
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 12, paddingVertical: 4, gap: 8, borderTopWidth: 1, borderTopColor: COLORS.borderLight }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, paddingHorizontal: 8, paddingVertical: 4, gap: 4, borderTopWidth: 1, borderTopColor: COLORS.borderLight }}>
       {/* Set # */}
-      <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text600, width: 24, textAlign: 'center' }}>
-        {idx + 1}
+      <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text600, width: 20, textAlign: 'center' }}>
+        {String(idx + 1).padStart(2, '0')}
       </Text>
 
-      {/* Last session reference */}
-      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: ref.color, width: 64 }} numberOfLines={1}>
-        {ref.text}
-      </Text>
-
-      {/* KG Input */}
-      <TextInput
-        style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, height: 38, width: 62, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, lineHeight: 20, paddingTop: 2 }}
-        value={String(set.weight)}
-        onChangeText={v => onUpdate({ weight: v === '' ? '' : Number(v) })}
-        keyboardType="decimal-pad"
-        placeholder="0"
-        placeholderTextColor={COLORS.text700}
-      />
+      {/* Last session — 2 stacked lines */}
+      <View style={{ width: 72 }}>
+        {lastSet ? (
+          <>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text400 }} numberOfLines={1}>
+              {lastSet.reps} × {lastSet.weight}kg
+            </Text>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 }}>
+              vol {fmt0(prevVol)}
+            </Text>
+          </>
+        ) : (
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700 }}>—</Text>
+        )}
+      </View>
 
       {/* Reps Input */}
       <TextInput
-        style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, height: 38, width: 62, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, lineHeight: 20, paddingTop: 2 }}
+        style={{ fontFamily: FONTS.anton, fontSize: 15, color: COLORS.text100, height: 36, width: 52, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, paddingTop: 2 }}
         value={String(set.reps)}
         onChangeText={v => onUpdate({ reps: v === '' ? '' : Number(v) })}
         keyboardType="number-pad"
@@ -210,53 +306,70 @@ function SetRow({ set, idx, lastSet, onUpdate, onDelete, isLast }: {
         placeholderTextColor={COLORS.text700}
       />
 
+      {/* Weight Input + kg label */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+        <TextInput
+          style={{ fontFamily: FONTS.anton, fontSize: 15, color: COLORS.text100, height: 36, width: 52, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, paddingTop: 2 }}
+          value={String(set.weight)}
+          onChangeText={v => onUpdate({ weight: v === '' ? '' : Number(v) })}
+          keyboardType="decimal-pad"
+          placeholder="0"
+          placeholderTextColor={COLORS.text700}
+        />
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>kg</Text>
+      </View>
+
+      {/* Live volume */}
+      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400, width: 36, textAlign: 'center' }}>
+        {curVol > 0 ? fmt0(curVol) : '—'}
+      </Text>
+
+      {/* STATUS pill */}
+      <View style={{ width: 52, paddingHorizontal: 4, paddingVertical: 3, backgroundColor: status.bg, borderWidth: 1, borderColor: status.border, alignItems: 'center' }}>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: status.color, textTransform: 'uppercase', letterSpacing: 0.2 }} numberOfLines={1}>
+          {status.label}
+        </Text>
+      </View>
+
       {/* × Remove */}
       <TouchableOpacity
         onPress={() => { if (!isLast) onDelete(); }}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        style={{ width: 32, height: 44, alignItems: 'center', justifyContent: 'center', opacity: isLast ? 0.2 : 1 }}>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 18, color: '#f87171' }}>×</Text>
+        style={{ width: 20, height: 44, alignItems: 'center', justifyContent: 'center', opacity: isLast ? 0.2 : 1 }}>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 14, color: '#f87171' }}>×</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 // ─── Exercise Card ────────────────────────────────────────────────────────────
-function ExerciseCard({ we, index, lastSession, onUpdate, onRemove, onAddSet }: {
+function ExerciseCard({ we, index, lastSession, onUpdate, onRemove, onAddSet, onOpenRestTimer }: {
   we: WorkoutEntry; index: number;
   lastSession?: LastSessionExercise;
   onUpdate: (u: WorkoutEntry) => void; onRemove: () => void;
   onAddSet: () => void;
+  onOpenRestTimer: () => void;
 }) {
   const ex  = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
   if (!ex) return null;
   const vol = exerciseVolume(we);
 
-  function getProgression(): { label: string; color: string } | null {
-    if (!lastSession || lastSession.totalVol === 0) return { label: 'NEW', color: COLORS.text600 };
-    if (vol === 0) return null;
-    const ratio = vol / lastSession.totalVol;
-    if (ratio > 1.03) return { label: '↑ Progressing', color: '#4ade80' };
-    if (ratio < 0.97) return { label: '↓ Down',        color: '#f87171' };
-    return                     { label: '→ Holding',   color: COLORS.text500 };
-  }
-  const progression = getProgression();
+  const lastSummary = lastSession && lastSession.sets.length > 0
+    ? `LAST: ${lastSession.sets.length} SET${lastSession.sets.length !== 1 ? 'S' : ''} · ${lastSession.sets[0].weight}KG × ${lastSession.sets[0].reps}`
+    : null;
 
   return (
     <View style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 12 }}>
       {/* Exercise header */}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
         <View style={{ flex: 1, marginRight: 8 }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, marginBottom: 2 }}>{String(index + 1).padStart(2, '0')}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+          {/* Index + Name */}
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 }}>{String(index + 1).padStart(2, '0')}</Text>
             <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 24, paddingTop: 2 }}>{ex.name.toUpperCase()}</Text>
-            {progression && (
-              <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: `${progression.color}55`, backgroundColor: `${progression.color}18` }}>
-                <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: progression.color, letterSpacing: 0.5 }}>{progression.label}</Text>
-              </View>
-            )}
           </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+          {/* Muscle pills */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: lastSummary ? 6 : 0 }}>
             {ex.primary.map(m => (
               <View key={m} style={{ paddingHorizontal: 6, paddingVertical: 2, backgroundColor: COLORS.accentMuted, borderWidth: 1, borderColor: COLORS.accentBorder }}>
                 <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.orange400, textTransform: 'uppercase', letterSpacing: 0.8 }}>{MUSCLES[m]}</Text>
@@ -268,40 +381,34 @@ function ExerciseCard({ we, index, lastSession, onUpdate, onRemove, onAddSet }: 
               </View>
             ))}
           </View>
+          {/* LAST session summary */}
+          {lastSummary && (
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500 }}>{lastSummary}</Text>
+          )}
         </View>
-        <View style={{ alignItems: 'flex-end', gap: 4 }}>
-          <TouchableOpacity onPress={onRemove} style={{ padding: 4 }}>
-            <Text style={{ color: COLORS.text600, fontSize: 14 }}>✕</Text>
+        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+          <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={{ color: COLORS.text600, fontSize: 14, fontFamily: FONTS.mono }}>✕</Text>
           </TouchableOpacity>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>{we.sets.length} sets</Text>
-          <Text style={{ fontFamily: FONTS.anton, fontSize: 14, color: COLORS.orange400, lineHeight: 18, paddingTop: 2 }}>{fmt0(vol)}</Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase' }}>SETS</Text>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 13, color: COLORS.text100 }}>{we.sets.length}</Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase' }}>VOL</Text>
+            <Text style={{ fontFamily: FONTS.anton, fontSize: 14, color: COLORS.orange400, lineHeight: 18, paddingTop: 2 }}>{fmt0(vol)}</Text>
+          </View>
         </View>
       </View>
 
-      {/* Last session summary */}
-      {lastSession && lastSession.sets.length > 0 && (
-        <View style={{ paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: 'rgba(20,17,15,0.6)', flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1.5, marginRight: 4 }}>LAST SESSION</Text>
-          {lastSession.sets.map((s, i) => (
-            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>
-                {s.weight}<Text style={{ color: COLORS.text700 }}>kg</Text> × {s.reps}
-              </Text>
-              {i < lastSession.sets.length - 1 && (
-                <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, marginLeft: 2 }}>·</Text>
-              )}
-            </View>
-          ))}
-        </View>
-      )}
-
       {/* Column headers */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(28,25,23,0.5)', gap: 8 }}>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 24, textAlign: 'center', textTransform: 'uppercase' }}>SET</Text>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 64, textTransform: 'uppercase' }}>LAST</Text>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 62, textAlign: 'center', textTransform: 'uppercase' }}>KG</Text>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 62, textAlign: 'center', textTransform: 'uppercase' }}>REPS</Text>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 24, textAlign: 'center' }}>×</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 6, backgroundColor: 'rgba(28,25,23,0.5)', gap: 4, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight }}>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, width: 20, textAlign: 'center', textTransform: 'uppercase' }}>SET</Text>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, width: 72, textTransform: 'uppercase' }}>LAST SESSION</Text>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, width: 52, textAlign: 'center', textTransform: 'uppercase' }}>REPS</Text>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, width: 55, textAlign: 'center', textTransform: 'uppercase' }}>WEIGHT</Text>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, width: 36, textAlign: 'center', textTransform: 'uppercase' }}>VOL</Text>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, width: 52, textAlign: 'center', textTransform: 'uppercase' }}>STATUS</Text>
       </View>
 
       {we.sets.map((s, idx) => (
@@ -312,9 +419,20 @@ function ExerciseCard({ we, index, lastSession, onUpdate, onRemove, onAddSet }: 
         />
       ))}
 
-      <TouchableOpacity onPress={onAddSet} style={{ paddingVertical: 11, borderTopWidth: 1, borderTopColor: COLORS.borderLight, alignItems: 'center' }}>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 2 }}>+ ADD SET</Text>
-      </TouchableOpacity>
+      {/* Footer */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.borderLight }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity onPress={onAddSet} style={{ paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: COLORS.border }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1 }}>+ ADD SET</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onOpenRestTimer} style={{ paddingHorizontal: 8, paddingVertical: 6, borderWidth: 1, borderColor: COLORS.border }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 0.5 }}>⏱ REST TIMER</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500 }}>
+          TOTAL <Text style={{ color: COLORS.text300 }}>{fmt0(vol)}</Text> KG·REPS
+        </Text>
+      </View>
     </View>
   );
 }
@@ -603,8 +721,122 @@ const TEMPLATES: Template[] = [
   },
 ];
 
+// ─── Create Split Sheet ───────────────────────────────────────────────────────
+function CreateSplitSheet({ visible, mode, onClose, onSaved }: {
+  visible: boolean;
+  mode: 'split' | 'template';
+  onClose: () => void;
+  onSaved: (split: UserSplit) => void;
+}) {
+  const [name, setName]         = useState('');
+  const [exercises, setExercises] = useState<{ exerciseId: string; setsTarget: number }[]>([]);
+  const [showPicker, setShowPicker] = useState(false);
+  const [saving, setSaving]     = useState(false);
+
+  const usedExIds = useMemo(() => new Set(exercises.map(e => e.exerciseId)), [exercises]);
+
+  async function handleSave() {
+    if (!name.trim()) { Alert.alert('Name required', 'Enter a name for this split.'); return; }
+    if (exercises.length === 0) { Alert.alert('No exercises', 'Add at least one exercise.'); return; }
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+      const col = mode === 'split' ? 'my_splits' : 'my_templates';
+      const { data: profile } = await supabase.from('profiles').select(col).eq('id', user.id).single();
+      const current = ((profile as any)?.[col] ?? []) as UserSplit[];
+      const newSplit: UserSplit = { id: Date.now().toString(), name: name.trim(), exercises };
+      await supabase.from('profiles').update({ [col]: [...current, newSplit] }).eq('id', user.id);
+      onSaved(newSplit);
+      setName(''); setExercises([]);
+      onClose();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message ?? 'Could not save');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.75)' }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={{ backgroundColor: '#111110', borderTopWidth: 1, borderTopColor: '#292524', maxHeight: '92%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+              <Text style={{ fontFamily: FONTS.anton, fontSize: 22, color: COLORS.text100, lineHeight: 28, paddingTop: 2 }}>
+                {mode === 'split' ? 'CREATE SPLIT' : 'CREATE TEMPLATE'}
+              </Text>
+              <TouchableOpacity onPress={onClose}>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase' }}>CLOSE</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 480 }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
+                {mode === 'split' ? 'SPLIT NAME' : 'TEMPLATE NAME'}
+              </Text>
+              <TextInput
+                style={{ fontFamily: FONTS.mono, fontSize: 14, color: COLORS.text100, borderWidth: 1, borderColor: COLORS.border, backgroundColor: '#1c1917', paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20 }}
+                placeholder={mode === 'split' ? 'e.g. My Push Day' : 'e.g. Upper Body A'}
+                placeholderTextColor={COLORS.text700}
+                value={name}
+                onChangeText={setName}
+              />
+              {exercises.length > 0 && (
+                <>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>EXERCISES</Text>
+                  {exercises.map((e, i) => {
+                    const ex = EXERCISE_LIBRARY.find(x => x.id === e.exerciseId);
+                    return (
+                      <View key={e.exerciseId} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight }}>
+                        <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text300, flex: 1 }} numberOfLines={1}>{ex?.name ?? e.exerciseId}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <TouchableOpacity onPress={() => setExercises(prev => prev.map((x, j) => j === i ? { ...x, setsTarget: Math.max(1, x.setsTarget - 1) } : x))}
+                            style={{ width: 28, height: 28, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ color: COLORS.text500, fontSize: 14, lineHeight: 18 }}>−</Text>
+                          </TouchableOpacity>
+                          <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text100, width: 20, textAlign: 'center' }}>{e.setsTarget}</Text>
+                          <TouchableOpacity onPress={() => setExercises(prev => prev.map((x, j) => j === i ? { ...x, setsTarget: Math.min(10, x.setsTarget + 1) } : x))}
+                            style={{ width: 28, height: 28, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ color: COLORS.text500, fontSize: 14, lineHeight: 18 }}>+</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => setExercises(prev => prev.filter((_, j) => j !== i))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            <Text style={{ fontFamily: FONTS.mono, fontSize: 14, color: '#f87171' }}>×</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                  <View style={{ height: 16 }} />
+                </>
+              )}
+              <TouchableOpacity onPress={() => setShowPicker(true)}
+                style={{ paddingVertical: 12, borderWidth: 1, borderStyle: 'dashed', borderColor: 'rgba(87,83,78,0.5)', alignItems: 'center', marginBottom: 20 }}>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1 }}>+ ADD EXERCISE</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleSave} disabled={saving}
+                style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: saving ? '#292524' : COLORS.accent }}>
+                {saving ? <ActivityIndicator size="small" color={COLORS.bg} /> : (
+                  <Text style={{ fontFamily: FONTS.anton, fontSize: 14, color: COLORS.bg, letterSpacing: 2 }}>
+                    {mode === 'split' ? 'SAVE SPLIT' : 'SAVE TEMPLATE'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+      <AddExerciseSheet
+        visible={showPicker}
+        onClose={() => setShowPicker(false)}
+        onAdd={id => { setExercises(prev => [...prev, { exerciseId: id, setsTarget: 3 }]); }}
+        usedIds={usedExIds}
+      />
+    </Modal>
+  );
+}
+
 // ─── Session Selector ─────────────────────────────────────────────────────────
-const SELECTOR_TABS = ['New Session', 'Templates', 'Past Session'] as const;
+const SELECTOR_TABS = ['New Session', 'My Splits', 'Templates', 'Past Session'] as const;
 type SelectorTab = typeof SELECTOR_TABS[number];
 
 function SessionSelector({
@@ -613,14 +845,23 @@ function SessionSelector({
   onSelectTemplate,
   onRepeatSession,
   onNewSession,
+  userSplits,
+  userTemplates,
+  onSelectSplit,
+  onSplitSaved,
 }: {
   historyData: any[] | undefined;
   todayWorkout: any;
   onSelectTemplate: (exercises: { exerciseId: string; setsTarget: number }[]) => void;
   onRepeatSession: (workout: any) => void;
   onNewSession: () => void;
+  userSplits: UserSplit[];
+  userTemplates: UserSplit[];
+  onSelectSplit: (exercises: { exerciseId: string; setsTarget: number }[]) => void;
+  onSplitSaved: (split: UserSplit, mode: 'split' | 'template') => void;
 }) {
   const [tab, setTab] = useState<SelectorTab>('New Session');
+  const [createMode, setCreateMode] = useState<'split' | 'template' | null>(null);
 
   return (
     <View style={{ flex: 1 }}>
@@ -660,26 +901,69 @@ function SessionSelector({
           </View>
         )}
 
-        {tab === 'Templates' && TEMPLATES.map((tmpl, i) => {
-          const exerciseNames = tmpl.exercises.map(e => EXERCISE_LIBRARY.find(ex => ex.id === e.exerciseId)?.name ?? e.exerciseId);
-          return (
-            <TouchableOpacity key={i} onPress={() => onSelectTemplate(tmpl.exercises)}
-              style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 10, padding: 14 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 24, paddingTop: 2 }}>{tmpl.name.toUpperCase()}</Text>
-                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>~{tmpl.estimatedMins}m</Text>
-              </View>
-              {exerciseNames.slice(0, 4).map((name, j) => (
-                <Text key={j} style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, marginBottom: 2 }}>
-                  {tmpl.exercises[j].setsTarget}× {name}
-                </Text>
-              ))}
-              {exerciseNames.length > 4 && (
-                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, marginTop: 2 }}>+{exerciseNames.length - 4} more</Text>
-              )}
+        {tab === 'My Splits' && (
+          <>
+            <TouchableOpacity onPress={() => setCreateMode('split')}
+              style={{ paddingVertical: 12, borderWidth: 1, borderColor: COLORS.accent, backgroundColor: COLORS.accentMuted, alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, textTransform: 'uppercase', letterSpacing: 1.5 }}>+ CREATE SPLIT</Text>
             </TouchableOpacity>
-          );
-        })}
+            {userSplits.length === 0 ? (
+              <View style={{ paddingTop: 24, alignItems: 'center' }}>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700, textTransform: 'uppercase' }}>No saved splits yet.</Text>
+              </View>
+            ) : userSplits.map(split => (
+              <TouchableOpacity key={split.id} onPress={() => onSelectSplit(split.exercises)}
+                style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 10, padding: 14 }}>
+                <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 24, paddingTop: 2, marginBottom: 8 }}>{split.name.toUpperCase()}</Text>
+                {split.exercises.slice(0, 4).map((e, j) => {
+                  const ex = EXERCISE_LIBRARY.find(x => x.id === e.exerciseId);
+                  return <Text key={j} style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, marginBottom: 2 }}>{e.setsTarget}× {ex?.name ?? e.exerciseId}</Text>;
+                })}
+                {split.exercises.length > 4 && <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, marginTop: 2 }}>+{split.exercises.length - 4} more</Text>}
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
+
+        {tab === 'Templates' && (
+          <>
+            <TouchableOpacity onPress={() => setCreateMode('template')}
+              style={{ paddingVertical: 12, borderWidth: 1, borderColor: COLORS.accent, backgroundColor: COLORS.accentMuted, alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, textTransform: 'uppercase', letterSpacing: 1.5 }}>+ CREATE TEMPLATE</Text>
+            </TouchableOpacity>
+            {TEMPLATES.map((tmpl, i) => {
+              const exerciseNames = tmpl.exercises.map(e => EXERCISE_LIBRARY.find(ex => ex.id === e.exerciseId)?.name ?? e.exerciseId);
+              return (
+                <TouchableOpacity key={i} onPress={() => onSelectTemplate(tmpl.exercises)}
+                  style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 10, padding: 14 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 24, paddingTop: 2 }}>{tmpl.name.toUpperCase()}</Text>
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>~{tmpl.estimatedMins}m</Text>
+                  </View>
+                  {exerciseNames.slice(0, 4).map((name, j) => (
+                    <Text key={j} style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, marginBottom: 2 }}>
+                      {tmpl.exercises[j].setsTarget}× {name}
+                    </Text>
+                  ))}
+                  {exerciseNames.length > 4 && (
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, marginTop: 2 }}>+{exerciseNames.length - 4} more</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+            {userTemplates.map(tmpl => (
+              <TouchableOpacity key={tmpl.id} onPress={() => onSelectSplit(tmpl.exercises)}
+                style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 10, padding: 14 }}>
+                <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 24, paddingTop: 2, marginBottom: 8 }}>{tmpl.name.toUpperCase()}</Text>
+                {tmpl.exercises.slice(0, 4).map((e, j) => {
+                  const ex = EXERCISE_LIBRARY.find(x => x.id === e.exerciseId);
+                  return <Text key={j} style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, marginBottom: 2 }}>{e.setsTarget}× {ex?.name ?? e.exerciseId}</Text>;
+                })}
+                {tmpl.exercises.length > 4 && <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, marginTop: 2 }}>+{tmpl.exercises.length - 4} more</Text>}
+              </TouchableOpacity>
+            ))}
+          </>
+        )}
 
         {tab === 'Past Session' && (
           historyData && historyData.length > 0 ? historyData.map((w: any, i: number) => {
@@ -706,6 +990,15 @@ function SessionSelector({
           )
         )}
       </ScrollView>
+
+      {createMode !== null && (
+        <CreateSplitSheet
+          visible={createMode !== null}
+          mode={createMode}
+          onClose={() => setCreateMode(null)}
+          onSaved={(split) => { onSplitSaved(split, createMode!); setCreateMode(null); }}
+        />
+      )}
     </View>
   );
 }
@@ -727,6 +1020,8 @@ export default function ForgeScreen() {
   const [restDisplay, setRestDisplay]     = useState('01:30');
   const [restDuration, setRestDuration]   = useState(90);
   const [toast, setToast]                 = useState<string | null>(null);
+  const [userSplits, setUserSplits]       = useState<UserSplit[]>([]);
+  const [userTemplates, setUserTemplates] = useState<UserSplit[]>([]);
 
   const restRemainingRef = useRef(90);
   const restIntervalRef  = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -771,6 +1066,19 @@ export default function ForgeScreen() {
   // Clean up rest timer on unmount
   useEffect(() => {
     return () => { if (restIntervalRef.current) clearInterval(restIntervalRef.current); };
+  }, []);
+
+  // Load user splits + templates from Supabase
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase.from('profiles').select('my_splits, my_templates').eq('id', user.id).single();
+        if (data?.my_splits)    setUserSplits(data.my_splits as UserSplit[]);
+        if (data?.my_templates) setUserTemplates(data.my_templates as UserSplit[]);
+      } catch {}
+    })();
   }, []);
 
   // Rest timer controls
@@ -1033,6 +1341,13 @@ export default function ForgeScreen() {
             onSelectTemplate={handleSelectTemplate}
             onRepeatSession={handleRepeatSession}
             onNewSession={handleNewSession}
+            userSplits={userSplits}
+            userTemplates={userTemplates}
+            onSelectSplit={handleSelectTemplate}
+            onSplitSaved={(split, mode) => {
+              if (mode === 'split') setUserSplits(prev => [...prev, split]);
+              else setUserTemplates(prev => [...prev, split]);
+            }}
           />
         ) : (
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 14, paddingBottom: 20 }} keyboardShouldPersistTaps="handled">
@@ -1052,6 +1367,7 @@ export default function ForgeScreen() {
                   onUpdate={updated => updateExercise(we.id, updated)}
                   onRemove={() => setWorkout(w => w.filter(x => x.id !== we.id))}
                   onAddSet={() => addSet(we.id)}
+                  onOpenRestTimer={() => setShowRestSheet(true)}
                 />
               );
             })}
@@ -1074,92 +1390,47 @@ export default function ForgeScreen() {
               </View>
             )}
 
-            {/* Volume Breakdown */}
-            {workout.length > 0 && (
-              <View style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 12 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-                  <Text style={{ fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text100, lineHeight: 26, paddingTop: 2 }}>VOLUME BREAKDOWN</Text>
+            {/* Volume Breakdown — bar graph */}
+            {workout.length > 0 && (() => {
+              const muscleVols: { name: string; vol: number }[] = [];
+              for (const we of workout) {
+                const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
+                if (!ex) continue;
+                const vol = exerciseVolume(we);
+                const push = (m: string, v: number) => {
+                  const found = muscleVols.find(x => x.name === m);
+                  if (found) found.vol += v;
+                  else muscleVols.push({ name: m, vol: v });
+                };
+                ex.primary.forEach(m   => push(m, vol));
+                ex.secondary.forEach(m => push(m, vol * 0.5));
+              }
+              muscleVols.sort((a, b) => b.vol - a.vol);
+              const barMax = muscleVols[0]?.vol || 1;
+              return (
+                <View style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 16 }}>
+                  <View style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+                    <Text style={{ fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text100, lineHeight: 26, paddingTop: 2 }}>VOLUME BREAKDOWN</Text>
+                  </View>
+                  <View style={{ padding: 14, gap: 10 }}>
+                    {muscleVols.map(({ name, vol }) => {
+                      const pct = (vol / barMax) * 100;
+                      return (
+                        <View key={name}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400, textTransform: 'uppercase' }}>{name.replace(/_/g, ' ')}</Text>
+                            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.orange400 }}>{fmt0(vol)}</Text>
+                          </View>
+                          <View style={{ height: 3, backgroundColor: 'rgba(28,25,23,0.8)' }}>
+                            <View style={{ height: '100%', width: `${pct}%` as any, backgroundColor: COLORS.accent }} />
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
                 </View>
-                <View style={{ flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: 'rgba(28,25,23,0.5)' }}>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, flex: 1, textTransform: 'uppercase' }}>EXERCISE</Text>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 40, textAlign: 'center', textTransform: 'uppercase' }}>SETS</Text>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 60, textAlign: 'right', textTransform: 'uppercase' }}>KG·REPS</Text>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 48, textAlign: 'right', textTransform: 'uppercase' }}>Δ</Text>
-                </View>
-                {workout.map((we, i) => {
-                  const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
-                  if (!ex) return null;
-                  const vol = exerciseVolume(we);
-                  const lastSession = lastSessionMap.get(ex.name.toLowerCase().trim());
-                  const delta = lastSession && lastSession.totalVol > 0
-                    ? ((vol - lastSession.totalVol) / lastSession.totalVol) * 100
-                    : null;
-                  const deltaColor = delta === null ? COLORS.text600 : delta > 0 ? '#4ade80' : '#f87171';
-                  const deltaStr = delta === null ? '—' : `${delta > 0 ? '+' : ''}${Math.round(delta)}%`;
-                  return (
-                    <View key={we.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.borderLight }}>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text300, flex: 1 }} numberOfLines={1}>{ex.name}</Text>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, width: 40, textAlign: 'center' }}>{we.sets.length}</Text>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.orange400, width: 60, textAlign: 'right' }}>{fmt0(vol)}</Text>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: deltaColor, width: 48, textAlign: 'right' }}>{deltaStr}</Text>
-                    </View>
-                  );
-                })}
-                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: 'rgba(28,25,23,0.5)' }}>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, flex: 1, textTransform: 'uppercase', letterSpacing: 1 }}>TOTAL</Text>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, width: 40, textAlign: 'center' }}>{totalSets}</Text>
-                  <Text style={{ fontFamily: FONTS.anton, fontSize: 14, color: COLORS.orange400, width: 60, textAlign: 'right', lineHeight: 18, paddingTop: 2 }}>{fmt0(totalVolume)}</Text>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700, width: 48, textAlign: 'right' }}>—</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Progressive Overload */}
-            {workout.length > 0 && (
-              <View style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 16 }}>
-                <View style={{ padding: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-                  <Text style={{ fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text100, lineHeight: 26, paddingTop: 2 }}>PROGRESSIVE OVERLOAD</Text>
-                </View>
-                <View style={{ flexDirection: 'row', paddingHorizontal: 14, paddingVertical: 6, backgroundColor: 'rgba(28,25,23,0.5)' }}>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, flex: 1, textTransform: 'uppercase' }}>EXERCISE</Text>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 64, textAlign: 'center', textTransform: 'uppercase' }}>LAST TOP SET</Text>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 64, textAlign: 'center', textTransform: 'uppercase' }}>TODAY TOP</Text>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 48, textAlign: 'center', textTransform: 'uppercase' }}>STATUS</Text>
-                </View>
-                {workout.map(we => {
-                  const ex = EXERCISE_LIBRARY.find(e => e.id === we.exerciseId);
-                  if (!ex) return null;
-                  const lastSess = lastSessionMap.get(ex.name.toLowerCase().trim());
-                  const lastTopVol = lastSess ? Math.max(0, ...lastSess.sets.map(s => s.weight * s.reps)) : 0;
-                  const lastTopSet = lastSess?.sets.reduce((best, s) => s.weight * s.reps > best.weight * best.reps ? s : best, { weight: 0, reps: 0 });
-                  const todaySets = we.sets.filter(s => Number(s.weight) > 0 && Number(s.reps) > 0);
-                  const todayTopVol = todaySets.length > 0 ? Math.max(0, ...todaySets.map(s => Number(s.weight) * Number(s.reps))) : 0;
-                  const todayTopSet = todaySets.reduce((best, s) => Number(s.weight) * Number(s.reps) > Number(best.weight) * Number(best.reps) ? s : best, { weight: 0, reps: 0 } as any);
-
-                  let statusLabel: string;
-                  let statusColor: string;
-                  if (!lastSess) { statusLabel = 'FIRST'; statusColor = COLORS.accent; }
-                  else if (todaySets.length === 0) { statusLabel = '—'; statusColor = COLORS.text700; }
-                  else if (todayTopVol > lastTopVol * 1.001) { statusLabel = '↑ UP'; statusColor = '#4ade80'; }
-                  else if (todayTopVol < lastTopVol * 0.999) { statusLabel = '↓ DOWN'; statusColor = '#f87171'; }
-                  else { statusLabel = '→ HOLD'; statusColor = COLORS.text500; }
-
-                  const lastStr = lastTopSet && lastTopSet.weight > 0 ? `${lastTopSet.weight}×${lastTopSet.reps}` : '—';
-                  const todayStr = todaySets.length > 0 && Number(todayTopSet.weight) > 0 ? `${todayTopSet.weight}×${todayTopSet.reps}` : '—';
-
-                  return (
-                    <View key={we.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: 1, borderTopColor: COLORS.borderLight }}>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text300, flex: 1 }} numberOfLines={1}>{ex.name}</Text>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, width: 64, textAlign: 'center' }}>{lastStr}</Text>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text100, width: 64, textAlign: 'center' }}>{todayStr}</Text>
-                      <View style={{ width: 48, alignItems: 'center' }}>
-                        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: statusColor }}>{statusLabel}</Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
+              );
+            })()}
           </ScrollView>
         )}
 
