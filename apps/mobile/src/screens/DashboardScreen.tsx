@@ -201,7 +201,7 @@ function cellColor(status: string) {
   if (status === 'done')   return COLORS.accent;
   if (status === 'missed') return 'rgba(248,113,113,0.25)';
   if (status === 'rest')   return '#292524';
-  return '#292524'; // future — same neutral as rest
+  return '#44403c'; // future — opaque stone-700, distinct from rest
 }
 
 function getCellStatus(d: DayAdherence, key: 'workout' | 'meals' | 'weight') {
