@@ -738,7 +738,7 @@ const s = StyleSheet.create({
   gridDateLabel:{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, marginTop: 2 },
   gridSection:  { marginTop: SPACING.md },
   gridRowLabel: { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: SPACING.xs },
-  gridCell:     { height: 8, width: '90%' },
+  gridCell:     { height: 8, alignSelf: 'stretch', marginHorizontal: 2 },
   legendRow:    { flexDirection: 'row', gap: SPACING.lg, marginTop: SPACING.md, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.borderLight, flexWrap: 'wrap' },
   legendItem:   { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot:    { width: 10, height: 6 },
