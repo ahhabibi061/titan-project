@@ -98,6 +98,7 @@ const MOCK_GROWTH_MAP: Record<string, { status: string; growthPct: number; curre
 interface DayAdherence {
   day: string; label: string; today: boolean; future: boolean; rest: boolean;
   workout: boolean; meals: boolean; weight: boolean;
+  workoutId?: string;
 }
 interface ActivityItem { time: string; type: string; text: string; }
 
@@ -209,7 +210,7 @@ function getCellStatus(d: DayAdherence, key: 'workout' | 'meals' | 'weight') {
   return d[key] ? 'done' : (d.today || d.future ? 'future' : 'missed');
 }
 
-function WeeklyGrid({ days }: { days: DayAdherence[] }) {
+function WeeklyGrid({ days, navigation }: { days: DayAdherence[]; navigation: any }) {
   const rows: { key: 'workout' | 'meals' | 'weight'; label: string }[] = [
     { key: 'workout', label: 'Workout'   },
     { key: 'meals',   label: 'Nutrition' },
@@ -229,11 +230,20 @@ function WeeklyGrid({ days }: { days: DayAdherence[] }) {
         <View key={row.key} style={s.gridSection}>
           <Text style={s.gridRowLabel}>{row.label}</Text>
           <View style={s.gridRow}>
-            {days.map((d, i) => (
-              <View key={i} style={s.gridCol}>
-                <View style={[s.gridCell, { backgroundColor: cellColor(getCellStatus(d, row.key)) }]} />
-              </View>
-            ))}
+            {days.map((d, i) => {
+              const status = getCellStatus(d, row.key);
+              const tappable = row.key === 'workout' && status === 'done' && d.workoutId;
+              return (
+                <View key={i} style={s.gridCol}>
+                  <TouchableOpacity
+                    activeOpacity={tappable ? 0.6 : 1}
+                    onPress={tappable ? () => navigation.navigate('SessionReview', { workoutId: d.workoutId }) : undefined}
+                  >
+                    <View style={[s.gridCell, { backgroundColor: cellColor(status) }, tappable && { borderWidth: 1, borderColor: 'rgba(237,122,42,0.4)' }]} />
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
           </View>
         </View>
       ))}
@@ -318,11 +328,12 @@ export default function DashboardScreen() {
       const isoDate = date.toISOString().split('T')[0];
       const isToday  = isoDate === now.toISOString().split('T')[0];
       const isFuture = date > now && !isToday;
-      const hasWorkout = (weeklyWorkouts ?? []).some(w => w.started_at?.startsWith(isoDate) && w.completed);
+      const completedW = (weeklyWorkouts ?? []).find(w => w.started_at?.startsWith(isoDate) && w.completed);
       return {
         day, label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         today: isToday, future: isFuture, rest: false,
-        workout: hasWorkout, meals: false, weight: false,
+        workout: !!completedW, meals: false, weight: false,
+        workoutId: completedW?.id,
       };
     });
   }, [weeklyWorkouts])();
@@ -537,7 +548,7 @@ export default function DashboardScreen() {
                 style={s.primaryBtn}
                 onPress={() => {
                   if (todayWorkout.completed) {
-                    navigation.navigate('Forge', { reviewWorkoutId: todayWorkout.id });
+                    navigation.navigate('SessionReview', { workoutId: todayWorkout.id });
                   } else {
                     navigation.navigate('Forge');
                   }
@@ -556,7 +567,7 @@ export default function DashboardScreen() {
             <Text style={s.sectionTitle}>This Week</Text>
             <Text style={s.cardTag}>VAULT →</Text>
           </View>
-          <WeeklyGrid days={days} />
+          <WeeklyGrid days={days} navigation={navigation} />
           <View style={[s.divider, { marginTop: SPACING.lg }]} />
           <View style={s.weekStatsGrid}>
             {([

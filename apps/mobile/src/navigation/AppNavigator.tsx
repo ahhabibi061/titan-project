@@ -1,13 +1,16 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, FONTS } from '../constants/theme';
 import DashboardScreen from '../screens/DashboardScreen';
 import PlaceholderScreen from '../screens/PlaceholderScreen';
 import ForgeScreen from '../screens/ForgeScreen';
+import SessionReviewScreen from '../screens/SessionReviewScreen';
 
-const Tab = createBottomTabNavigator();
+const Tab   = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
 
 const TABS = [
   { name: 'Home',     label: 'Home',     icon: 'home',         Screen: () => <DashboardScreen /> },
@@ -17,7 +20,7 @@ const TABS = [
   { name: 'Oracle',   label: 'Oracle',   icon: 'sparkles',     Screen: () => <PlaceholderScreen name="Oracle" /> },
 ] as const;
 
-export default function AppNavigator() {
+function TabNavigator() {
   const insets = useSafeAreaInsets();
 
   return (
@@ -41,7 +44,7 @@ export default function AppNavigator() {
           letterSpacing: 1,
           marginTop:     2,
         },
-        tabBarIcon: ({ color, size }) => {
+        tabBarIcon: ({ color }) => {
           const tab = TABS.find(t => t.name === route.name);
           return <Ionicons name={tab?.icon as any} size={20} color={color} />;
         },
@@ -56,5 +59,14 @@ export default function AppNavigator() {
         />
       ))}
     </Tab.Navigator>
+  );
+}
+
+export default function AppNavigator() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Tabs"          component={TabNavigator} />
+      <Stack.Screen name="SessionReview" component={SessionReviewScreen} />
+    </Stack.Navigator>
   );
 }
