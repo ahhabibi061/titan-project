@@ -199,9 +199,9 @@ function MiniSparkline({ values }: { values: number[] }) {
 
 function cellColor(status: string) {
   if (status === 'done')   return COLORS.accent;
-  if (status === 'missed') return 'rgba(248,113,113,0.2)';
+  if (status === 'missed') return 'rgba(248,113,113,0.25)';
   if (status === 'rest')   return '#292524';
-  return 'rgba(12,11,10,0.4)';
+  return '#292524'; // future — same neutral as rest
 }
 
 function getCellStatus(d: DayAdherence, key: 'workout' | 'meals' | 'weight') {
@@ -242,9 +242,7 @@ function WeeklyGrid({ days, navigation }: { days: DayAdherence[]; navigation: an
                 >
                   <View style={[
                     s.gridCell,
-                    status === 'future'
-                      ? { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#3c3532' }
-                      : { backgroundColor: cellColor(status) },
+                    { backgroundColor: cellColor(status) },
                     tappable && { borderWidth: 1, borderColor: 'rgba(237,122,42,0.4)' },
                   ]} />
                 </TouchableOpacity>
