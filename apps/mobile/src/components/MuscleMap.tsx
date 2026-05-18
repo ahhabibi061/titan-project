@@ -13,11 +13,12 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, Animated, Modal, ScrollView } from 'react-native';
 import Body, { ExtendedBodyPart, Slug } from 'react-native-body-highlighter';
 import { COLORS, FONTS } from '../constants/theme';
+import { EXERCISE_LIBRARY } from '../constants/exercises';
 
-// ── Copied verbatim from web ──────────────────────────────────────────────────
+// ── Muscle display labels (local copy — keeps MuscleMap self-contained) ────────
 
 const MUSCLES: Record<string, string> = {
   chest: 'Chest', front_delts: 'Front Delts', side_delts: 'Side Delts',
@@ -25,13 +26,17 @@ const MUSCLES: Record<string, string> = {
   forearms: 'Forearms', abs: 'Abs', obliques: 'Obliques', traps: 'Traps',
   lats: 'Lats', lower_back: 'Lower Back', glutes: 'Glutes',
   quads: 'Quads', hamstrings: 'Hamstrings', calves: 'Calves',
+  adductors: 'Adductors', abductors: 'Abductors',
 };
 
-// Web slug names → mobile library slug names.
-// react-native-body-highlighter merges front/rear deltoids into 'deltoids'.
+// Internal muscle key → react-native-body-highlighter slug
+// Verified against README slug table (trapezius/triceps/forearm/adductors/calves/
+// deltoids/obliques/chest/biceps/abs/quadriceps/abductors/upper-back/lower-back/
+// hamstring/gluteal).
 const MUSCLE_MAP: Record<string, string> = {
   chest:       'chest',
   front_delts: 'deltoids',
+  side_delts:  'deltoids',   // was missing — caused lateral raises not to light up
   rear_delts:  'deltoids',
   biceps:      'biceps',
   triceps:     'triceps',
@@ -45,6 +50,8 @@ const MUSCLE_MAP: Record<string, string> = {
   quads:       'quadriceps',
   hamstrings:  'hamstring',
   calves:      'calves',
+  adductors:   'adductors',
+  abductors:   'abductors',
 };
 
 const MUSCLE_DISPLAY_NAMES: Record<string, string> = {
@@ -62,6 +69,8 @@ const MUSCLE_DISPLAY_NAMES: Record<string, string> = {
   'quadriceps':  'Quadriceps',
   'hamstring':   'Hamstrings',
   'calves':      'Gastrocnemius',
+  'adductors':   'Hip Adductors',
+  'abductors':   'Hip Abductors',
 };
 
 const MUSCLE_WINDOWS: Record<string, number> = {
@@ -69,6 +78,7 @@ const MUSCLE_WINDOWS: Record<string, number> = {
   'abs': 24, 'obliques': 24, 'trapezius': 36,
   'upper-back': 72, 'lower-back': 72, 'gluteal': 72,
   'quadriceps': 72, 'hamstring': 72, 'calves': 36,
+  'adductors': 48, 'abductors': 48,
 };
 
 const RECOVERY_HIGHLIGHTED = ['#4ade80', '#a3e635', '#fbbf24', '#f87171'];
@@ -102,9 +112,6 @@ function buildModelData(
   return Object.entries(slugFreq).map(([slug, frequency]) => ({ name: slug, muscles: [slug], frequency }));
 }
 
-// ── Primitive adapter: web frequency-model → mobile ExtendedBodyPart[] ────────
-// The web Model component resolves color via highlightedColors[frequency-1].
-// The mobile Body component needs colors pre-resolved per part.
 function toBodyParts(
   modelData:         { name: string; frequency: number }[],
   highlightedColors: string[],
@@ -116,21 +123,24 @@ function toBodyParts(
 }
 
 // ── MuscleTooltip ─────────────────────────────────────────────────────────────
-// Logic identical to web. Position: absolute div → Animated slide-up panel.
 
 interface MuscleTooltipProps {
-  muscle:       string | null;
-  recoveryData: Record<string, any>;
-  growthData:   Record<string, any>;
-  mode:         'recovery' | 'growth';
-  slideY:       Animated.Value;
-  fadeAnim:     Animated.Value;
+  muscle:           string | null;
+  recoveryData:     Record<string, any>;
+  growthData:       Record<string, any>;
+  mode:             'recovery' | 'growth';
+  slideY:           Animated.Value;
+  fadeAnim:         Animated.Value;
+  onExercisePress?: (exerciseId: string) => void;
 }
 
-function MuscleTooltip({ muscle, recoveryData, growthData, mode, slideY, fadeAnim }: MuscleTooltipProps) {
+function MuscleTooltip({ muscle, recoveryData, growthData, mode, slideY, fadeAnim, onExercisePress }: MuscleTooltipProps) {
+  const [showModal, setShowModal] = useState(false);
+
   if (!muscle) return null;
-  const displayName  = MUSCLE_DISPLAY_NAMES[muscle] || muscle.replace(/-/g, ' ').toUpperCase();
-  const internalKey  = Object.entries(MUSCLE_MAP).find(([, s]) => s === muscle)?.[0];
+
+  const displayName = MUSCLE_DISPLAY_NAMES[muscle] || muscle.replace(/-/g, ' ').toUpperCase();
+  const internalKey = Object.entries(MUSCLE_MAP).find(([, s]) => s === muscle)?.[0];
   let value: number | null = null;
   let line2: string | null = null;
   let statusStr: string | null = null;
@@ -153,7 +163,6 @@ function MuscleTooltip({ muscle, recoveryData, growthData, mode, slideY, fadeAni
     }
   }
 
-  // Colors keyed by status string — identical to HIGHLIGHTED palette used by the body map
   const RECOVERY_COLORS: Record<string, { label: string; color: string }> = {
     ready:   { label: 'READY',        color: RECOVERY_HIGHLIGHTED[0] },
     almost:  { label: 'ALMOST READY', color: RECOVERY_HIGHLIGHTED[1] },
@@ -168,7 +177,20 @@ function MuscleTooltip({ muscle, recoveryData, growthData, mode, slideY, fadeAni
     dropped:   { label: 'DROPPED',      color: GROWTH_HIGHLIGHTED[4] },
   };
   const lookup = mode === 'recovery' ? RECOVERY_COLORS : GROWTH_COLORS;
-  const status = (statusStr && lookup[statusStr]) ?? { label: 'NO DATA', color: '#78716c' };
+  const status: { label: string; color: string } = (statusStr ? lookup[statusStr] : null) ?? { label: 'NO DATA', color: '#78716c' };
+
+  // All internal keys that map to this slug (e.g. deltoids → front_delts, side_delts, rear_delts)
+  const internalKeys = Object.entries(MUSCLE_MAP)
+    .filter(([, s]) => s === muscle)
+    .map(([k]) => k);
+
+  const matchedExercises = EXERCISE_LIBRARY.filter(ex =>
+    internalKeys.some(key =>
+      (ex.primary as string[]).includes(key) || (ex.secondary as string[]).includes(key),
+    ),
+  );
+  const firstFour = matchedExercises.slice(0, 4);
+  const hasMore   = matchedExercises.length > 4;
 
   return (
     <Animated.View style={{
@@ -176,6 +198,7 @@ function MuscleTooltip({ muscle, recoveryData, growthData, mode, slideY, fadeAni
       marginTop: 12, backgroundColor: '#0c0a09',
       borderWidth: 1, borderColor: '#292524', padding: 12,
     }}>
+      {/* Status header */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
         <Text style={{ fontFamily: FONTS.anton, fontSize: 13, color: '#f5f5f4', letterSpacing: 0.5, textTransform: 'uppercase' }}>{displayName}</Text>
         <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.2 }}>
@@ -200,21 +223,90 @@ function MuscleTooltip({ muscle, recoveryData, growthData, mode, slideY, fadeAni
       }}>
         <Text style={{ fontFamily: FONTS.mono, fontSize: 9, letterSpacing: 1.5, textTransform: 'uppercase', color: status.color }}>{status.label}</Text>
       </View>
+
+      {/* Exercise pills */}
+      {matchedExercises.length > 0 && (
+        <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#292524' }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 6 }}>
+            EXERCISES TARGETING THIS MUSCLE
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+            {firstFour.map(ex => (
+              <TouchableOpacity
+                key={ex.id}
+                onPress={() => onExercisePress?.(ex.id)}
+                style={{ paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: COLORS.border }}
+              >
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text400 }} numberOfLines={1}>
+                  {ex.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+            {hasMore && (
+              <TouchableOpacity onPress={() => setShowModal(true)} style={{ paddingVertical: 3, paddingHorizontal: 4 }}>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.accent }}>
+                  {firstFour.length} of {matchedExercises.length} →
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* Full exercise list modal */}
+      <Modal visible={showModal} transparent animationType="slide" onRequestClose={() => setShowModal(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.75)' }}>
+          <View style={{ backgroundColor: '#111110', borderTopWidth: 1, borderTopColor: '#292524', maxHeight: '70%' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#292524' }}>
+              <View>
+                <Text style={{ fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text100, lineHeight: 26, paddingTop: 2 }}>
+                  {displayName.toUpperCase()}
+                </Text>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 2 }}>
+                  {matchedExercises.length} EXERCISES
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowModal(false)}>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase' }}>CLOSE</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {matchedExercises.map((ex, i) => (
+                <TouchableOpacity
+                  key={ex.id}
+                  onPress={() => { onExercisePress?.(ex.id); setShowModal(false); }}
+                  style={{
+                    paddingVertical: 14, paddingHorizontal: 16,
+                    borderBottomWidth: i < matchedExercises.length - 1 ? 1 : 0,
+                    borderBottomColor: '#1c1917',
+                    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 13, color: COLORS.text100 }}>{ex.name}</Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1 }}>
+                    {(ex.primary as string[])[0]?.replace(/_/g, ' ')}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Animated.View>
   );
 }
 
 // ── BodyMapDual ───────────────────────────────────────────────────────────────
-// Logic identical to web BodyMapDual. Primitives swapped throughout.
 
 export interface BodyMapDualProps {
-  recoveryMap: Record<string, any>;
-  growthMap:   Record<string, any>;
-  mode:        'recovery' | 'growth';
-  setMode:     (m: 'recovery' | 'growth') => void;
+  recoveryMap:      Record<string, any>;
+  growthMap:        Record<string, any>;
+  mode:             'recovery' | 'growth';
+  setMode:          (m: 'recovery' | 'growth') => void;
+  onExercisePress?: (exerciseId: string) => void;
 }
 
-export function BodyMapDual({ recoveryMap, growthMap, mode, setMode }: BodyMapDualProps) {
+export function BodyMapDual({ recoveryMap, growthMap, mode, setMode, onExercisePress }: BodyMapDualProps) {
   const slideY   = useRef(new Animated.Value(80)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const [tooltip, setTooltip] = useState<string | null>(null);
@@ -241,7 +333,6 @@ export function BodyMapDual({ recoveryMap, growthMap, mode, setMode }: BodyMapDu
     }
   }
 
-  // Summary items — identical logic to web
   const summaryItems = mode === 'recovery'
     ? Object.entries(recoveryMap)
         .filter(([, v]) => v.status !== 'no_data' && v.status !== 'ready')
@@ -268,7 +359,7 @@ export function BodyMapDual({ recoveryMap, growthMap, mode, setMode }: BodyMapDu
 
   return (
     <View>
-      {/* Mode toggle — web: flex gap-1 mb-4 */}
+      {/* Mode toggle */}
       <View style={{ flexDirection: 'row', gap: 4, marginBottom: 16 }}>
         {(['recovery', 'growth'] as const).map(m => (
           <TouchableOpacity
@@ -289,7 +380,7 @@ export function BodyMapDual({ recoveryMap, growthMap, mode, setMode }: BodyMapDu
         ))}
       </View>
 
-      {/* Body maps — web: flex gap-3 justify-center */}
+      {/* Front + back body maps */}
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12 }}>
         <View style={{ alignItems: 'center' }}>
           <Body
@@ -313,7 +404,7 @@ export function BodyMapDual({ recoveryMap, growthMap, mode, setMode }: BodyMapDu
         </View>
       </View>
 
-      {/* Tooltip — web: absolute div; mobile: animated slide-up in-flow */}
+      {/* Tooltip */}
       {tooltip && (
         <MuscleTooltip
           muscle={tooltip}
@@ -322,10 +413,11 @@ export function BodyMapDual({ recoveryMap, growthMap, mode, setMode }: BodyMapDu
           mode={mode}
           slideY={slideY}
           fadeAnim={fadeAnim}
+          onExercisePress={onExercisePress}
         />
       )}
 
-      {/* Legend — web: mt-3 pt-3 border-t border-stone-800/60 */}
+      {/* Legend */}
       <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(68,64,60,0.6)' }}>
         {mode === 'recovery' ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
@@ -348,7 +440,7 @@ export function BodyMapDual({ recoveryMap, growthMap, mode, setMode }: BodyMapDu
         )}
       </View>
 
-      {/* Summary — web: mt-3 pt-3 border-t space-y-2 */}
+      {/* Summary */}
       {summaryItems.length > 0 && (
         <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(68,64,60,0.6)', gap: 8 }}>
           <Text style={{ fontFamily: FONTS.mono, fontSize: 9, textTransform: 'uppercase', letterSpacing: 1.5, color: COLORS.text600 }}>
@@ -361,7 +453,7 @@ export function BodyMapDual({ recoveryMap, growthMap, mode, setMode }: BodyMapDu
                 <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400 }}>{item.label}</Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text200 }}>{item.value}</Text>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text300 }}>{item.value}</Text>
                 <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>{item.sub}</Text>
               </View>
             </View>

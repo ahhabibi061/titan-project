@@ -515,7 +515,13 @@ export default function DashboardScreen() {
 
         {/* ── MUSCLE MAP ─────────────────────────────────────────────── */}
         <View style={{ marginBottom: SPACING.xl }}>
-          <BodyMapDual recoveryMap={MOCK_RECOVERY_MAP} growthMap={MOCK_GROWTH_MAP} mode={mapMode} setMode={setMapMode} />
+          <BodyMapDual
+            recoveryMap={MOCK_RECOVERY_MAP}
+            growthMap={MOCK_GROWTH_MAP}
+            mode={mapMode}
+            setMode={setMapMode}
+            onExercisePress={(id) => navigation.navigate('Forge', { preAddExerciseId: id })}
+          />
         </View>
 
         {/* ── 4. TODAY'S WORKOUT CARD ────────────────────────────────── */}

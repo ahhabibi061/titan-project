@@ -1097,6 +1097,19 @@ export default function ForgeScreen() {
     return () => { if (restIntervalRef.current) clearInterval(restIntervalRef.current); };
   }, []);
 
+  // Pre-add an exercise when navigated from Dashboard muscle map
+  const preAddExId = route.params?.preAddExerciseId;
+  useEffect(() => {
+    if (!preAddExId) return;
+    setWorkout([{
+      id:         `we-${Date.now()}`,
+      exerciseId: preAddExId,
+      sets:       [{ id: `s-${Date.now()}-0`, weight: 0, reps: 8 }],
+    }]);
+    setShowSelector(false);
+    navigation.setParams({ preAddExerciseId: undefined });
+  }, [preAddExId]);
+
   // Load user splits + templates from Supabase
   useEffect(() => {
     (async () => {
@@ -1458,6 +1471,7 @@ export default function ForgeScreen() {
                   growthMap={forgeGrowthMap}
                   mode={forgeMapMode}
                   setMode={setForgeMapMode}
+                  onExercisePress={(id) => { addExercise(id); }}
                 />
               </View>
             )}
