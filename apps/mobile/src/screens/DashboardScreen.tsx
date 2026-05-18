@@ -322,15 +322,14 @@ export default function DashboardScreen() {
   // Compute weekly adherence grid from real workouts
   const days = useCallback((): typeof MOCK_WEEKLY => {
     const now = new Date();
-    const dow = now.getDay();
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
-    monday.setHours(0, 0, 0, 0);
+    const sunday = new Date(now);
+    sunday.setDate(now.getDate() - now.getDay());
+    sunday.setHours(0, 0, 0, 0);
 
-    const LABELS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+    const LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
     return LABELS.map((day, i) => {
-      const date = new Date(monday);
-      date.setDate(monday.getDate() + i);
+      const date = new Date(sunday);
+      date.setDate(sunday.getDate() + i);
       const isoDate = date.toISOString().split('T')[0];
       const isToday  = isoDate === now.toISOString().split('T')[0];
       const isFuture = date > now && !isToday;
