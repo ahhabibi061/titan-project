@@ -133,16 +133,19 @@ function MuscleTooltip({ muscle, recoveryData, growthData, mode, slideY, fadeAni
   const internalKey  = Object.entries(MUSCLE_MAP).find(([, s]) => s === muscle)?.[0];
   let value: number | null = null;
   let line2: string | null = null;
+  let statusStr: string | null = null;
 
   if (mode === 'recovery' && internalKey) {
     const e = recoveryData?.[internalKey];
     if (e && e.status !== 'no_data') {
+      statusStr = e.status;
       value = e.pct ?? (e.status === 'ready' ? 100 : null);
       line2 = e.hoursRemaining > 0 ? `${e.hoursRemaining}h remaining` : null;
     }
   } else if (mode === 'growth' && internalKey) {
     const e = growthData?.[internalKey];
     if (e) {
+      statusStr = e.status;
       value = e.growthPct;
       line2 = e.prevVol != null
         ? `${fmt(e.currentVol)} vs ${fmt(e.prevVol)} kg·reps`
@@ -150,22 +153,22 @@ function MuscleTooltip({ muscle, recoveryData, growthData, mode, slideY, fadeAni
     }
   }
 
-  const getStatus = (): { label: string; color: string } => {
-    if (mode === 'recovery') {
-      if (value === null) return { label: 'NO DATA',      color: '#78716c' };
-      if (value >= 100)   return { label: 'READY',        color: '#22c55e' };
-      if (value >= 67)    return { label: 'ALMOST READY', color: '#eab308' };
-      if (value >= 34)    return { label: 'PARTIAL',      color: '#f97316' };
-      return                     { label: 'RESTING',      color: '#ef4444' };
-    } else {
-      if (value === null) return { label: 'NO DATA',      color: '#78716c' };
-      if (value! > 10)    return { label: 'PR TERRITORY', color: '#22c55e' };
-      if (value! > 0)     return { label: 'IMPROVED',     color: '#86efac' };
-      if (value! > -10)   return { label: 'SLIGHT DROP',  color: '#f97316' };
-      return                     { label: 'REGRESSED',    color: '#ef4444' };
-    }
+  // Colors keyed by status string — identical to HIGHLIGHTED palette used by the body map
+  const RECOVERY_COLORS: Record<string, { label: string; color: string }> = {
+    ready:   { label: 'READY',        color: RECOVERY_HIGHLIGHTED[0] },
+    almost:  { label: 'ALMOST READY', color: RECOVERY_HIGHLIGHTED[1] },
+    partial: { label: 'PARTIAL',      color: RECOVERY_HIGHLIGHTED[2] },
+    resting: { label: 'RESTING',      color: RECOVERY_HIGHLIGHTED[3] },
   };
-  const status = getStatus();
+  const GROWTH_COLORS: Record<string, { label: string; color: string }> = {
+    pr:        { label: 'PR TERRITORY', color: GROWTH_HIGHLIGHTED[0] },
+    improved:  { label: 'IMPROVED',     color: GROWTH_HIGHLIGHTED[1] },
+    first:     { label: 'FIRST TIME',   color: GROWTH_HIGHLIGHTED[2] },
+    regressed: { label: 'REGRESSED',    color: GROWTH_HIGHLIGHTED[3] },
+    dropped:   { label: 'DROPPED',      color: GROWTH_HIGHLIGHTED[4] },
+  };
+  const lookup = mode === 'recovery' ? RECOVERY_COLORS : GROWTH_COLORS;
+  const status = (statusStr && lookup[statusStr]) ?? { label: 'NO DATA', color: '#78716c' };
 
   return (
     <Animated.View style={{
