@@ -234,14 +234,14 @@ function WeeklyGrid({ days, navigation }: { days: DayAdherence[]; navigation: an
               const status = getCellStatus(d, row.key);
               const tappable = row.key === 'workout' && status === 'done' && d.workoutId;
               return (
-                <View key={i} style={s.gridCol}>
-                  <TouchableOpacity
-                    activeOpacity={tappable ? 0.6 : 1}
-                    onPress={tappable ? () => navigation.navigate('SessionReview', { workoutId: d.workoutId }) : undefined}
-                  >
-                    <View style={[s.gridCell, { backgroundColor: cellColor(status) }, tappable && { borderWidth: 1, borderColor: 'rgba(237,122,42,0.4)' }]} />
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  key={i}
+                  style={s.gridCol}
+                  activeOpacity={tappable ? 0.6 : 1}
+                  onPress={tappable ? () => navigation.navigate('SessionReview', { workoutId: d.workoutId }) : undefined}
+                >
+                  <View style={[s.gridCell, { backgroundColor: cellColor(status) }, tappable && { borderWidth: 1, borderColor: 'rgba(237,122,42,0.4)' }]} />
+                </TouchableOpacity>
               );
             })}
           </View>
