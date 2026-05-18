@@ -240,7 +240,13 @@ function WeeklyGrid({ days, navigation }: { days: DayAdherence[]; navigation: an
                   activeOpacity={tappable ? 0.6 : 1}
                   onPress={tappable ? () => navigation.navigate('SessionReview', { workoutId: d.workoutId }) : undefined}
                 >
-                  <View style={[s.gridCell, { backgroundColor: cellColor(status) }, tappable && { borderWidth: 1, borderColor: 'rgba(237,122,42,0.4)' }]} />
+                  <View style={[
+                    s.gridCell,
+                    status === 'future'
+                      ? { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#3c3532' }
+                      : { backgroundColor: cellColor(status) },
+                    tappable && { borderWidth: 1, borderColor: 'rgba(237,122,42,0.4)' },
+                  ]} />
                 </TouchableOpacity>
               );
             })}
