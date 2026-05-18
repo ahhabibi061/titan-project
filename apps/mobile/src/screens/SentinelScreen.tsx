@@ -5,14 +5,16 @@ import {
   Platform, FlatList, Keyboard, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Circle, G } from 'react-native-svg';
+import Svg, { Circle, G, Path } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS } from '../constants/theme';
 import {
   useDailyNutrition, useLogMeal, useDeleteMeal,
   useWaterLog, useLogWater, useDeleteWater, useScanMeal, useFoodSearch,
   useMostLoggedFoods, searchFoodHistory, useTodayCaloriesBurned, useLoggedDates,
-  FoodResult, ScanResult, NutritionLog, MostLoggedFood,
+  useMealTemplates, useSaveTemplate, useDeleteTemplate, useLogTemplate,
+  FoodResult, ScanResult, NutritionLog, MostLoggedFood, MealTemplate, TemplateItem,
 } from '../hooks/useNutrition';
 import { useProfile, useUpdateProfile } from '../hooks/useSettings';
 
@@ -78,6 +80,17 @@ function buildCalendarGrid(year: number, month: number): (number | null)[][] {
   const rows: (number | null)[][] = [];
   for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
   return rows;
+}
+
+// ── CrownIcon ──────────────────────────────────────────────────────────────
+
+function CrownIcon({ size = 12, color = '#fbbf24' }: { size?: number; color?: string }) {
+  const h = Math.round(size * 0.72);
+  return (
+    <Svg width={size} height={h} viewBox="0 0 20 14">
+      <Path d="M1 13 L1 8 L5 12 L10 2 L15 12 L19 8 L19 13 Z" fill={color} />
+    </Svg>
+  );
 }
 
 // ── CalorieRing ────────────────────────────────────────────────────────────
@@ -167,7 +180,9 @@ function ProLockedModal({ visible, feature, onClose }: {
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
         <View style={s.proCard}>
-          <Text style={{ fontSize: 32, textAlign: 'center', marginBottom: 8 }}>👑</Text>
+          <View style={{ alignItems: 'center', marginBottom: 10 }}>
+            <CrownIcon size={36} color="#fbbf24" />
+          </View>
           <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: '#fbbf24', letterSpacing: 2, textAlign: 'center', marginBottom: 10 }}>
             PRO FEATURE
           </Text>
@@ -402,11 +417,12 @@ function MealItem({ item, onDelete }: { item: NutritionLog; onDelete: (id: strin
 
 // ── MealSection ────────────────────────────────────────────────────────────
 
-function MealSection({ type, items, onAdd, onScan, onDelete, isPro }: {
+function MealSection({ type, items, onAdd, onScan, onTemplates, onDelete, isPro }: {
   type: MealType;
   items: NutritionLog[];
   onAdd: () => void;
   onScan: () => void;
+  onTemplates: () => void;
   onDelete: (id: string) => void;
   isPro: boolean;
 }) {
@@ -436,15 +452,23 @@ function MealSection({ type, items, onAdd, onScan, onDelete, isPro }: {
         </Text>
       )}
 
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
         <TouchableOpacity style={s.addBtn} onPress={onAdd}>
           <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, letterSpacing: 1 }}>
             + ADD FOOD
           </Text>
         </TouchableOpacity>
         <TouchableOpacity style={[s.addBtn, { paddingHorizontal: 10 }]} onPress={onScan}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: isPro ? COLORS.text400 : COLORS.text600, letterSpacing: 1 }}>
-            {isPro ? '⬡ SCAN' : '👑 SCAN'}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            {!isPro && <CrownIcon size={9} color="#fbbf24" />}
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: isPro ? COLORS.text400 : COLORS.text600, letterSpacing: 1 }}>
+              SCAN BARCODE
+            </Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity style={[s.addBtn, { paddingHorizontal: 10 }]} onPress={onTemplates}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, letterSpacing: 1 }}>
+            ⊞ TEMPLATES
           </Text>
         </TouchableOpacity>
       </View>
@@ -924,12 +948,350 @@ function ScanResultModal({ result, mealType, onConfirm, onClose }: {
           )}
 
           {/* Gating / disclaimer */}
-          <View style={{ marginTop: 8, padding: 12, backgroundColor: 'rgba(41,37,36,0.25)', borderWidth: 1, borderColor: 'rgba(41,37,36,0.4)' }}>
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, letterSpacing: 0.5, lineHeight: 14 }}>
-              👑 AI meal analysis is a Pro / Elite feature. Scans use computer vision and may not always be precise — always verify values against a nutrition label when accuracy matters.
+          <View style={{ marginTop: 8, padding: 12, backgroundColor: 'rgba(41,37,36,0.25)', borderWidth: 1, borderColor: 'rgba(41,37,36,0.4)', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+            <View style={{ marginTop: 2 }}><CrownIcon size={11} color="#fbbf24" /></View>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, letterSpacing: 0.5, lineHeight: 14, flex: 1 }}>
+              AI meal analysis is a Pro / Elite feature. Scans use computer vision and may not always be precise — always verify values against a nutrition label when accuracy matters.
             </Text>
           </View>
         </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+// ── TemplatesModal ─────────────────────────────────────────────────────────
+
+function TemplatesModal({ visible, mealType, onClose }: {
+  visible: boolean;
+  mealType: MealType;
+  onClose: () => void;
+}) {
+  const [mode, setMode]               = useState<'list' | 'builder'>('list');
+  const { data: templates = [] }      = useMealTemplates();
+  const { saveTemplate, isLoading: saving }   = useSaveTemplate();
+  const { deleteTemplate }            = useDeleteTemplate();
+  const { logTemplate, isLoading: logging }   = useLogTemplate();
+  const { scanMeal, isLoading: scanning }     = useScanMeal();
+
+  // Builder state
+  const [tName, setTName]             = useState('');
+  const [ingredients, setIngredients] = useState<TemplateItem[]>([]);
+  const [searchQ, setSearchQ]         = useState('');
+  const [committed, setCommitted]     = useState('');
+  const [histItems, setHistItems]     = useState<MostLoggedFood[]>([]);
+  const [pending, setPending]         = useState<FoodResult | null>(null);
+  const [servingSize, setServing]     = useState('100');
+  const debounceRef                   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const { data: usdaResults, isFetching } = useFoodSearch(committed);
+
+  const mergedSearch = useMemo<FoodResult[]>(() => {
+    const hist: FoodResult[] = histItems.map((h, i) => ({ fdcId: -(i + 1), name: h.name, kcal: h.kcal, protein_g: h.protein_g, carbs_g: h.carbs_g, fat_g: h.fat_g, fromHistory: true, count: h.count }));
+    if (!usdaResults?.length) return hist;
+    const histNames = new Set(histItems.map(h => h.name.toLowerCase()));
+    return [...hist, ...usdaResults.filter(u => !histNames.has(u.name.toLowerCase()))];
+  }, [histItems, usdaResults]);
+
+  function handleSearchChange(text: string) {
+    setSearchQ(text);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setCommitted(text);
+      if (text.trim().length >= 2) {
+        const hist = await searchFoodHistory(text).catch(() => []);
+        setHistItems(hist);
+      } else {
+        setHistItems([]);
+      }
+    }, 500);
+  }
+
+  function addIngredient(item: FoodResult, servingG: number) {
+    const scale = servingG / 100;
+    setIngredients(prev => [...prev, {
+      name:      item.name,
+      kcal:      Math.round(item.kcal * scale),
+      protein_g: Math.round(item.protein_g * scale * 10) / 10,
+      carbs_g:   Math.round(item.carbs_g   * scale * 10) / 10,
+      fat_g:     Math.round(item.fat_g     * scale * 10) / 10,
+    }]);
+    setPending(null); setSearchQ(''); setCommitted(''); setHistItems([]); setServing('100');
+  }
+
+  async function handleScan() {
+    try {
+      const result = await scanMeal();
+      setIngredients(prev => [...prev, { name: result.meal_name, kcal: result.kcal, protein_g: result.protein_g, carbs_g: result.carbs_g, fat_g: result.fat_g }]);
+    } catch (e: any) {
+      if (e?.message !== 'Cancelled') Alert.alert('Scan Failed', e?.message ?? 'Try again.');
+    }
+  }
+
+  async function handleSave() {
+    if (!tName.trim()) { Alert.alert('Name required', 'Give your template a name.'); return; }
+    if (ingredients.length === 0) { Alert.alert('No ingredients', 'Add at least one ingredient.'); return; }
+    try {
+      await saveTemplate({ name: tName.trim(), items: ingredients });
+      setMode('list'); setTName(''); setIngredients([]);
+    } catch { Alert.alert('Error', 'Could not save template.'); }
+  }
+
+  function resetBuilder() {
+    setTName(''); setIngredients([]); setSearchQ(''); setCommitted(''); setHistItems([]); setPending(null);
+  }
+
+  const builderTotals = ingredients.reduce(
+    (acc, i) => ({ kcal: acc.kcal + i.kcal, protein_g: acc.protein_g + i.protein_g, carbs_g: acc.carbs_g + i.carbs_g, fat_g: acc.fat_g + i.fat_g }),
+    { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+  );
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }}>
+
+        {/* Header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+          {mode === 'builder' && (
+            <TouchableOpacity onPress={() => setMode('list')} style={{ marginRight: 12 }}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500 }}>‹ BACK</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text300, letterSpacing: 1, flex: 1 }}>
+            {mode === 'list' ? `MEAL TEMPLATES · ${mealType.toUpperCase()}` : 'BUILD TEMPLATE'}
+          </Text>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text500 }}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        {mode === 'list' ? (
+          /* ── Template list ── */
+          <ScrollView style={{ flex: 1, padding: 16 }}>
+            <TouchableOpacity
+              style={[s.addBtn, { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 10, marginBottom: 14, backgroundColor: COLORS.accentMuted, borderColor: COLORS.accentBorder }]}
+              onPress={() => { resetBuilder(); setMode('builder'); }}
+            >
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, letterSpacing: 1 }}>
+                + BUILD NEW TEMPLATE
+              </Text>
+            </TouchableOpacity>
+
+            {templates.length === 0 && (
+              <Text style={{ fontFamily: FONTS.sans, fontSize: 13, color: COLORS.text600, textAlign: 'center', marginTop: 20, lineHeight: 20 }}>
+                No templates yet.{'\n'}Build one to log repetitive meals in one tap.
+              </Text>
+            )}
+
+            {templates.map(tmpl => (
+              <View key={tmpl.id} style={[s.card, { marginBottom: 8 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: FONTS.sansSB, fontSize: 13, color: COLORS.text100, marginBottom: 3 }}>{tmpl.name}</Text>
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>
+                      {tmpl.kcal} kcal · P {tmpl.protein_g}g · C {tmpl.carbs_g}g · F {tmpl.fat_g}g
+                    </Text>
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, marginTop: 2 }}>
+                      {tmpl.items.length} ingredient{tmpl.items.length !== 1 ? 's' : ''} · used {tmpl.times_used}×
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => Alert.alert('Delete Template', `Remove "${tmpl.name}"?`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => deleteTemplate(tmpl.id) }])}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ padding: 4 }}
+                  >
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 13, color: COLORS.text700 }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Ingredients preview */}
+                {tmpl.items.slice(0, 3).map((item, i) => (
+                  <Text key={i} style={{ fontFamily: FONTS.sans, fontSize: 11, color: COLORS.text600, marginTop: 4 }}>
+                    · {item.name} ({item.kcal} kcal)
+                  </Text>
+                ))}
+                {tmpl.items.length > 3 && (
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, marginTop: 2 }}>
+                    +{tmpl.items.length - 3} more ingredient{tmpl.items.length - 3 !== 1 ? 's' : ''}
+                  </Text>
+                )}
+
+                <TouchableOpacity
+                  style={[s.addBtn, { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 9, marginTop: 12, backgroundColor: COLORS.accentMuted, borderColor: COLORS.accentBorder }]}
+                  onPress={async () => { await logTemplate({ template: tmpl, mealType }); onClose(); }}
+                  disabled={logging}
+                >
+                  {logging
+                    ? <ActivityIndicator size="small" color={COLORS.accent} />
+                    : <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, letterSpacing: 1 }}>
+                        LOG ALL → {mealType.toUpperCase()}
+                      </Text>
+                  }
+                </TouchableOpacity>
+              </View>
+            ))}
+          </ScrollView>
+        ) : (
+          /* ── Builder ── */
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
+
+              {/* Template name */}
+              <View style={s.card}>
+                <Text style={s.fieldLabel}>TEMPLATE NAME</Text>
+                <TextInput
+                  style={s.input}
+                  placeholder="e.g. Morning Oats, Post-Workout Shake…"
+                  placeholderTextColor={COLORS.text600}
+                  value={tName}
+                  onChangeText={setTName}
+                />
+              </View>
+
+              {/* Ingredient list */}
+              <View style={s.card}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={[s.sectionLabel, { flex: 1 }]}>
+                    INGREDIENTS ({ingredients.length})
+                  </Text>
+                  {ingredients.length > 0 && (
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent }}>
+                      {builderTotals.kcal} kcal total
+                    </Text>
+                  )}
+                </View>
+
+                {ingredients.length === 0 && (
+                  <Text style={{ fontFamily: FONTS.sans, fontSize: 12, color: COLORS.text600, marginBottom: 8 }}>
+                    Search below or scan a barcode to add ingredients.
+                  </Text>
+                )}
+
+                {ingredients.map((ing, idx) => (
+                  <View key={idx} style={[s.mealItem, { paddingVertical: 6 }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: FONTS.sansSB, fontSize: 12, color: COLORS.text300 }} numberOfLines={1}>
+                        {ing.name}
+                      </Text>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 }}>
+                        {ing.kcal} kcal · P {ing.protein_g}g · C {ing.carbs_g}g · F {ing.fat_g}g
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setIngredients(prev => prev.filter((_, i) => i !== idx))}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 13, color: COLORS.text600 }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+
+              {/* Search + Scan */}
+              <View style={s.card}>
+                <Text style={s.sectionLabel}>ADD INGREDIENT</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, marginBottom: 10 }}>
+                  <TextInput
+                    style={[s.input, { flex: 1 }]}
+                    placeholder="Search food (e.g. oats, eggs)…"
+                    placeholderTextColor={COLORS.text600}
+                    value={searchQ}
+                    onChangeText={handleSearchChange}
+                    returnKeyType="search"
+                  />
+                  <TouchableOpacity
+                    style={[s.addBtn, { paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' }]}
+                    onPress={handleScan}
+                    disabled={scanning}
+                  >
+                    {scanning
+                      ? <ActivityIndicator size="small" color={COLORS.accent} />
+                      : <>
+                          <Ionicons name="barcode-outline" size={16} color={COLORS.text400} />
+                          <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text500, marginTop: 2 }}>SCAN</Text>
+                        </>
+                    }
+                  </TouchableOpacity>
+                </View>
+
+                {/* Serving size confirm for selected search result */}
+                {pending && (
+                  <View style={{ padding: 10, borderWidth: 1, borderColor: COLORS.accentBorder, backgroundColor: COLORS.accentMuted, marginBottom: 10 }}>
+                    <Text style={{ fontFamily: FONTS.sansSB, fontSize: 12, color: COLORS.text100, marginBottom: 6 }} numberOfLines={1}>
+                      {pending.name}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>SERVING (g)</Text>
+                      <TextInput
+                        style={[s.input, { width: 70 }]}
+                        value={servingSize}
+                        onChangeText={setServing}
+                        keyboardType="numeric"
+                        placeholderTextColor={COLORS.text600}
+                      />
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, flex: 1 }}>
+                        = {Math.round(pending.kcal * (parseFloat(servingSize) || 100) / 100)} kcal
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity style={s.addBtn} onPress={() => setPending(null)}>
+                        <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>CANCEL</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[s.addBtn, { flex: 1, alignItems: 'center', backgroundColor: COLORS.accentMuted, borderColor: COLORS.accentBorder }]}
+                        onPress={() => addIngredient(pending, parseFloat(servingSize) || 100)}
+                      >
+                        <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent }}>+ ADD</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {isFetching && <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 6 }} />}
+
+                {!pending && mergedSearch.length > 0 && mergedSearch.slice(0, 8).map((item, i) => (
+                  <TouchableOpacity
+                    key={`${item.fdcId}-${i}`}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderTopWidth: 1, borderTopColor: 'rgba(41,37,36,0.3)' }}
+                    onPress={() => { setPending(item); setServing('100'); Keyboard.dismiss(); }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Text style={{ fontFamily: FONTS.sansSB, fontSize: 12, color: COLORS.text300 }} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        {item.fromHistory && <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.accent }}>★</Text>}
+                      </View>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 }}>
+                        {item.kcal} kcal / 100g
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 14, color: COLORS.accent }}>+</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Save template button */}
+              <TouchableOpacity
+                style={[s.addBtn, {
+                  alignSelf: 'stretch', alignItems: 'center', paddingVertical: 12,
+                  backgroundColor: (tName.trim() && ingredients.length > 0) ? COLORS.accentMuted : 'transparent',
+                  borderColor:     (tName.trim() && ingredients.length > 0) ? COLORS.accentBorder : COLORS.border,
+                }]}
+                onPress={handleSave}
+                disabled={saving || !tName.trim() || ingredients.length === 0}
+              >
+                {saving
+                  ? <ActivityIndicator size="small" color={COLORS.accent} />
+                  : <Text style={{ fontFamily: FONTS.mono, fontSize: 10, letterSpacing: 1, color: (tName.trim() && ingredients.length > 0) ? COLORS.accent : COLORS.text600 }}>
+                      SAVE TEMPLATE
+                    </Text>
+                }
+              </TouchableOpacity>
+
+            </ScrollView>
+          </KeyboardAvoidingView>
+        )}
       </SafeAreaView>
     </Modal>
   );
@@ -943,10 +1305,12 @@ export default function SentinelScreen() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showMacroEdit, setShowMacroEdit] = useState(false);
   const [proModal, setProModal]         = useState({ visible: false, feature: '' });
-  const [searchMealType, setSearchMealType] = useState<MealType>('breakfast');
-  const [showSearch, setShowSearch]         = useState(false);
-  const [scanMealType, setScanMealType]     = useState<MealType>('breakfast');
-  const [scanResult, setScanResult]         = useState<ScanResult | null>(null);
+  const [searchMealType, setSearchMealType]       = useState<MealType>('breakfast');
+  const [showSearch, setShowSearch]               = useState(false);
+  const [scanMealType, setScanMealType]           = useState<MealType>('breakfast');
+  const [scanResult, setScanResult]               = useState<ScanResult | null>(null);
+  const [templatesMealType, setTemplatesMealType] = useState<MealType>('breakfast');
+  const [showTemplates, setShowTemplates]         = useState(false);
 
   const { data: nutrition, isLoading } = useDailyNutrition(selectedDate);
   const { data: profile }              = useProfile();
@@ -975,7 +1339,8 @@ export default function SentinelScreen() {
   }
   const isToday = selectedDate === today;
 
-  function openSearch(mt: MealType) { setSearchMealType(mt); setShowSearch(true); }
+  function openSearch(mt: MealType)    { setSearchMealType(mt);    setShowSearch(true); }
+  function openTemplates(mt: MealType) { setTemplatesMealType(mt); setShowTemplates(true); }
 
   async function openScan(mt: MealType) {
     if (!isPro) { setProModal({ visible: true, feature: 'Meal scanning' }); return; }
@@ -1012,11 +1377,11 @@ export default function SentinelScreen() {
         <TouchableOpacity onPress={prevDay} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={{ fontFamily: FONTS.mono, fontSize: 20, color: COLORS.text500 }}>‹</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowCalendar(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <TouchableOpacity onPress={() => setShowCalendar(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
           <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text300, letterSpacing: 1 }}>
             {formatDisplayDate(selectedDate).toUpperCase()}
           </Text>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 }}>▾</Text>
+          <Ionicons name="calendar-outline" size={14} color={COLORS.text500} />
         </TouchableOpacity>
         <TouchableOpacity onPress={nextDay} disabled={isToday} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
           <Text style={{ fontFamily: FONTS.mono, fontSize: 20, color: isToday ? COLORS.text700 : COLORS.text500 }}>›</Text>
@@ -1080,6 +1445,7 @@ export default function SentinelScreen() {
             items={logs.filter(l => l.meal_type === mt)}
             onAdd={() => openSearch(mt)}
             onScan={() => openScan(mt)}
+            onTemplates={() => openTemplates(mt)}
             onDelete={handleDelete}
             isPro={isPro}
           />
@@ -1116,6 +1482,11 @@ export default function SentinelScreen() {
         visible={showMacroEdit}
         current={macros}
         onClose={() => setShowMacroEdit(false)}
+      />
+      <TemplatesModal
+        visible={showTemplates}
+        mealType={templatesMealType}
+        onClose={() => setShowTemplates(false)}
       />
       <FoodSearchModal
         visible={showSearch}

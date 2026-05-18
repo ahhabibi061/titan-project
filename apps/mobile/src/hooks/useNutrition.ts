@@ -396,6 +396,114 @@ export function useTodayCaloriesBurned() {
 
 // ── useLoggedDates ────────────────────────────────────────────────────────
 
+// ── Meal Templates ────────────────────────────────────────────────────────
+
+export interface TemplateItem {
+  name: string;
+  kcal: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+export interface MealTemplate {
+  id: string;
+  name: string;
+  kcal: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  items: TemplateItem[];
+  times_used: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export function useMealTemplates() {
+  return useQuery<MealTemplate[]>({
+    queryKey: ['meal-templates'],
+    queryFn: async () => {
+      const userId = await getUserId();
+      const { data, error } = await supabase
+        .from('meal_templates')
+        .select('*')
+        .eq('user_id', userId)
+        .order('times_used', { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as MealTemplate[];
+    },
+    staleTime: 60_000,
+  });
+}
+
+export function useSaveTemplate() {
+  const qc = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: async (template: { name: string; items: TemplateItem[] }) => {
+      const userId = await getUserId();
+      const totals = template.items.reduce(
+        (acc, i) => ({ kcal: acc.kcal + i.kcal, protein_g: acc.protein_g + i.protein_g, carbs_g: acc.carbs_g + i.carbs_g, fat_g: acc.fat_g + i.fat_g }),
+        { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+      );
+      const { error } = await supabase.from('meal_templates').insert({
+        user_id: userId,
+        name:    template.name,
+        items:   template.items,
+        ...totals,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-templates'] }),
+  });
+  return { saveTemplate: mutation.mutateAsync, isLoading: mutation.isPending, error: mutation.error };
+}
+
+export function useDeleteTemplate() {
+  const qc = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('meal_templates').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meal-templates'] }),
+  });
+  return { deleteTemplate: mutation.mutateAsync };
+}
+
+export function useLogTemplate() {
+  const qc = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: async ({ template, mealType }: { template: MealTemplate; mealType: string }) => {
+      const userId = await getUserId();
+      const now    = new Date().toISOString();
+      const entries = template.items.map(item => ({
+        user_id:   userId,
+        meal_name: item.name,
+        kcal:      item.kcal,
+        protein_g: item.protein_g,
+        carbs_g:   item.carbs_g,
+        fat_g:     item.fat_g,
+        meal_type: mealType,
+        source:    'manual' as const,
+        logged_at: now,
+      }));
+      const { error } = await supabase.from('nutrition_logs').insert(entries);
+      if (error) throw error;
+      await supabase.from('meal_templates')
+        .update({ times_used: template.times_used + 1 })
+        .eq('id', template.id);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nutrition'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['meal-templates'] });
+    },
+  });
+  return { logTemplate: mutation.mutateAsync, isLoading: mutation.isPending };
+}
+
+// ── useLoggedDates ────────────────────────────────────────────────────────
+
 export function useLoggedDates(year: number, month: number) {
   return useQuery<Set<string>>({
     queryKey: ['logged-dates', year, month],
