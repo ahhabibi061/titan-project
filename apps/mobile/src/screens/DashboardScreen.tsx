@@ -410,9 +410,18 @@ export default function DashboardScreen() {
             </Svg>
             <Text style={s.wordmark}>IRONLAB</Text>
           </View>
-          <TouchableOpacity style={s.avatar} onPress={() => supabase.auth.signOut()}>
-            <Text style={s.avatarText}>{initials}</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Settings')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{ padding: 6 }}
+            >
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 16, color: COLORS.text500 }}>⚙</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.avatar} onPress={() => supabase.auth.signOut()}>
+              <Text style={s.avatarText}>{initials}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <Text style={s.greeting}>{getGreeting()}, {displayName}.</Text>

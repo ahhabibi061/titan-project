@@ -8,6 +8,7 @@ import DashboardScreen from '../screens/DashboardScreen';
 import PlaceholderScreen from '../screens/PlaceholderScreen';
 import ForgeScreen from '../screens/ForgeScreen';
 import SessionReviewScreen from '../screens/SessionReviewScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import VaultScreen from '../screens/VaultScreen';
 
 const Tab   = createBottomTabNavigator();
@@ -68,6 +69,7 @@ export default function AppNavigator() {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Tabs"          component={TabNavigator} />
       <Stack.Screen name="SessionReview" component={SessionReviewScreen} />
+      <Stack.Screen name="Settings"       component={SettingsScreen} />
     </Stack.Navigator>
   );
 }
