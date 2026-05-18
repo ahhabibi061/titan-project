@@ -471,40 +471,40 @@ export default function DashboardScreen() {
           {/* ── 4-Stat Strip ── */}
           <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: 'rgba(41,37,36,0.6)', backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 20 }}>
             {/* Weight */}
-            <TouchableOpacity onPress={() => router.push('/(tabs)/vault' as any)} style={{ flex: 1, padding: 14, borderRightWidth: 1, borderRightColor: 'rgba(41,37,36,0.6)' }}>
-              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8, color: '#57534e', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Weight</Text>
-              {loading ? <View style={{ height: 28, backgroundColor: '#1c1917', marginBottom: 4 }} /> : (
-                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 24, color: '#e7e5e4', lineHeight: 26 }}>
-                  {data?.weight ?? '—'}<Text style={{ fontSize: 14, color: '#57534e' }}> kg</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/vault' as any)} style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 14, borderRightWidth: 1, borderRightColor: 'rgba(41,37,36,0.6)' }}>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 7, color: '#57534e', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Weight</Text>
+              {loading ? <View style={{ height: 22, backgroundColor: '#1c1917', marginBottom: 4 }} /> : (
+                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 20, color: '#e7e5e4', lineHeight: 22 }}>
+                  {data?.weight ?? '—'}<Text style={{ fontSize: 10, color: '#57534e' }}> kg</Text>
                 </Text>
               )}
               {weightDelta != null && (
-                <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: '#fb923c', marginTop: 2 }}>
+                <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8, color: '#fb923c', marginTop: 2 }}>
                   {weightDelta < 0 ? '↓' : '↑'} {Math.abs(weightDelta).toFixed(1)} kg/7d
                 </Text>
               )}
             </TouchableOpacity>
 
             {/* Calories Left */}
-            <TouchableOpacity onPress={() => router.push('/(tabs)/sentinel' as any)} style={{ flex: 1, padding: 14, borderRightWidth: 1, borderRightColor: 'rgba(41,37,36,0.6)' }}>
-              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8, color: '#57534e', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Calories Left</Text>
-              {loading ? <View style={{ height: 28, backgroundColor: '#1c1917', marginBottom: 4 }} /> : (
-                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 24, color: data?.consumed.mealsLogged === 0 ? '#57534e' : '#fb923c', lineHeight: 26 }}>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/sentinel' as any)} style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 14, borderRightWidth: 1, borderRightColor: 'rgba(41,37,36,0.6)' }}>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 7, color: '#57534e', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Calories Left</Text>
+              {loading ? <View style={{ height: 22, backgroundColor: '#1c1917', marginBottom: 4 }} /> : (
+                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 20, color: data?.consumed.mealsLogged === 0 ? '#57534e' : '#fb923c', lineHeight: 22 }}>
                   {fmt0(Math.max(remaining, 0))}
                 </Text>
               )}
-              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: '#44403c', marginTop: 2 }}>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8, color: '#44403c', marginTop: 2 }}>
                 {loading ? '' : `${fmt0(data?.consumed.kcal ?? 0)} / ${fmt0(data?.targets.kcal ?? 0)}`}
               </Text>
             </TouchableOpacity>
 
             {/* Workout */}
-            <TouchableOpacity onPress={() => router.push('/(tabs)/forge' as any)} style={{ flex: 1, padding: 14, borderRightWidth: 1, borderRightColor: 'rgba(41,37,36,0.6)' }}>
-              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8, color: '#57534e', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Workout</Text>
-              {loading ? <View style={{ height: 28, backgroundColor: '#1c1917', marginBottom: 4 }} /> : data?.workout ? (
-                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 16, color: '#e7e5e4', lineHeight: 18 }} numberOfLines={2}>{data.workout.name.toUpperCase()}</Text>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/forge' as any)} style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 14, borderRightWidth: 1, borderRightColor: 'rgba(41,37,36,0.6)' }}>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 7, color: '#57534e', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Workout</Text>
+              {loading ? <View style={{ height: 22, backgroundColor: '#1c1917', marginBottom: 4 }} /> : data?.workout ? (
+                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 12, color: '#e7e5e4', lineHeight: 14 }} numberOfLines={2}>{data.workout.name.toUpperCase()}</Text>
               ) : (
-                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 20, color: '#44403c' }}>REST</Text>
+                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 16, color: '#44403c' }}>REST</Text>
               )}
               {data?.workout && (
                 <View style={{ marginTop: 4, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, alignSelf: 'flex-start', borderColor: data.workout.completed ? 'rgba(74,222,128,0.3)' : 'rgba(237,122,42,0.3)', backgroundColor: data.workout.completed ? 'rgba(74,222,128,0.1)' : 'rgba(237,122,42,0.1)' }}>
@@ -514,50 +514,15 @@ export default function DashboardScreen() {
             </TouchableOpacity>
 
             {/* Streak */}
-            <TouchableOpacity onPress={() => router.push('/(tabs)/vault' as any)} style={{ flex: 1, padding: 14 }}>
-              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8, color: '#57534e', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Streak</Text>
-              {loading ? <View style={{ height: 28, backgroundColor: '#1c1917', marginBottom: 4 }} /> : (
-                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 24, color: (data?.streak ?? 0) >= 7 ? '#fbbf24' : '#e7e5e4', lineHeight: 26 }}>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/vault' as any)} style={{ flex: 1, paddingVertical: 10, paddingHorizontal: 14 }}>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 7, color: '#57534e', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 }}>Streak</Text>
+              {loading ? <View style={{ height: 22, backgroundColor: '#1c1917', marginBottom: 4 }} /> : (
+                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 20, color: (data?.streak ?? 0) >= 7 ? '#fbbf24' : '#e7e5e4', lineHeight: 22 }}>
                   🔥 {data?.streak ?? 0}
                 </Text>
               )}
-              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: '#44403c', marginTop: 2 }}>days</Text>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8, color: '#44403c', marginTop: 2 }}>days</Text>
             </TouchableOpacity>
-          </View>
-
-          {/* ── Today's Workout Card ── */}
-          <View style={{ borderWidth: 1, borderColor: 'rgba(41,37,36,0.6)', backgroundColor: 'rgba(12,10,8,0.4)', padding: 20, marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
-              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: '#57534e', textTransform: 'uppercase', letterSpacing: 2 }}>Today's Workout</Text>
-              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: '#44403c' }}>FORGE</Text>
-            </View>
-            {loading ? <ActivityIndicator color="#ed7a2a" /> : data?.workout ? (
-              <>
-                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 32, color: '#e7e5e4', lineHeight: 34, marginBottom: 8 }}>{data.workout.name.toUpperCase()}</Text>
-                <TouchableOpacity
-                  onPress={() => {
-                    if (data.workout.completed) {
-                      router.push({ pathname: '/forge-review', params: { workoutId: data.workout.id } } as any);
-                    } else {
-                      router.push('/(tabs)/forge' as any);
-                    }
-                  }}
-                  style={{ paddingVertical: 14, alignItems: 'center', backgroundColor: '#ed7a2a', marginTop: 8 }}
-                >
-                  <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 14, color: '#0a0908', letterSpacing: 2 }}>
-                    {data.workout.completed ? 'VIEW WORKOUT →' : 'START WORKOUT →'}
-                  </Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 32, color: '#292524', marginBottom: 8 }}>REST DAY</Text>
-                <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 10, color: '#44403c', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16 }}>No workout scheduled today</Text>
-                <TouchableOpacity onPress={() => router.push('/(tabs)/forge' as any)} style={{ paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: '#292524' }}>
-                  <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 10, color: '#57534e', textTransform: 'uppercase' }}>Schedule a workout →</Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
 
           {/* ── Today's Macros Card ── */}
@@ -596,6 +561,79 @@ export default function DashboardScreen() {
             )}
           </TouchableOpacity>
 
+          {/* ── Today's Workout Card ── */}
+          <View style={{ borderWidth: 1, borderColor: 'rgba(41,37,36,0.6)', backgroundColor: 'rgba(12,10,8,0.4)', padding: 20, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: '#57534e', textTransform: 'uppercase', letterSpacing: 2 }}>Today's Workout</Text>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: '#44403c' }}>FORGE</Text>
+            </View>
+            {loading ? <ActivityIndicator color="#ed7a2a" /> : data?.workout ? (
+              <>
+                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 32, color: '#e7e5e4', lineHeight: 34, marginBottom: 8 }}>{data.workout.name.toUpperCase()}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (data.workout.completed) {
+                      router.push({ pathname: '/forge-review', params: { workoutId: data.workout.id } } as any);
+                    } else {
+                      router.push('/(tabs)/forge' as any);
+                    }
+                  }}
+                  style={{ paddingVertical: 14, alignItems: 'center', backgroundColor: '#ed7a2a', marginTop: 8 }}
+                >
+                  <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 14, color: '#0a0908', letterSpacing: 2 }}>
+                    {data.workout.completed ? 'VIEW WORKOUT →' : 'START WORKOUT →'}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 32, color: '#292524', marginBottom: 8 }}>REST DAY</Text>
+                <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 10, color: '#44403c', textTransform: 'uppercase', letterSpacing: 2, marginBottom: 16 }}>No workout scheduled today</Text>
+                <TouchableOpacity onPress={() => router.push('/(tabs)/forge' as any)} style={{ paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: '#292524' }}>
+                  <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 10, color: '#57534e', textTransform: 'uppercase' }}>Schedule a workout →</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          {/* ── Muscle Status ── */}
+          <View style={{ borderWidth: 1, borderColor: 'rgba(41,37,36,0.6)', backgroundColor: 'rgba(12,10,8,0.4)', padding: 20, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
+              <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 22, color: '#e7e5e4' }}>Muscle Status</Text>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {(['recovery', 'growth'] as const).map(m => (
+                  <TouchableOpacity key={m} onPress={() => setBodyMode(m)} style={{ paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: bodyMode === m ? 'rgba(237,122,42,0.6)' : '#292524', backgroundColor: bodyMode === m ? 'rgba(237,122,42,0.1)' : 'transparent' }}>
+                    <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: bodyMode === m ? '#fb923c' : '#57534e', textTransform: 'uppercase' }}>{m === 'recovery' ? 'RECOVERY' : 'GROWTH'}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <MuscleVolumeSection mode={bodyMode} />
+          </View>
+
+          {/* ── This Week ── */}
+          <View style={{ borderWidth: 1, borderColor: 'rgba(41,37,36,0.6)', backgroundColor: 'rgba(12,10,8,0.4)', padding: 20, marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+              <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 22, color: '#e7e5e4' }}>THIS WEEK</Text>
+              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: '#44403c' }}>vault →</Text>
+            </View>
+            {loading ? <ActivityIndicator color="#ed7a2a" /> : data?.weeklyAdherence ? (
+              <WeeklyGrid days={data.weeklyAdherence} />
+            ) : null}
+            <View style={{ flexDirection: 'row', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(41,37,36,0.6)', gap: 0 }}>
+              {[
+                { label: 'Avg Calories', value: data?.weeklyStats.avgKcal ? `${data.weeklyStats.avgKcal}` : '—', sub: 'kcal/day' },
+                { label: 'Avg Protein',  value: data?.weeklyStats.avgProtein ? `${data.weeklyStats.avgProtein}g` : '—', sub: 'per day' },
+              ].map((s, i) => (
+                <View key={s.label} style={{ flex: 1, paddingRight: i === 0 ? 16 : 0, borderRightWidth: i === 0 ? 1 : 0, borderRightColor: 'rgba(41,37,36,0.6)', paddingLeft: i > 0 ? 16 : 0 }}>
+                  <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8, color: '#57534e', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 4 }}>{s.label}</Text>
+                  <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 22, color: '#e7e5e4' }}>{loading ? '—' : s.value}</Text>
+                  <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: '#44403c' }}>{s.sub}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
           {/* ── Body Comp Card ── */}
           <TouchableOpacity onPress={() => router.push('/(tabs)/vault' as any)} style={{ borderWidth: 1, borderColor: 'rgba(41,37,36,0.6)', backgroundColor: 'rgba(12,10,8,0.4)', padding: 20, marginBottom: 16 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -632,29 +670,6 @@ export default function DashboardScreen() {
             )}
           </TouchableOpacity>
 
-          {/* ── This Week ── */}
-          <View style={{ borderWidth: 1, borderColor: 'rgba(41,37,36,0.6)', backgroundColor: 'rgba(12,10,8,0.4)', padding: 20, marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
-              <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 22, color: '#e7e5e4' }}>THIS WEEK</Text>
-              <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: '#44403c' }}>vault →</Text>
-            </View>
-            {loading ? <ActivityIndicator color="#ed7a2a" /> : data?.weeklyAdherence ? (
-              <WeeklyGrid days={data.weeklyAdherence} />
-            ) : null}
-            <View style={{ flexDirection: 'row', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(41,37,36,0.6)', gap: 0 }}>
-              {[
-                { label: 'Avg Calories', value: data?.weeklyStats.avgKcal ? `${data.weeklyStats.avgKcal}` : '—', sub: 'kcal/day' },
-                { label: 'Avg Protein',  value: data?.weeklyStats.avgProtein ? `${data.weeklyStats.avgProtein}g` : '—', sub: 'per day' },
-              ].map((s, i) => (
-                <View key={s.label} style={{ flex: 1, paddingRight: i === 0 ? 16 : 0, borderRightWidth: i === 0 ? 1 : 0, borderRightColor: 'rgba(41,37,36,0.6)', paddingLeft: i > 0 ? 16 : 0 }}>
-                  <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 8, color: '#57534e', textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 4 }}>{s.label}</Text>
-                  <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 22, color: '#e7e5e4' }}>{loading ? '—' : s.value}</Text>
-                  <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: '#44403c' }}>{s.sub}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
           {/* ── Activity Feed ── */}
           <View style={{ borderWidth: 1, borderColor: 'rgba(41,37,36,0.6)', backgroundColor: 'rgba(12,10,8,0.4)', padding: 20, marginBottom: 16 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -677,21 +692,6 @@ export default function DashboardScreen() {
                 </View>
               ))
             )}
-          </View>
-
-          {/* ── Muscle Status ── */}
-          <View style={{ borderWidth: 1, borderColor: 'rgba(41,37,36,0.6)', backgroundColor: 'rgba(12,10,8,0.4)', padding: 20, marginBottom: 16 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 16 }}>
-              <Text style={{ fontFamily: 'Anton_400Regular', fontSize: 22, color: '#e7e5e4' }}>Muscle Status</Text>
-              <View style={{ flexDirection: 'row', gap: 6 }}>
-                {(['recovery', 'growth'] as const).map(m => (
-                  <TouchableOpacity key={m} onPress={() => setBodyMode(m)} style={{ paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: bodyMode === m ? 'rgba(237,122,42,0.6)' : '#292524', backgroundColor: bodyMode === m ? 'rgba(237,122,42,0.1)' : 'transparent' }}>
-                    <Text style={{ fontFamily: 'JetBrainsMono_400Regular', fontSize: 9, color: bodyMode === m ? '#fb923c' : '#57534e', textTransform: 'uppercase' }}>{m === 'recovery' ? 'RECOVERY' : 'GROWTH'}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-            <MuscleVolumeSection mode={bodyMode} />
           </View>
 
           {/* ── Module Tiles ── */}
