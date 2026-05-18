@@ -8,7 +8,7 @@ import {
   KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Body, { ExtendedBodyPart, Slug } from 'react-native-body-highlighter';
+import { BodyMapDual } from '../components/MuscleMap';
 import * as Haptics from 'expo-haptics';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS } from '../constants/theme';
@@ -119,21 +119,32 @@ const MUSCLE_RECOVERY_HOURS: Record<string, number> = {
   calves: 36, traps: 36, forearms: 36, abs: 24, obliques: 24,
 };
 
-function volumeToRecoveryColor(vol: number, maxVol: number): string | null {
-  if (!vol || vol <= 0) return null;
-  const t = vol / Math.max(maxVol, 1);
-  if (t >= 0.67) return '#f87171';
-  if (t >= 0.34) return '#fb923c';
-  if (t >= 0.10) return '#a3e635';
-  return '#4ade80';
+function volumesToRecoveryMap(
+  vols: Record<string, number>, maxVol: number,
+): Record<string, { status: string; pct: number; hoursRemaining: number }> {
+  const map: Record<string, { status: string; pct: number; hoursRemaining: number }> = {};
+  for (const [muscle, vol] of Object.entries(vols)) {
+    if (vol <= 0) continue;
+    const t = vol / Math.max(maxVol, 1);
+    const status = t >= 0.67 ? 'resting' : t >= 0.34 ? 'partial' : t >= 0.10 ? 'almost' : 'ready';
+    const pct    = t >= 0.67 ? 28 : t >= 0.34 ? 55 : t >= 0.10 ? 80 : 100;
+    const hours  = Math.round((MUSCLE_RECOVERY_HOURS[muscle] ?? 48) * t);
+    map[muscle]  = { status, pct, hoursRemaining: hours };
+  }
+  return map;
 }
 
-function volumeToGrowthColor(vol: number, maxVol: number): string | null {
-  if (!vol || vol <= 0) return null;
-  const t = vol / Math.max(maxVol, 1);
-  if (t >= 0.67) return '#4ade80';
-  if (t >= 0.34) return '#a3e635';
-  return '#fb923c';
+function volumesToGrowthMap(
+  vols: Record<string, number>, maxVol: number,
+): Record<string, { status: string; growthPct: number; currentVol: number; prevVol: number }> {
+  const map: Record<string, { status: string; growthPct: number; currentVol: number; prevVol: number }> = {};
+  for (const [muscle, vol] of Object.entries(vols)) {
+    if (vol <= 0) continue;
+    const t      = vol / Math.max(maxVol, 1);
+    const status = t >= 0.67 ? 'pr' : t >= 0.34 ? 'improved' : 'first';
+    map[muscle]  = { status, growthPct: Math.round(t * 100), currentVol: Math.round(vol), prevVol: 0 };
+  }
+  return map;
 }
 
 const STATUS_CONFIG = {
@@ -142,116 +153,6 @@ const STATUS_CONFIG = {
   match: { label: '= MATCH', color: '#78716c', bg: 'rgba(87,83,78,0.12)',     border: 'rgba(87,83,78,0.35)'    },
   down:  { label: '▼ DOWN',  color: '#f87171', bg: 'rgba(248,113,113,0.10)',  border: 'rgba(248,113,113,0.35)' },
 };
-
-// ─── Forge Body Map ───────────────────────────────────────────────────────────
-const FORGE_SLUG_MAP: { slug: Slug; dataKey: string; views: ('front'|'back')[] }[] = [
-  { slug: 'chest',      dataKey: 'chest',       views: ['front']         },
-  { slug: 'biceps',     dataKey: 'biceps',       views: ['front']         },
-  { slug: 'quadriceps', dataKey: 'quads',        views: ['front']         },
-  { slug: 'upper-back', dataKey: 'lats',         views: ['back']          },
-  { slug: 'lower-back', dataKey: 'lower_back',   views: ['back']          },
-  { slug: 'hamstring',  dataKey: 'hamstrings',   views: ['back']          },
-  { slug: 'gluteal',    dataKey: 'glutes',       views: ['back']          },
-  { slug: 'deltoids',   dataKey: 'front_delts',  views: ['front']         },
-  { slug: 'deltoids',   dataKey: 'rear_delts',   views: ['back']          },
-  { slug: 'triceps',    dataKey: 'triceps',      views: ['front', 'back'] },
-  { slug: 'calves',     dataKey: 'calves',       views: ['front', 'back'] },
-  { slug: 'trapezius',  dataKey: 'traps',        views: ['front', 'back'] },
-];
-
-function buildForgeBodyData(
-  volumes: Record<string,number>, maxVol: number, view: 'front'|'back',
-  colorFn: (v: number, max: number) => string | null,
-): ExtendedBodyPart[] {
-  const result: ExtendedBodyPart[] = [];
-  for (const entry of FORGE_SLUG_MAP) {
-    if (!entry.views.includes(view)) continue;
-    const color = colorFn(volumes[entry.dataKey] ?? 0, maxVol);
-    if (color) result.push({ slug: entry.slug, styles: { fill: color } });
-  }
-  return result;
-}
-
-function ForgeBodyMap({ volumes, maxVol }: { volumes: Record<string,number>; maxVol: number }) {
-  const [mode, setMode] = useState<'recovery' | 'growth'>('recovery');
-  const colorFn = mode === 'recovery' ? volumeToRecoveryColor : volumeToGrowthColor;
-
-  const RECOVERY_LEGEND: [string, string][] = [['#4ade80','READY'],['#a3e635','ALMOST'],['#fb923c','PARTIAL'],['#f87171','RESTING']];
-  const GROWTH_LEGEND:   [string, string][] = [['#4ade80','HIGH'],['#a3e635','MODERATE'],['#fb923c','LOW'],['#57534e','UNDERTRAINED']];
-  const legend = mode === 'recovery' ? RECOVERY_LEGEND : GROWTH_LEGEND;
-
-  const sortedMuscles = useMemo(() =>
-    Object.entries(volumes).filter(([,v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 3),
-    [volumes],
-  );
-
-  return (
-    <View>
-      {/* Mode toggle */}
-      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
-        {(['recovery', 'growth'] as const).map(m => (
-          <TouchableOpacity key={m} onPress={() => setMode(m)}
-            style={{ flex: 1, paddingVertical: 7, borderWidth: 1, alignItems: 'center',
-              borderColor: mode === m ? COLORS.accent : COLORS.border,
-              backgroundColor: mode === m ? COLORS.accentMuted : 'transparent' }}>
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: mode === m ? COLORS.accent : COLORS.text600, textTransform: 'uppercase', letterSpacing: 1 }}>
-              {m.toUpperCase()}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Bodies */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-around', alignItems: 'flex-start' }}>
-        {(['front', 'back'] as const).map(side => (
-          <View key={side} style={{ alignItems: 'center' }}>
-            <Body data={buildForgeBodyData(volumes, maxVol, side, colorFn)} side={side} gender="male" scale={0.65} border="none" defaultFill="#1c1917" />
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1.5, marginTop: 4 }}>
-              {side === 'front' ? 'ANTERIOR' : 'POSTERIOR'}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Legend */}
-      <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border, flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-        {legend.map(([color, label]) => (
-          <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color }} />
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Summary */}
-      {sortedMuscles.length > 0 && (
-        <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 8 }}>
-            {mode === 'recovery' ? 'MOST FATIGUED' : 'TOP GAINS'}
-          </Text>
-          {sortedMuscles.map(([muscle, vol]) => {
-            const dotColor = colorFn(vol, maxVol) ?? COLORS.text700;
-            const hours = mode === 'recovery'
-              ? Math.round((MUSCLE_RECOVERY_HOURS[muscle] ?? 48) * (vol / Math.max(maxVol, 1)))
-              : null;
-            return (
-              <View key={muscle} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: dotColor }} />
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400 }}>{MUSCLES[muscle] ?? muscle}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text300 }}>{fmt0(vol)}</Text>
-                  {hours !== null && <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>{hours}h est.</Text>}
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      )}
-    </View>
-  );
-}
 
 // ─── Set Row ──────────────────────────────────────────────────────────────────
 function SetRow({ set, idx, lastSet, onUpdate, onDelete, isLast }: {
@@ -1115,6 +1016,9 @@ export default function ForgeScreen() {
 
   const volumes     = useMemo(() => muscleVolumes(workout), [workout]);
   const maxVol      = useMemo(() => Math.max(800, ...Object.values(volumes)), [volumes]);
+  const [forgeMapMode, setForgeMapMode] = useState<'recovery' | 'growth'>('recovery');
+  const forgeRecoveryMap = useMemo(() => volumesToRecoveryMap(volumes, maxVol), [volumes, maxVol]);
+  const forgeGrowthMap   = useMemo(() => volumesToGrowthMap(volumes, maxVol),   [volumes, maxVol]);
   const totalSets   = useMemo(() => workout.reduce((a, we) => a + we.sets.length, 0), [workout]);
   const doneSets    = useMemo(() => workout.reduce((a, we) => a + we.sets.filter(s => Number(s.weight) > 0 && Number(s.reps) > 0).length, 0), [workout]);
   const totalVolume = useMemo(() => workout.reduce((a, we) => a + exerciseVolume(we), 0), [workout]);
@@ -1379,14 +1283,12 @@ export default function ForgeScreen() {
                   <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, lineHeight: 20, paddingTop: 2 }}>MUSCLE MAP</Text>
                   <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700 }}>live</Text>
                 </View>
-                <ForgeBodyMap volumes={volumes} maxVol={maxVol} />
-                <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border }}>
-                  <View style={{ height: 6, flexDirection: 'row' }}>
-                    {(['rgba(44,36,30,0.8)', 'rgb(98,42,18)', 'rgb(186,74,28)', 'rgb(240,110,38)'] as const).map((c, i) => (
-                      <View key={i} style={{ flex: 1, backgroundColor: c }} />
-                    ))}
-                  </View>
-                </View>
+                <BodyMapDual
+                  recoveryMap={forgeRecoveryMap}
+                  growthMap={forgeGrowthMap}
+                  mode={forgeMapMode}
+                  setMode={setForgeMapMode}
+                />
               </View>
             )}
 

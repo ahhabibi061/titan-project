@@ -12,7 +12,6 @@ import {
   StyleSheet,
   Dimensions,
   StatusBar,
-  Animated,
   TextInput,
   KeyboardAvoidingView,
   Platform,
@@ -21,8 +20,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Stop, Path, Rect } from 'react-native-svg';
-import Body, { ExtendedBodyPart, Slug } from 'react-native-body-highlighter';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
+import { BodyMapDual } from '../components/MuscleMap';
 
 // ─── MOCK DATA ───────────────────────────────────────────────────────────────
 
@@ -72,21 +71,6 @@ const MOCK_RECOVERY_MAP: Record<string, { status: string; pct: number; hoursRema
   lower_back:  { status: 'partial', pct: 58,  hoursRemaining: 14 },
 };
 
-const MOCK_GROWTH_MAP: Record<string, { status: string; growthPct: number }> = {
-  chest:       { status: 'regressed', growthPct: -8.2 },
-  front_delts: { status: 'regressed', growthPct: -3.1 },
-  triceps:     { status: 'improved',  growthPct:  1.5 },
-  lats:        { status: 'improved',  growthPct:  4.2 },
-  biceps:      { status: 'improved',  growthPct:  0.5 },
-  rear_delts:  { status: 'improved',  growthPct:  1.8 },
-  traps:       { status: 'regressed', growthPct: -1.2 },
-  quads:       { status: 'regressed', growthPct: -5.4 },
-  hamstrings:  { status: 'regressed', growthPct: -1.8 },
-  glutes:      { status: 'improved',  growthPct:  2.1 },
-  calves:      { status: 'improved',  growthPct:  3.0 },
-  lower_back:  { status: 'regressed', growthPct: -2.0 },
-};
-
 const MUSCLE_DATA = {
   weeklyVolume: {
     chest: 4200, front_delts: 1800, side_delts: 900,  triceps: 2100,
@@ -102,117 +86,18 @@ const MUSCLE_DATA = {
   } as Record<string, number>,
 };
 
-// Maps slug → data key + display name, aware of front vs back view
-const SLUG_TO_DATA: Record<string, { front: string; back: string; frontName: string; backName: string }> = {
-  chest:        { front: 'chest',       back: 'chest',      frontName: 'Chest',       backName: 'Chest'      },
-  biceps:       { front: 'biceps',      back: 'biceps',     frontName: 'Biceps',      backName: 'Biceps'     },
-  quadriceps:   { front: 'quads',       back: 'quads',      frontName: 'Quadriceps',  backName: 'Quadriceps' },
-  deltoids:     { front: 'front_delts', back: 'rear_delts', frontName: 'Front Delts', backName: 'Rear Delts' },
-  triceps:      { front: 'triceps',     back: 'triceps',    frontName: 'Triceps',     backName: 'Triceps'    },
-  calves:       { front: 'calves',      back: 'calves',     frontName: 'Calves',      backName: 'Calves'     },
-  trapezius:    { front: 'traps',       back: 'traps',      frontName: 'Trapezius',   backName: 'Trapezius'  },
-  'upper-back': { front: 'lats',        back: 'lats',       frontName: 'Lats',        backName: 'Lats'       },
-  'lower-back': { front: 'lower_back',  back: 'lower_back', frontName: 'Lower Back',  backName: 'Lower Back' },
-  hamstring:    { front: 'hamstrings',  back: 'hamstrings', frontName: 'Hamstrings',  backName: 'Hamstrings' },
-  gluteal:      { front: 'glutes',      back: 'glutes',     frontName: 'Glutes',      backName: 'Glutes'     },
-};
-
-// ─── MUSCLE MAP DATA ─────────────────────────────────────────────────────────
-
-const RECOVERY_COLORS: Record<string, string> = {
-  ready:   '#4ade80',
-  almost:  '#fbbf24',
-  partial: '#f97316',
-  resting: '#ef4444',
-};
-
-const GROWTH_COLORS: Record<string, string> = {
-  pr:        '#fb923c',
-  improved:  '#4ade80',
-  regressed: '#fbbf24',
-  dropped:   '#f87171',
-};
-
-// Maps our data keys → library slugs, with which view each slug belongs to.
-// Deltoids entry is duplicated: front view uses front_delts data, back view uses rear_delts.
-const SLUG_MAP: { slug: Slug; dataKey: string; views: ('front' | 'back')[] }[] = [
-  { slug: 'chest',       dataKey: 'chest',       views: ['front']         },
-  { slug: 'biceps',      dataKey: 'biceps',       views: ['front']         },
-  { slug: 'quadriceps',  dataKey: 'quads',        views: ['front']         },
-  { slug: 'upper-back',  dataKey: 'lats',         views: ['back']          },
-  { slug: 'lower-back',  dataKey: 'lower_back',   views: ['back']          },
-  { slug: 'hamstring',   dataKey: 'hamstrings',   views: ['back']          },
-  { slug: 'gluteal',     dataKey: 'glutes',       views: ['back']          },
-  { slug: 'deltoids',    dataKey: 'front_delts',  views: ['front']         },
-  { slug: 'deltoids',    dataKey: 'rear_delts',   views: ['back']          },
-  { slug: 'triceps',     dataKey: 'triceps',      views: ['front', 'back'] },
-  { slug: 'calves',      dataKey: 'calves',       views: ['front', 'back'] },
-  { slug: 'trapezius',   dataKey: 'traps',        views: ['front', 'back'] },
-];
-
-function volToHeat(volume: number, max: number): string | null {
-  if (!volume || volume <= 0) return null;
-  const t = Math.min(volume / Math.max(max, 1), 1);
-  const stops = [
-    { t: 0.00, c: [44, 36, 30] },
-    { t: 0.18, c: [98, 42, 18] },
-    { t: 0.45, c: [186, 74, 28] },
-    { t: 0.72, c: [240, 110, 38] },
-    { t: 1.00, c: [255, 78, 38] },
-  ];
-  for (let i = 0; i < stops.length - 1; i++) {
-    if (t <= stops[i + 1].t) {
-      const local = (t - stops[i].t) / (stops[i + 1].t - stops[i].t || 1);
-      const r = Math.round(stops[i].c[0] + (stops[i + 1].c[0] - stops[i].c[0]) * local);
-      const g = Math.round(stops[i].c[1] + (stops[i + 1].c[1] - stops[i].c[1]) * local);
-      const b = Math.round(stops[i].c[2] + (stops[i + 1].c[2] - stops[i].c[2]) * local);
-      return `rgb(${r},${g},${b})`;
-    }
+// Computed like the web version — includes currentVol/prevVol for tooltip and summary
+const MOCK_GROWTH_MAP: Record<string, { status: string; growthPct: number; currentVol: number; prevVol: number }> = (() => {
+  const m: Record<string, any> = {};
+  for (const [key, vol] of Object.entries(MUSCLE_DATA.weeklyVolume)) {
+    const pct = MUSCLE_DATA.progression[key] ?? 0;
+    if (pct === 0) continue;
+    const status = pct > 10 ? 'pr' : pct > 0 ? 'improved' : pct > -10 ? 'regressed' : 'dropped';
+    m[key] = { status, growthPct: Math.round(pct * 10) / 10, currentVol: Math.round(vol), prevVol: Math.round(vol / (1 + pct / 100)) };
   }
-  const last = stops[stops.length - 1].c;
-  return `rgb(${last[0]},${last[1]},${last[2]})`;
-}
+  return m;
+})();
 
-function buildBodyData(volumes: Record<string, number>, maxVol: number, view: 'front' | 'back'): ExtendedBodyPart[] {
-  const result: ExtendedBodyPart[] = [];
-  for (const entry of SLUG_MAP) {
-    if (!entry.views.includes(view)) continue;
-    const color = volToHeat(volumes[entry.dataKey] ?? 0, maxVol);
-    if (color) {
-      result.push({ slug: entry.slug, styles: { fill: color } });
-    }
-  }
-  return result;
-}
-
-function buildRecoveryBodyData(recoveryMap: Record<string, { status: string; pct: number }>, view: 'front' | 'back'): ExtendedBodyPart[] {
-  const colorMap: Record<string, string> = { ready: '#4ade80', almost: '#a3e635', partial: '#fb923c', resting: '#f87171' };
-  const result: ExtendedBodyPart[] = [];
-  for (const entry of SLUG_MAP) {
-    if (!entry.views.includes(view)) continue;
-    const rec = recoveryMap[entry.dataKey];
-    if (!rec) continue;
-    const color = colorMap[rec.status];
-    if (color) result.push({ slug: entry.slug, styles: { fill: color } });
-  }
-  return result;
-}
-
-function buildGrowthBodyData(growthMap: Record<string, { status: string; growthPct: number }>, view: 'front' | 'back'): ExtendedBodyPart[] {
-  const result: ExtendedBodyPart[] = [];
-  for (const entry of SLUG_MAP) {
-    if (!entry.views.includes(view)) continue;
-    const g = growthMap[entry.dataKey];
-    if (!g) continue;
-    let color: string;
-    if (g.growthPct >= 3)       color = '#4ade80';
-    else if (g.growthPct >= 0)  color = '#a3e635';
-    else if (g.growthPct >= -3) color = '#fb923c';
-    else                         color = '#f87171';
-    result.push({ slug: entry.slug, styles: { fill: color } });
-  }
-  return result;
-}
 
 // ─── WEEKLY ADHERENCE DATA ───────────────────────────────────────────────────
 
@@ -374,187 +259,6 @@ function WeeklyGrid({ days }: { days: DayAdherence[] }) {
   );
 }
 
-// ─── MUSCLE MAP ───────────────────────────────────────────────────────────────
-
-interface SelectedMuscle { slug: string; view: 'front' | 'back'; dataKey: string; name: string; }
-
-const RECOVERY_LEGEND: [string, string][] = [['#4ade80','READY'],['#a3e635','ALMOST'],['#fb923c','PARTIAL'],['#f87171','RESTING']];
-const GROWTH_LEGEND:   [string, string][] = [['#4ade80','HIGH'],['#a3e635','MODERATE'],['#fb923c','LOW'],['#f87171','DECLINING']];
-
-function MuscleMap({ mode, setMode, volumes, maxVol }: {
-  mode: 'recovery' | 'growth'; setMode: (m: 'recovery' | 'growth') => void;
-  volumes: Record<string, number>; maxVol: number;
-}) {
-  const [selected, setSelected] = useState<SelectedMuscle | null>(null);
-  const slideY   = useRef(new Animated.Value(80)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  const BODY_SCALE = 0.75;
-
-  const showCard = (slug: string, view: 'front' | 'back') => {
-    const entry = SLUG_TO_DATA[slug];
-    if (!entry) return;
-    const dataKey = view === 'front' ? entry.front : entry.back;
-    const name    = view === 'front' ? entry.frontName : entry.backName;
-    setSelected({ slug, view, dataKey, name });
-    slideY.setValue(80);
-    fadeAnim.setValue(0);
-    Animated.parallel([
-      Animated.spring(slideY, { toValue: 0, useNativeDriver: true, damping: 15, stiffness: 140 }),
-      Animated.timing(fadeAnim, { toValue: 1, duration: 180, useNativeDriver: true }),
-    ]).start();
-  };
-
-  const dismissCard = () => {
-    Animated.parallel([
-      Animated.spring(slideY, { toValue: 80, useNativeDriver: true, damping: 15, stiffness: 140 }),
-      Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
-    ]).start(() => setSelected(null));
-  };
-
-  const handlePress = (bodyPart: any, view: 'front' | 'back') => {
-    const slug = bodyPart.slug as string;
-    if (!slug || !SLUG_TO_DATA[slug]) return;
-    if (selected?.slug === slug && selected?.view === view) dismissCard();
-    else showCard(slug, view);
-  };
-
-  const injectSelected = (data: ExtendedBodyPart[], view: 'front' | 'back'): ExtendedBodyPart[] => {
-    if (!selected || selected.view !== view) return data;
-    return [
-      ...data.filter(p => p.slug !== selected.slug),
-      { slug: selected.slug as Slug, styles: { fill: COLORS.accentHot } },
-    ];
-  };
-
-  const frontData = injectSelected(
-    mode === 'recovery'
-      ? buildRecoveryBodyData(MOCK_RECOVERY_MAP, 'front')
-      : buildGrowthBodyData(MOCK_GROWTH_MAP, 'front'),
-    'front'
-  );
-  const backData = injectSelected(
-    mode === 'recovery'
-      ? buildRecoveryBodyData(MOCK_RECOVERY_MAP, 'back')
-      : buildGrowthBodyData(MOCK_GROWTH_MAP, 'back'),
-    'back'
-  );
-
-  const recData  = selected ? MOCK_RECOVERY_MAP[selected.dataKey] : null;
-  const growData = selected ? MOCK_GROWTH_MAP[selected.dataKey]   : null;
-
-  // Most Fatigued / Top Gains summaries
-  const mostFatigued = Object.entries(MOCK_RECOVERY_MAP)
-    .filter(([, v]) => v.status === 'resting' || v.status === 'partial')
-    .sort((a, b) => a[1].pct - b[1].pct)
-    .slice(0, 3)
-    .map(([k, v]) => ({ name: k.replace(/_/g, ' '), hrs: v.hoursRemaining }));
-
-  const topGains = Object.entries(MOCK_GROWTH_MAP)
-    .filter(([, v]) => v.growthPct > 0)
-    .sort((a, b) => b[1].growthPct - a[1].growthPct)
-    .slice(0, 3)
-    .map(([k, v]) => ({ name: k.replace(/_/g, ' '), pct: v.growthPct }));
-
-  return (
-    <View style={s.card}>
-      <View style={s.cardHeader}>
-        <Text style={s.sectionTitle}>Muscle Map</Text>
-        <Text style={s.cardTag}>{mode === 'recovery' ? 'RECOVERY' : 'GROWTH'}</Text>
-      </View>
-
-      <View style={s.mapToggle}>
-        {(['recovery', 'growth'] as const).map(m => (
-          <TouchableOpacity
-            key={m}
-            style={[s.mapToggleBtn, mode === m && s.mapToggleBtnActive]}
-            onPress={() => { setMode(m); dismissCard(); }}
-          >
-            <Text style={[s.mapToggleText, mode === m && s.mapToggleTextActive]}>{m.toUpperCase()}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={s.mapBodies}>
-        <View style={s.mapBodyCol}>
-          <Body
-            data={frontData} side="front" gender="male" scale={BODY_SCALE}
-            border="none" defaultFill="#1c1917"
-            onBodyPartPress={(bp) => handlePress(bp, 'front')}
-          />
-          <Text style={s.mapBodyLabel}>ANTERIOR</Text>
-        </View>
-        <View style={s.mapBodyCol}>
-          <Body
-            data={backData} side="back" gender="male" scale={BODY_SCALE}
-            border="none" defaultFill="#1c1917"
-            onBodyPartPress={(bp) => handlePress(bp, 'back')}
-          />
-          <Text style={s.mapBodyLabel}>POSTERIOR</Text>
-        </View>
-      </View>
-
-      {selected && (
-        <Animated.View style={[s.muscleInfoCard, { opacity: fadeAnim, transform: [{ translateY: slideY }] }]}>
-          <View style={s.muscleInfoRow}>
-            <Text style={s.muscleInfoName}>{selected.name.toUpperCase()}</Text>
-            <Text style={[s.musclePillText, { color: COLORS.text600 }]}>{mode === 'recovery' ? 'recovery' : 'growth'}</Text>
-          </View>
-          {mode === 'recovery' ? (
-            <>
-              <Text style={[s.muscleInfoVol, { color: recData?.status === 'ready' ? '#4ade80' : recData?.status === 'almost' ? '#a3e635' : recData?.status === 'partial' ? '#fb923c' : '#f87171' }]}>
-                {recData ? recData.status.toUpperCase() : '—'}
-              </Text>
-              <Text style={s.muscleInfoSub}>{recData && recData.hoursRemaining > 0 ? `~${recData.hoursRemaining}h until ready` : 'Ready to train'}</Text>
-            </>
-          ) : (
-            <>
-              <Text style={[s.muscleInfoVol, { color: growData && growData.growthPct > 0 ? '#4ade80' : '#f87171' }]}>
-                {growData ? `${growData.growthPct > 0 ? '+' : ''}${growData.growthPct.toFixed(1)}%` : '—'}
-              </Text>
-              <Text style={s.muscleInfoSub}>vs last week</Text>
-            </>
-          )}
-        </Animated.View>
-      )}
-
-      <View style={[s.divider, { marginVertical: SPACING.md }]} />
-
-      <View style={s.legendRow}>
-        {(mode === 'recovery' ? RECOVERY_LEGEND : GROWTH_LEGEND).map(([color, label]) => (
-          <View key={label} style={s.legendItem}>
-            <View style={[s.legendDot, { backgroundColor: color }]} />
-            <Text style={s.legendLabel}>{label}</Text>
-          </View>
-        ))}
-      </View>
-
-      {mode === 'recovery' && mostFatigued.length > 0 && (
-        <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(68,64,60,0.3)' }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 6 }}>Most Fatigued</Text>
-          {mostFatigued.map(m => (
-            <View key={m.name} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400, textTransform: 'capitalize' }}>{m.name}</Text>
-              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: '#fb923c' }}>{m.hrs > 0 ? `${m.hrs}h est.` : 'Ready'}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {mode === 'growth' && topGains.length > 0 && (
-        <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(68,64,60,0.3)' }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 6 }}>Top Gains</Text>
-          {topGains.map(m => (
-            <View key={m.name} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 3 }}>
-              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400, textTransform: 'capitalize' }}>{m.name}</Text>
-              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: '#4ade80' }}>+{m.pct.toFixed(1)}%</Text>
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-}
 
 // ─── MAIN SCREEN ─────────────────────────────────────────────────────────────
 
@@ -912,7 +616,7 @@ export default function DashboardScreen() {
         </View>
 
         {/* ── FIX 2: MUSCLE MAP — between This Week and Activity Feed ── */}
-        <MuscleMap mode={mapMode} setMode={setMapMode} volumes={muscleVolumesData} maxVol={muscleMaxVol} />
+        <BodyMapDual recoveryMap={MOCK_RECOVERY_MAP} growthMap={MOCK_GROWTH_MAP} mode={mapMode} setMode={setMapMode} />
 
         {/* ── 8. TODAY'S ACTIVITY FEED ───────────────────────────────── */}
         <View style={s.card}>
