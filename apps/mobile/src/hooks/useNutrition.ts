@@ -48,6 +48,17 @@ export interface FoodResult {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  fromHistory?: boolean;
+  count?: number;
+}
+
+export interface MostLoggedFood {
+  name: string;
+  kcal: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  count: number;
 }
 
 export interface ScanResult {
@@ -301,6 +312,113 @@ export function useFoodSearch(query: string) {
       })) as FoodResult[];
     },
     enabled: query.trim().length >= 2,
+    staleTime: 5 * 60_000,
+  });
+}
+
+// ── useMostLoggedFoods ────────────────────────────────────────────────────
+
+export function useMostLoggedFoods() {
+  return useQuery<MostLoggedFood[]>({
+    queryKey: ['most-logged-foods'],
+    queryFn: async () => {
+      const userId = await getUserId();
+      const { data } = await supabase
+        .from('nutrition_logs')
+        .select('meal_name, kcal, protein_g, carbs_g, fat_g')
+        .eq('user_id', userId)
+        .not('meal_name', 'is', null)
+        .order('logged_at', { ascending: false })
+        .limit(300);
+      const map = new Map<string, MostLoggedFood>();
+      for (const row of data ?? []) {
+        const key = (row.meal_name ?? '').toLowerCase().trim();
+        if (!key) continue;
+        if (!map.has(key)) {
+          map.set(key, { name: row.meal_name, kcal: row.kcal ?? 0, protein_g: row.protein_g ?? 0, carbs_g: row.carbs_g ?? 0, fat_g: row.fat_g ?? 0, count: 1 });
+        } else {
+          map.get(key)!.count++;
+        }
+      }
+      return [...map.values()].sort((a, b) => b.count - a.count).slice(0, 8);
+    },
+    staleTime: 2 * 60_000,
+  });
+}
+
+// ── searchFoodHistory (exported async helper for inline use) ──────────────
+
+export async function searchFoodHistory(query: string): Promise<MostLoggedFood[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data } = await supabase
+    .from('nutrition_logs')
+    .select('meal_name, kcal, protein_g, carbs_g, fat_g')
+    .eq('user_id', user.id)
+    .ilike('meal_name', `%${query}%`)
+    .order('logged_at', { ascending: false })
+    .limit(100);
+  const map = new Map<string, MostLoggedFood>();
+  for (const row of data ?? []) {
+    const key = (row.meal_name ?? '').toLowerCase().trim();
+    if (!key) continue;
+    if (!map.has(key)) {
+      map.set(key, { name: row.meal_name, kcal: row.kcal ?? 0, protein_g: row.protein_g ?? 0, carbs_g: row.carbs_g ?? 0, fat_g: row.fat_g ?? 0, count: 1 });
+    } else {
+      map.get(key)!.count++;
+    }
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count).slice(0, 5);
+}
+
+// ── useTodayCaloriesBurned ────────────────────────────────────────────────
+
+export function useTodayCaloriesBurned() {
+  return useQuery<number>({
+    queryKey: ['today-calories-burned'],
+    queryFn: async () => {
+      const userId = await getUserId();
+      const now    = new Date();
+      const start  = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      const end    = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+      const { data } = await supabase
+        .from('workouts')
+        .select('calories_burned')
+        .eq('user_id', userId)
+        .not('completed_at', 'is', null)
+        .gte('completed_at', start)
+        .lte('completed_at', end);
+      return (data ?? []).reduce((sum, w) => sum + (w.calories_burned ?? 0), 0);
+    },
+    staleTime: 60_000,
+  });
+}
+
+// ── useLoggedDates ────────────────────────────────────────────────────────
+
+export function useLoggedDates(year: number, month: number) {
+  return useQuery<Set<string>>({
+    queryKey: ['logged-dates', year, month],
+    queryFn: async () => {
+      const userId = await getUserId();
+      const start  = new Date(year, month, 1).toISOString();
+      const end    = new Date(year, month + 1, 0, 23, 59, 59, 999).toISOString();
+      const { data } = await supabase
+        .from('nutrition_logs')
+        .select('logged_at')
+        .eq('user_id', userId)
+        .gte('logged_at', start)
+        .lte('logged_at', end);
+      const dates = new Set<string>();
+      for (const row of data ?? []) {
+        const d = new Date(row.logged_at);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        dates.add(`${y}-${m}-${day}`);
+      }
+      return dates;
+    },
     staleTime: 5 * 60_000,
   });
 }

@@ -1,18 +1,22 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   Modal, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView,
-  Platform, FlatList, Keyboard,
+  Platform, FlatList, Keyboard, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, G } from 'react-native-svg';
+import { useNavigation } from '@react-navigation/native';
 import { COLORS, FONTS } from '../constants/theme';
 import {
   useDailyNutrition, useLogMeal, useDeleteMeal,
   useWaterLog, useLogWater, useDeleteWater, useScanMeal, useFoodSearch,
-  FoodResult, ScanResult, NutritionLog,
+  useMostLoggedFoods, searchFoodHistory, useTodayCaloriesBurned, useLoggedDates,
+  FoodResult, ScanResult, NutritionLog, MostLoggedFood,
 } from '../hooks/useNutrition';
-import { useProfile } from '../hooks/useSettings';
+import { useProfile, useUpdateProfile } from '../hooks/useSettings';
+
+const { width: SCREEN_W } = Dimensions.get('window');
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -29,12 +33,22 @@ const MEAL_COLORS: Record<MealType, string> = {
 const MEAL_ICONS: Record<MealType, string> = {
   breakfast: '☀',
   lunch:     '⚡',
-  dinner:    '🌙',
+  dinner:    '●',
   snacks:    '◆',
+};
+
+const GOAL_LABELS: Record<string, string> = {
+  cut:      'CUT',
+  bulk:     'BULK',
+  recomp:   'RECOMP',
+  maintain: 'MAINTAIN',
 };
 
 const WATER_QUICK = [250, 500, 750, 1000];
 const WATER_TARGET_ML = 2500;
+const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+                     'July', 'August', 'September', 'October', 'November', 'December'];
 
 // ── Date helpers ───────────────────────────────────────────────────────────
 
@@ -46,12 +60,24 @@ function toLocalDateStr(d: Date): string {
 }
 
 function formatDisplayDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T12:00:00');
   const today = toLocalDateStr(new Date());
   const yesterday = toLocalDateStr(new Date(Date.now() - 86_400_000));
   if (dateStr === today) return 'Today';
   if (dateStr === yesterday) return 'Yesterday';
+  const d = new Date(dateStr + 'T12:00:00');
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function buildCalendarGrid(year: number, month: number): (number | null)[][] {
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+  const rows: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) rows.push(cells.slice(i, i + 7));
+  return rows;
 }
 
 // ── CalorieRing ────────────────────────────────────────────────────────────
@@ -63,6 +89,7 @@ function CalorieRing({ consumed, target }: { consumed: number; target: number })
   const pct = Math.min(consumed / Math.max(target, 1), 1);
   const offset = circ * (1 - pct);
   const remaining = Math.max(target - consumed, 0);
+  const over = consumed > target;
 
   return (
     <View style={{ alignItems: 'center' }}>
@@ -71,7 +98,7 @@ function CalorieRing({ consumed, target }: { consumed: number; target: number })
           <Circle cx={cx} cy={cy} r={r} stroke="rgba(41,37,36,0.5)" strokeWidth={7} fill="none" />
           <Circle
             cx={cx} cy={cy} r={r}
-            stroke={pct >= 1 ? COLORS.accentHot : COLORS.accent}
+            stroke={over ? COLORS.accentHot : COLORS.accent}
             strokeWidth={7}
             fill="none"
             strokeDasharray={`${circ} ${circ}`}
@@ -87,8 +114,8 @@ function CalorieRing({ consumed, target }: { consumed: number; target: number })
         <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, marginTop: 2 }}>
           / {target} KCAL
         </Text>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.accent, marginTop: 4 }}>
-          {remaining} left
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: over ? COLORS.red400 : COLORS.accent, marginTop: 4 }}>
+          {over ? `+${consumed - target} over` : `${remaining} left`}
         </Text>
       </View>
     </View>
@@ -118,6 +145,241 @@ function MacroBar({ label, consumed, target, color }: {
   );
 }
 
+// ── InfoPill ───────────────────────────────────────────────────────────────
+
+function InfoPill({ label, color = COLORS.text600, bg = 'rgba(41,37,36,0.4)' }: {
+  label: string; color?: string; bg?: string;
+}) {
+  return (
+    <View style={{ backgroundColor: bg, borderWidth: 1, borderColor: 'rgba(41,37,36,0.6)', paddingHorizontal: 8, paddingVertical: 3, marginRight: 6, marginBottom: 4 }}>
+      <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color, letterSpacing: 1 }}>{label}</Text>
+    </View>
+  );
+}
+
+// ── ProLockedModal ─────────────────────────────────────────────────────────
+
+function ProLockedModal({ visible, feature, onClose }: {
+  visible: boolean; feature: string; onClose: () => void;
+}) {
+  const navigation = useNavigation<any>();
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <View style={s.proCard}>
+          <Text style={{ fontSize: 32, textAlign: 'center', marginBottom: 8 }}>👑</Text>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: '#fbbf24', letterSpacing: 2, textAlign: 'center', marginBottom: 10 }}>
+            PRO FEATURE
+          </Text>
+          <Text style={{ fontFamily: FONTS.sans, fontSize: 13, color: COLORS.text300, textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
+            {feature} is available on{'\n'}Pro and Elite plans.
+          </Text>
+          <TouchableOpacity
+            style={[s.addBtn, { backgroundColor: COLORS.accentMuted, borderColor: COLORS.accentBorder, alignSelf: 'stretch', alignItems: 'center', paddingVertical: 10, marginBottom: 8 }]}
+            onPress={() => { onClose(); navigation.navigate('Settings'); }}
+          >
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, letterSpacing: 1 }}>
+              VIEW PLANS
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={{ alignSelf: 'stretch', alignItems: 'center', paddingVertical: 8 }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, letterSpacing: 1 }}>NOT NOW</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+// ── CalendarModal ──────────────────────────────────────────────────────────
+
+function CalendarModal({ visible, selectedDate, onSelect, onClose }: {
+  visible: boolean;
+  selectedDate: string;
+  onSelect: (date: string) => void;
+  onClose: () => void;
+}) {
+  const today = toLocalDateStr(new Date());
+  const initDate = new Date(selectedDate + 'T12:00:00');
+  const [viewYear, setViewYear]   = useState(initDate.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initDate.getMonth());
+  const { data: loggedDates }     = useLoggedDates(viewYear, viewMonth);
+
+  function prevMonth() {
+    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
+    else setViewMonth(m => m - 1);
+  }
+  function nextMonth() {
+    const now = new Date();
+    if (viewYear > now.getFullYear() || (viewYear === now.getFullYear() && viewMonth >= now.getMonth())) return;
+    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
+    else setViewMonth(m => m + 1);
+  }
+
+  const grid = buildCalendarGrid(viewYear, viewMonth);
+  const cellW = Math.floor((SCREEN_W - 64) / 7);
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }}>
+        {/* Header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text300, letterSpacing: 1, flex: 1 }}>CALENDAR</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text500 }}>✕ CLOSE</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Month nav */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 }}>
+          <TouchableOpacity onPress={prevMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 20, color: COLORS.text400 }}>‹</Text>
+          </TouchableOpacity>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text100, letterSpacing: 1 }}>
+            {MONTH_NAMES[viewMonth].toUpperCase()} {viewYear}
+          </Text>
+          <TouchableOpacity onPress={nextMonth} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 20, color: COLORS.text400 }}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Day labels */}
+        <View style={{ flexDirection: 'row', paddingHorizontal: 16, marginBottom: 6 }}>
+          {DAY_LABELS.map(d => (
+            <View key={d} style={{ width: cellW, alignItems: 'center' }}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, letterSpacing: 1 }}>{d}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Grid */}
+        {grid.map((row, ri) => (
+          <View key={ri} style={{ flexDirection: 'row', paddingHorizontal: 16, marginBottom: 2 }}>
+            {row.map((day, ci) => {
+              if (day === null) return <View key={ci} style={{ width: cellW, height: 40 }} />;
+              const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              const isSelected = dateStr === selectedDate;
+              const isToday    = dateStr === today;
+              const isFuture   = dateStr > today;
+              const hasLog     = loggedDates?.has(dateStr) ?? false;
+
+              return (
+                <TouchableOpacity
+                  key={ci}
+                  style={{ width: cellW, height: 40, alignItems: 'center', justifyContent: 'center' }}
+                  disabled={isFuture}
+                  onPress={() => { onSelect(dateStr); onClose(); }}
+                >
+                  <View style={[
+                    { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
+                    isSelected && { backgroundColor: COLORS.accent },
+                    isToday && !isSelected && { borderWidth: 1, borderColor: COLORS.accent },
+                  ]}>
+                    <Text style={{
+                      fontFamily: FONTS.mono,
+                      fontSize:   12,
+                      color:      isFuture ? COLORS.text700 : isSelected ? '#fff' : isToday ? COLORS.accent : COLORS.text300,
+                    }}>
+                      {day}
+                    </Text>
+                  </View>
+                  {hasLog && !isSelected && (
+                    <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: COLORS.accent, marginTop: 1 }} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
+
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, textAlign: 'center', marginTop: 16, letterSpacing: 1 }}>
+          ● = FOOD LOGGED
+        </Text>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+// ── MacroEditModal ─────────────────────────────────────────────────────────
+
+function MacroEditModal({ visible, current, onClose }: {
+  visible: boolean;
+  current: { kcal: number; protein: number; carbs: number; fat: number };
+  onClose: () => void;
+}) {
+  const { updateProfile, isLoading } = useUpdateProfile();
+  const [kcal, setKcal]       = useState(String(current.kcal));
+  const [protein, setProtein] = useState(String(current.protein));
+  const [carbs, setCarbs]     = useState(String(current.carbs));
+  const [fat, setFat]         = useState(String(current.fat));
+
+  useEffect(() => {
+    if (visible) {
+      setKcal(String(current.kcal));
+      setProtein(String(current.protein));
+      setCarbs(String(current.carbs));
+      setFat(String(current.fat));
+    }
+  }, [visible]);
+
+  async function save() {
+    try {
+      await updateProfile({
+        current_macros: {
+          kcal:    parseInt(kcal, 10)    || 0,
+          protein: parseInt(protein, 10) || 0,
+          carbs:   parseInt(carbs, 10)   || 0,
+          fat:     parseInt(fat, 10)     || 0,
+        },
+      });
+      onClose();
+    } catch { Alert.alert('Error', 'Could not save macro targets.'); }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
+        <TouchableOpacity activeOpacity={1} style={s.proCard}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.accent, letterSpacing: 1, marginBottom: 14 }}>
+            EDIT MACRO TARGETS
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.fieldLabel}>KCAL</Text>
+              <TextInput style={s.input} value={kcal} onChangeText={setKcal} keyboardType="numeric" placeholderTextColor={COLORS.text600} />
+            </View>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+            {[
+              { label: 'PROTEIN (g)', val: protein, set: setProtein },
+              { label: 'CARBS (g)',   val: carbs,   set: setCarbs   },
+              { label: 'FAT (g)',     val: fat,      set: setFat     },
+            ].map(f => (
+              <View key={f.label} style={{ flex: 1 }}>
+                <Text style={s.fieldLabel}>{f.label}</Text>
+                <TextInput style={s.input} value={f.val} onChangeText={f.set} keyboardType="numeric" placeholderTextColor={COLORS.text600} />
+              </View>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={[s.addBtn, { alignSelf: 'stretch', alignItems: 'center', backgroundColor: COLORS.accentMuted, borderColor: COLORS.accentBorder, paddingVertical: 10, marginBottom: 8 }]}
+            onPress={save}
+            disabled={isLoading}
+          >
+            {isLoading
+              ? <ActivityIndicator size="small" color={COLORS.accent} />
+              : <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, letterSpacing: 1 }}>SAVE TARGETS</Text>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={{ alignSelf: 'stretch', alignItems: 'center', paddingVertical: 8 }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 }}>CANCEL</Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
 // ── MealItem ───────────────────────────────────────────────────────────────
 
 function MealItem({ item, onDelete }: { item: NutritionLog; onDelete: (id: string) => void }) {
@@ -140,12 +402,13 @@ function MealItem({ item, onDelete }: { item: NutritionLog; onDelete: (id: strin
 
 // ── MealSection ────────────────────────────────────────────────────────────
 
-function MealSection({ type, items, onAdd, onScan, onDelete }: {
+function MealSection({ type, items, onAdd, onScan, onDelete, isPro }: {
   type: MealType;
   items: NutritionLog[];
   onAdd: () => void;
   onScan: () => void;
   onDelete: (id: string) => void;
+  isPro: boolean;
 }) {
   const color = MEAL_COLORS[type];
   const icon  = MEAL_ICONS[type];
@@ -159,9 +422,7 @@ function MealSection({ type, items, onAdd, onScan, onDelete }: {
           {icon}  {type}
         </Text>
         {kcal > 0 && (
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>
-            {kcal} kcal
-          </Text>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>{kcal} kcal</Text>
         )}
       </View>
 
@@ -182,8 +443,8 @@ function MealSection({ type, items, onAdd, onScan, onDelete }: {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity style={[s.addBtn, { paddingHorizontal: 10 }]} onPress={onScan}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, letterSpacing: 1 }}>
-            ⬡ SCAN
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: isPro ? COLORS.text400 : COLORS.text600, letterSpacing: 1 }}>
+            {isPro ? '⬡ SCAN' : '👑 SCAN'}
           </Text>
         </TouchableOpacity>
       </View>
@@ -194,15 +455,15 @@ function MealSection({ type, items, onAdd, onScan, onDelete }: {
 // ── WaterSection ───────────────────────────────────────────────────────────
 
 function WaterSection({ date }: { date: string }) {
-  const { data: waterDay } = useWaterLog(date);
-  const { logWater, isLoading: logging } = useLogWater();
-  const { deleteWater } = useDeleteWater();
+  const { data: waterDay }          = useWaterLog(date);
+  const { logWater, isLoading }     = useLogWater();
+  const { deleteWater }             = useDeleteWater();
   const [customInput, setCustomInput] = useState('');
-  const [showCustom, setShowCustom] = useState(false);
+  const [showCustom, setShowCustom]   = useState(false);
 
-  const totalMl  = waterDay?.total_ml ?? 0;
-  const logs     = waterDay?.logs ?? [];
-  const pct      = Math.min(totalMl / WATER_TARGET_ML, 1);
+  const totalMl = waterDay?.total_ml ?? 0;
+  const logs    = waterDay?.logs ?? [];
+  const pct     = Math.min(totalMl / WATER_TARGET_ML, 1);
 
   async function add(ml: number) {
     if (!ml || ml <= 0) return;
@@ -213,8 +474,8 @@ function WaterSection({ date }: { date: string }) {
     <View style={s.card}>
       <Text style={s.sectionLabel}>💧  WATER</Text>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 20, color: COLORS.text100, marginRight: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 10 }}>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 20, color: COLORS.text100, marginRight: 6 }}>
           {totalMl < 1000 ? `${totalMl}ml` : `${(totalMl / 1000).toFixed(1)}L`}
         </Text>
         <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500 }}>
@@ -226,23 +487,15 @@ function WaterSection({ date }: { date: string }) {
         <View style={{ height: 6, width: `${pct * 100}%` as any, backgroundColor: '#60a5fa', borderRadius: 3 }} />
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
         {WATER_QUICK.map(ml => (
-          <TouchableOpacity
-            key={ml}
-            style={s.waterQuickBtn}
-            onPress={() => add(ml)}
-            disabled={logging}
-          >
+          <TouchableOpacity key={ml} style={s.waterQuickBtn} onPress={() => add(ml)} disabled={isLoading}>
             <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text300 }}>
               {ml >= 1000 ? `${ml / 1000}L` : `${ml}ml`}
             </Text>
           </TouchableOpacity>
         ))}
-        <TouchableOpacity
-          style={[s.waterQuickBtn, { paddingHorizontal: 10 }]}
-          onPress={() => setShowCustom(v => !v)}
-        >
+        <TouchableOpacity style={[s.waterQuickBtn, { paddingHorizontal: 10 }]} onPress={() => setShowCustom(v => !v)}>
           <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>custom</Text>
         </TouchableOpacity>
       </View>
@@ -289,47 +542,69 @@ function FoodSearchModal({ visible, mealType, onClose, onLog }: {
   visible: boolean;
   mealType: MealType;
   onClose: () => void;
-  onLog: (entry: { meal_name: string; kcal: number; protein_g: number; carbs_g: number; fat_g: number; meal_type: string }) => Promise<void>;
+  onLog: (entry: any) => Promise<void>;
 }) {
-  const [query, setQuery]           = useState('');
-  const [committed, setCommitted]   = useState('');
-  const [selected, setSelected]     = useState<FoodResult | null>(null);
-  const [serving, setServing]       = useState('100');
-  const [logging, setLogging]       = useState(false);
-  // Manual add mode
-  const [manual, setManual]         = useState(false);
-  const [mName, setMName]           = useState('');
-  const [mKcal, setMKcal]           = useState('');
-  const [mP, setMP]                 = useState('');
-  const [mC, setMC]                 = useState('');
-  const [mF, setMF]                 = useState('');
+  const [query, setQuery]             = useState('');
+  const [committed, setCommitted]     = useState('');
+  const [historyResults, setHistory]  = useState<MostLoggedFood[]>([]);
+  const [selected, setSelected]       = useState<FoodResult | null>(null);
+  const [serving, setServing]         = useState('100');
+  const [logging, setLogging]         = useState(false);
+  const [manual, setManual]           = useState(false);
+  const [mName, setMName]             = useState('');
+  const [mKcal, setMKcal]             = useState('');
+  const [mP, setMP]                   = useState('');
+  const [mC, setMC]                   = useState('');
+  const [mF, setMF]                   = useState('');
+  const debounceRef                   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const { data: mostLogged }          = useMostLoggedFoods();
+  const { data: usdaResults, isFetching: fetchingUsda } = useFoodSearch(committed);
 
-  const { data: results, isFetching } = useFoodSearch(committed);
+  // Debounce both USDA commit + history search together
+  function handleQueryChange(text: string) {
+    setQuery(text);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setCommitted(text);
+      if (text.trim().length >= 2) {
+        const hist = await searchFoodHistory(text).catch(() => []);
+        setHistory(hist);
+      } else {
+        setHistory([]);
+      }
+    }, 500);
+  }
+
+  // Merged results: history first (deduped against USDA)
+  const mergedResults = useMemo<FoodResult[]>(() => {
+    const histItems: FoodResult[] = historyResults.map((h, i) => ({
+      fdcId: -(i + 1),
+      name:  h.name,
+      kcal:  h.kcal,
+      protein_g: h.protein_g,
+      carbs_g:   h.carbs_g,
+      fat_g:     h.fat_g,
+      fromHistory: true,
+      count: h.count,
+    }));
+    if (!usdaResults?.length) return histItems;
+    const histNames = new Set(historyResults.map(h => h.name.toLowerCase()));
+    const usdaFiltered = usdaResults.filter(u => !histNames.has(u.name.toLowerCase()));
+    return [...histItems, ...usdaFiltered];
+  }, [historyResults, usdaResults]);
 
   function reset() {
-    setQuery(''); setCommitted(''); setSelected(null); setServing('100');
+    setQuery(''); setCommitted(''); setHistory([]); setSelected(null); setServing('100');
     setManual(false); setMName(''); setMKcal(''); setMP(''); setMC(''); setMF('');
   }
-
   function close() { reset(); onClose(); }
-
-  function scale(val: number) {
-    const s = parseFloat(serving) || 100;
-    return Math.round((val * s) / 100);
-  }
+  function scale(val: number) { return Math.round((val * (parseFloat(serving) || 100)) / 100); }
 
   async function confirmFood() {
     if (!selected) return;
     setLogging(true);
     try {
-      await onLog({
-        meal_name: selected.name,
-        kcal:      scale(selected.kcal),
-        protein_g: scale(selected.protein_g),
-        carbs_g:   scale(selected.carbs_g),
-        fat_g:     scale(selected.fat_g),
-        meal_type: mealType,
-      });
+      await onLog({ meal_name: selected.name, kcal: scale(selected.kcal), protein_g: scale(selected.protein_g), carbs_g: scale(selected.carbs_g), fat_g: scale(selected.fat_g), meal_type: mealType });
       close();
     } catch { Alert.alert('Error', 'Could not log meal.'); }
     finally { setLogging(false); }
@@ -339,20 +614,15 @@ function FoodSearchModal({ visible, mealType, onClose, onLog }: {
     if (!mName.trim() || !mKcal) return;
     setLogging(true);
     try {
-      await onLog({
-        meal_name: mName.trim(),
-        kcal:      parseInt(mKcal, 10) || 0,
-        protein_g: parseInt(mP, 10) || 0,
-        carbs_g:   parseInt(mC, 10) || 0,
-        fat_g:     parseInt(mF, 10) || 0,
-        meal_type: mealType,
-      });
+      await onLog({ meal_name: mName.trim(), kcal: parseInt(mKcal, 10) || 0, protein_g: parseInt(mP, 10) || 0, carbs_g: parseInt(mC, 10) || 0, fat_g: parseInt(mF, 10) || 0, meal_type: mealType });
       close();
     } catch { Alert.alert('Error', 'Could not log meal.'); }
     finally { setLogging(false); }
   }
 
   const color = MEAL_COLORS[mealType];
+  const showSuggestions = !committed && (mostLogged?.length ?? 0) > 0;
+  const showResults     = committed.length >= 2 && !selected;
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>
@@ -366,64 +636,70 @@ function FoodSearchModal({ visible, mealType, onClose, onLog }: {
               Add to {mealType}
             </Text>
             <TouchableOpacity onPress={close}>
-              <Text style={{ fontFamily: FONTS.mono, fontSize: 13, color: COLORS.text500 }}>✕ CLOSE</Text>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 13, color: COLORS.text500 }}>✕</Text>
             </TouchableOpacity>
           </View>
 
           {/* Tab toggle */}
           <View style={{ flexDirection: 'row', marginHorizontal: 16, marginTop: 12, gap: 8 }}>
-            <TouchableOpacity
-              style={[s.tabToggle, !manual && { borderColor: COLORS.accent }]}
-              onPress={() => setManual(false)}
-            >
-              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: manual ? COLORS.text500 : COLORS.accent, letterSpacing: 1 }}>
-                SEARCH
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[s.tabToggle, manual && { borderColor: COLORS.accent }]}
-              onPress={() => setManual(true)}
-            >
-              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: manual ? COLORS.accent : COLORS.text500, letterSpacing: 1 }}>
-                MANUAL
-              </Text>
-            </TouchableOpacity>
+            {(['SEARCH', 'MANUAL'] as const).map(tab => (
+              <TouchableOpacity
+                key={tab}
+                style={[s.tabToggle, (tab === 'MANUAL') === manual && { borderColor: COLORS.accent }]}
+                onPress={() => setManual(tab === 'MANUAL')}
+              >
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, letterSpacing: 1, color: (tab === 'MANUAL') === manual ? COLORS.accent : COLORS.text500 }}>
+                  {tab}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
 
           {!manual ? (
             <>
-              {/* Search input */}
+              {/* Search bar */}
               <View style={{ flexDirection: 'row', marginHorizontal: 16, marginTop: 12, gap: 8 }}>
                 <TextInput
                   style={[s.input, { flex: 1 }]}
-                  placeholder="Search food (e.g. chicken breast)…"
+                  placeholder="e.g. chicken breast, rice…"
                   placeholderTextColor={COLORS.text600}
                   value={query}
-                  onChangeText={setQuery}
-                  onSubmitEditing={() => { setCommitted(query); Keyboard.dismiss(); }}
+                  onChangeText={handleQueryChange}
+                  onSubmitEditing={Keyboard.dismiss}
                   returnKeyType="search"
                   autoFocus
                 />
-                <TouchableOpacity
-                  style={[s.addBtn, { paddingHorizontal: 14 }]}
-                  onPress={() => { setCommitted(query); Keyboard.dismiss(); }}
-                >
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent }}>GO</Text>
-                </TouchableOpacity>
+                {query.length > 0 && (
+                  <TouchableOpacity style={[s.addBtn, { paddingHorizontal: 10 }]} onPress={() => { setQuery(''); setCommitted(''); setHistory([]); }}>
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>✕</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
-              {isFetching && <ActivityIndicator color={COLORS.accent} style={{ marginTop: 20 }} />}
+              {/* Accuracy tip */}
+              <View style={{ marginHorizontal: 16, marginTop: 10, padding: 10, backgroundColor: 'rgba(41,37,36,0.3)', borderWidth: 1, borderColor: 'rgba(41,37,36,0.4)' }}>
+                <Text style={{ fontFamily: FONTS.sans, fontSize: 11, color: COLORS.text600, lineHeight: 16 }}>
+                  💡 For packaged foods, use <Text style={{ color: COLORS.text400 }}>Scan Barcode</Text> for best accuracy. Search works best for whole ingredients like "chicken breast" or "brown rice".
+                </Text>
+              </View>
 
-              {/* Selected food confirm */}
+              {fetchingUsda && <ActivityIndicator color={COLORS.accent} style={{ marginTop: 16 }} />}
+
+              {/* Selected food detail */}
               {selected && (
                 <View style={[s.card, { margin: 16 }]}>
-                  <Text style={{ fontFamily: FONTS.sansSB, fontSize: 13, color: COLORS.text100, marginBottom: 6 }} numberOfLines={2}>
+                  <Text style={{ fontFamily: FONTS.sansSB, fontSize: 13, color: COLORS.text100, marginBottom: 4 }} numberOfLines={2}>
                     {selected.name}
                   </Text>
+                  {selected.fromHistory && (
+                    <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+                      <InfoPill label={`LOGGED ${selected.count}×`} color={COLORS.accent} bg={COLORS.accentMuted} />
+                    </View>
+                  )}
                   <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, marginBottom: 10 }}>
                     Per 100g · {selected.kcal} kcal · P {selected.protein_g}g · C {selected.carbs_g}g · F {selected.fat_g}g
                   </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>SERVING (g)</Text>
                     <TextInput
                       style={[s.input, { width: 80 }]}
@@ -431,11 +707,11 @@ function FoodSearchModal({ visible, mealType, onClose, onLog }: {
                       value={serving}
                       onChangeText={setServing}
                     />
-                    <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400, flex: 1 }}>
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent }}>
                       = {scale(selected.kcal)} kcal
                     </Text>
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
                     <TouchableOpacity style={s.addBtn} onPress={() => setSelected(null)}>
                       <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>BACK</Text>
                     </TouchableOpacity>
@@ -453,71 +729,75 @@ function FoodSearchModal({ visible, mealType, onClose, onLog }: {
                 </View>
               )}
 
-              {/* Results */}
-              {!selected && results && results.length > 0 && (
+              {!selected && (
                 <FlatList
-                  data={results}
-                  keyExtractor={item => String(item.fdcId)}
-                  style={{ marginHorizontal: 16, marginTop: 8 }}
+                  data={showSuggestions
+                    ? mostLogged?.map((h, i): FoodResult => ({ fdcId: -(i + 1), name: h.name, kcal: h.kcal, protein_g: h.protein_g, carbs_g: h.carbs_g, fat_g: h.fat_g, fromHistory: true, count: h.count }))
+                    : mergedResults}
+                  keyExtractor={(item, i) => `${item.fdcId}-${i}`}
+                  style={{ marginTop: 8 }}
                   keyboardShouldPersistTaps="handled"
+                  ListHeaderComponent={showSuggestions ? (
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, letterSpacing: 1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 }}>
+                      YOUR USUALS
+                    </Text>
+                  ) : mergedResults.some(r => r.fromHistory) ? (
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, letterSpacing: 1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 }}>
+                      PREVIOUSLY LOGGED · USDA
+                    </Text>
+                  ) : null}
                   renderItem={({ item }) => (
                     <TouchableOpacity
-                      style={[s.mealItem, { marginBottom: 0, borderTopWidth: 1, borderTopColor: 'rgba(41,37,36,0.3)' }]}
+                      style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(41,37,36,0.25)' }}
                       onPress={() => { setSelected(item); setServing('100'); Keyboard.dismiss(); }}
                     >
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontFamily: FONTS.sansSB, fontSize: 12, color: COLORS.text300 }} numberOfLines={1}>
-                          {item.name}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                          <Text style={{ fontFamily: FONTS.sansSB, fontSize: 12, color: COLORS.text300 }} numberOfLines={1}>
+                            {item.name}
+                          </Text>
+                          {item.fromHistory && (
+                            <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.accent }}>★</Text>
+                          )}
+                        </View>
                         <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 }}>
-                          {item.kcal} kcal / 100g
+                          {item.kcal} kcal / 100g{item.count ? ` · logged ${item.count}×` : ''}
                         </Text>
                       </View>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.accent }}>+</Text>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 14, color: COLORS.accent }}>+</Text>
                     </TouchableOpacity>
                   )}
+                  ListEmptyComponent={showResults && !fetchingUsda ? (
+                    <Text style={{ fontFamily: FONTS.sans, fontSize: 13, color: COLORS.text600, textAlign: 'center', padding: 24 }}>
+                      No results for "{committed}"
+                    </Text>
+                  ) : null}
                 />
-              )}
-
-              {!selected && !isFetching && committed.length >= 2 && results?.length === 0 && (
-                <Text style={{ fontFamily: FONTS.sans, fontSize: 13, color: COLORS.text600, textAlign: 'center', marginTop: 24 }}>
-                  No results for "{committed}"
-                </Text>
               )}
             </>
           ) : (
-            /* Manual add form */
             <ScrollView style={{ padding: 16 }} keyboardShouldPersistTaps="handled">
               <View style={s.card}>
                 <Text style={s.fieldLabel}>FOOD NAME</Text>
                 <TextInput style={[s.input, { marginBottom: 12 }]} placeholder="e.g. Oatmeal with banana" placeholderTextColor={COLORS.text600} value={mName} onChangeText={setMName} />
-
                 <Text style={s.fieldLabel}>CALORIES (kcal)</Text>
                 <TextInput style={[s.input, { marginBottom: 12 }]} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.text600} value={mKcal} onChangeText={setMKcal} />
-
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fieldLabel}>PROTEIN (g)</Text>
-                    <TextInput style={s.input} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.text600} value={mP} onChangeText={setMP} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fieldLabel}>CARBS (g)</Text>
-                    <TextInput style={s.input} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.text600} value={mC} onChangeText={setMC} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.fieldLabel}>FAT (g)</Text>
-                    <TextInput style={s.input} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.text600} value={mF} onChangeText={setMF} />
-                  </View>
+                <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+                  {[['PROTEIN (g)', mP, setMP], ['CARBS (g)', mC, setMC], ['FAT (g)', mF, setMF]] .map(([label, val, set]: any) => (
+                    <View key={label} style={{ flex: 1 }}>
+                      <Text style={s.fieldLabel}>{label}</Text>
+                      <TextInput style={s.input} keyboardType="numeric" placeholder="0" placeholderTextColor={COLORS.text600} value={val} onChangeText={set} />
+                    </View>
+                  ))}
                 </View>
-
                 <TouchableOpacity
-                  style={[s.addBtn, { marginTop: 16, alignSelf: 'stretch', alignItems: 'center', backgroundColor: COLORS.accentMuted, borderColor: COLORS.accentBorder }]}
+                  style={[s.addBtn, { alignSelf: 'stretch', alignItems: 'center', backgroundColor: COLORS.accentMuted, borderColor: COLORS.accentBorder, paddingVertical: 10 }]}
                   onPress={confirmManual}
                   disabled={logging || !mName.trim() || !mKcal}
                 >
                   {logging
                     ? <ActivityIndicator size="small" color={COLORS.accent} />
-                    : <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, letterSpacing: 1 }}>LOG MEAL</Text>
+                    : <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent }}>LOG MEAL</Text>
                   }
                 </TouchableOpacity>
               </View>
@@ -541,32 +821,30 @@ function ScanResultModal({ result, mealType, onConfirm, onClose }: {
   const [kcal, setKcal]     = useState('');
   const [prot, setProt]     = useState('');
   const [carb, setCarb]     = useState('');
-  const [fat, setFat]       = useState('');
+  const [fat,  setFat]      = useState('');
   const [saving, setSaving] = useState(false);
+  const [feedbackSent, setFeedbackSent] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (result) {
       setName(result.meal_name);
       setKcal(String(result.kcal));
       setProt(String(result.protein_g));
       setCarb(String(result.carbs_g));
       setFat(String(result.fat_g));
+      setFeedbackSent(false);
     }
   }, [result]);
+
+  const confidence = result?.confidence ?? 0;
+  const confColor  = confidence >= 80 ? COLORS.green400 : confidence >= 60 ? '#fbbf24' : COLORS.red400;
+  const confLabel  = confidence >= 80 ? 'HIGH CONFIDENCE' : confidence >= 60 ? 'MODERATE — verify values' : 'LOW CONFIDENCE — verify manually';
+  const showLowWarning = confidence > 0 && confidence < 60;
 
   async function confirm() {
     setSaving(true);
     try {
-      await onConfirm({
-        meal_name: name,
-        kcal:      parseInt(kcal, 10) || 0,
-        protein_g: parseInt(prot, 10) || 0,
-        carbs_g:   parseInt(carb, 10) || 0,
-        fat_g:     parseInt(fat, 10)  || 0,
-        meal_type: mealType,
-        source:    'vision_api',
-        confidence: result?.confidence,
-      });
+      await onConfirm({ meal_name: name, kcal: parseInt(kcal, 10) || 0, protein_g: parseInt(prot, 10) || 0, carbs_g: parseInt(carb, 10) || 0, fat_g: parseInt(fat, 10) || 0, meal_type: mealType, source: 'vision_api', confidence });
       onClose();
     } catch { Alert.alert('Error', 'Could not save.'); }
     finally { setSaving(false); }
@@ -576,39 +854,43 @@ function ScanResultModal({ result, mealType, onConfirm, onClose }: {
     <Modal visible={!!result} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }}>
         <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.accent, letterSpacing: 1 }}>
-            ⬡  SCAN RESULT
-          </Text>
-          {result && (
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, marginTop: 4 }}>
-              {Math.round(result.confidence)}% confidence
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.accent, letterSpacing: 1, flex: 1 }}>
+              ⬡  SCAN RESULT
             </Text>
-          )}
+            {confidence > 0 && (
+              <View style={{ backgroundColor: `${confColor}22`, borderWidth: 1, borderColor: confColor, paddingHorizontal: 8, paddingVertical: 3 }}>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: confColor, letterSpacing: 1 }}>
+                  {Math.round(confidence)}% · {confLabel}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
+
         <ScrollView style={{ padding: 16 }} keyboardShouldPersistTaps="handled">
+          {showLowWarning && (
+            <View style={{ backgroundColor: 'rgba(248,113,113,0.08)', borderWidth: 1, borderColor: 'rgba(248,113,113,0.3)', padding: 10, marginBottom: 12 }}>
+              <Text style={{ fontFamily: FONTS.sans, fontSize: 12, color: COLORS.red400, lineHeight: 18 }}>
+                ⚠ Low confidence scan. The values below may not be accurate — please verify against the food's nutrition label before logging.
+              </Text>
+            </View>
+          )}
+
           <View style={s.card}>
             <Text style={s.fieldLabel}>FOOD NAME</Text>
             <TextInput style={[s.input, { marginBottom: 12 }]} value={name} onChangeText={setName} placeholderTextColor={COLORS.text600} />
-
             <Text style={s.fieldLabel}>CALORIES (kcal)</Text>
             <TextInput style={[s.input, { marginBottom: 12 }]} value={kcal} onChangeText={setKcal} keyboardType="numeric" placeholderTextColor={COLORS.text600} />
-
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={s.fieldLabel}>PROTEIN</Text>
-                <TextInput style={s.input} value={prot} onChangeText={setProt} keyboardType="numeric" placeholderTextColor={COLORS.text600} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.fieldLabel}>CARBS</Text>
-                <TextInput style={s.input} value={carb} onChangeText={setCarb} keyboardType="numeric" placeholderTextColor={COLORS.text600} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.fieldLabel}>FAT</Text>
-                <TextInput style={s.input} value={fat} onChangeText={setFat} keyboardType="numeric" placeholderTextColor={COLORS.text600} />
-              </View>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+              {[['PROTEIN', prot, setProt], ['CARBS', carb, setCarb], ['FAT', fat, setFat]].map(([label, val, set]: any) => (
+                <View key={label} style={{ flex: 1 }}>
+                  <Text style={s.fieldLabel}>{label}</Text>
+                  <TextInput style={s.input} value={val} onChangeText={set} keyboardType="numeric" placeholderTextColor={COLORS.text600} />
+                </View>
+              ))}
             </View>
-
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
               <TouchableOpacity style={s.addBtn} onPress={onClose}>
                 <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>DISCARD</Text>
               </TouchableOpacity>
@@ -624,6 +906,29 @@ function ScanResultModal({ result, mealType, onConfirm, onClose }: {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Manual feedback */}
+          {!feedbackSent ? (
+            <TouchableOpacity
+              style={{ alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 16 }}
+              onPress={() => setFeedbackSent(true)}
+            >
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, letterSpacing: 1 }}>
+                ↩ MARK RESULT AS INACCURATE
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, textAlign: 'center', paddingVertical: 8 }}>
+              ✓ Feedback noted. Thank you.
+            </Text>
+          )}
+
+          {/* Gating / disclaimer */}
+          <View style={{ marginTop: 8, padding: 12, backgroundColor: 'rgba(41,37,36,0.25)', borderWidth: 1, borderColor: 'rgba(41,37,36,0.4)' }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, letterSpacing: 0.5, lineHeight: 14 }}>
+              👑 AI meal analysis is a Pro / Elite feature. Scans use computer vision and may not always be precise — always verify values against a nutrition label when accuracy matters.
+            </Text>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </Modal>
@@ -635,21 +940,27 @@ function ScanResultModal({ result, mealType, onConfirm, onClose }: {
 export default function SentinelScreen() {
   const today = toLocalDateStr(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
-
-  const { data: nutrition, isLoading: loadingNutrition } = useDailyNutrition(selectedDate);
-  const { data: profile } = useProfile();
-  const { logMeal } = useLogMeal();
-  const { deleteMeal } = useDeleteMeal();
-  const { scanMeal, isLoading: scanning } = useScanMeal();
-
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [showMacroEdit, setShowMacroEdit] = useState(false);
+  const [proModal, setProModal]         = useState({ visible: false, feature: '' });
   const [searchMealType, setSearchMealType] = useState<MealType>('breakfast');
   const [showSearch, setShowSearch]         = useState(false);
   const [scanMealType, setScanMealType]     = useState<MealType>('breakfast');
   const [scanResult, setScanResult]         = useState<ScanResult | null>(null);
 
+  const { data: nutrition, isLoading } = useDailyNutrition(selectedDate);
+  const { data: profile }              = useProfile();
+  const { data: caloriesBurned = 0 }  = useTodayCaloriesBurned();
+  const { logMeal }                    = useLogMeal();
+  const { deleteMeal }                 = useDeleteMeal();
+  const { scanMeal, isLoading: scanning } = useScanMeal();
+
   const macros  = profile?.current_macros ?? { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
   const totals  = nutrition?.totals ?? { kcal: 0, protein: 0, carbs: 0, fat: 0 };
-  const logs    = nutrition?.logs   ?? [];
+  const logs    = nutrition?.logs ?? [];
+  const isPro   = profile?.subscription_tier === 'pro' || profile?.subscription_tier === 'elite';
+  const streak  = (profile as any)?.current_streak ?? 0;
+  const goal    = profile?.goal;
 
   function prevDay() {
     const d = new Date(selectedDate + 'T12:00:00');
@@ -667,10 +978,7 @@ export default function SentinelScreen() {
   function openSearch(mt: MealType) { setSearchMealType(mt); setShowSearch(true); }
 
   async function openScan(mt: MealType) {
-    if (profile?.subscription_tier === 'basic') {
-      Alert.alert('Pro Feature', 'Meal scanning requires a Pro or Elite subscription.');
-      return;
-    }
+    if (!isPro) { setProModal({ visible: true, feature: 'Meal scanning' }); return; }
     setScanMealType(mt);
     try {
       const result = await scanMeal();
@@ -680,10 +988,6 @@ export default function SentinelScreen() {
     }
   }
 
-  async function handleLogMeal(entry: any) {
-    await logMeal(entry);
-  }
-
   async function handleDelete(id: string) {
     Alert.alert('Delete Entry', 'Remove this food from your log?', [
       { text: 'Cancel', style: 'cancel' },
@@ -691,46 +995,84 @@ export default function SentinelScreen() {
     ]);
   }
 
+  // Net calories: consumed - burned
+  const netKcal    = totals.kcal - caloriesBurned;
+  const netDisplay = netKcal !== totals.kcal;
+
   return (
     <SafeAreaView style={s.container} edges={['top']}>
       {/* Header */}
-      <View style={s.header}>
+      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 2 }}>
         <Text style={s.screenTitle}>SENTINEL</Text>
         <Text style={s.screenSub}>Nutrition Logger</Text>
       </View>
 
       {/* Date nav */}
       <View style={s.dateNav}>
-        <TouchableOpacity onPress={prevDay} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 18, color: COLORS.text500 }}>‹</Text>
+        <TouchableOpacity onPress={prevDay} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 20, color: COLORS.text500 }}>‹</Text>
         </TouchableOpacity>
-        <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text300, letterSpacing: 1 }}>
-          {formatDisplayDate(selectedDate).toUpperCase()}
-        </Text>
-        <TouchableOpacity onPress={nextDay} disabled={isToday} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 18, color: isToday ? COLORS.text700 : COLORS.text500 }}>›</Text>
+        <TouchableOpacity onPress={() => setShowCalendar(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text300, letterSpacing: 1 }}>
+            {formatDisplayDate(selectedDate).toUpperCase()}
+          </Text>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 }}>▾</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={nextDay} disabled={isToday} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 20, color: isToday ? COLORS.text700 : COLORS.text500 }}>›</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
-        {/* Summary card */}
+        {/* ── Summary card ───────────────────────────────────────────── */}
         <View style={s.card}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
-            <CalorieRing consumed={totals.kcal} target={macros.kcal} />
+          {/* Header row with edit targets button */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={s.sectionLabel}>TODAY'S MACROS</Text>
+            <TouchableOpacity
+              onPress={() => setShowMacroEdit(true)}
+              style={{ marginLeft: 'auto' as any }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, letterSpacing: 1 }}>✎ EDIT TARGETS</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Ring + macro bars */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 }}>
+            <CalorieRing consumed={netDisplay ? netKcal : totals.kcal} target={macros.kcal} />
             <View style={{ flex: 1 }}>
-              <MacroBar label="PROTEIN" consumed={totals.protein} target={macros.protein} color={COLORS.blue400} />
-              <MacroBar label="CARBS"   consumed={totals.carbs}   target={macros.carbs}   color={COLORS.accent} />
-              <MacroBar label="FAT"     consumed={totals.fat}     target={macros.fat}     color="#fbbf24" />
+              {/* protein=orange, carbs=blue, fat=yellow */}
+              <MacroBar label="PROTEIN" consumed={totals.protein} target={macros.protein} color={COLORS.accent}   />
+              <MacroBar label="CARBS"   consumed={totals.carbs}   target={macros.carbs}   color={COLORS.blue400} />
+              <MacroBar label="FAT"     consumed={totals.fat}     target={macros.fat}     color="#fbbf24"        />
             </View>
           </View>
+
+          {/* Pill row: goal · calories burned · streak */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 2 }}>
+            {goal && GOAL_LABELS[goal] && (
+              <InfoPill label={`🎯 ${GOAL_LABELS[goal]}`} color={COLORS.accent} bg={COLORS.accentMuted} />
+            )}
+            {caloriesBurned > 0 && (
+              <InfoPill label={`🔥 ${caloriesBurned} KCAL BURNED`} color={COLORS.orange400 ?? '#fb923c'} />
+            )}
+            {streak > 0 && (
+              <InfoPill label={`⚡ ${streak} DAY STREAK`} color="#fbbf24" />
+            )}
+          </View>
+
+          {netDisplay && (
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, marginTop: 6, letterSpacing: 0.5 }}>
+              Ring shows net kcal (consumed − burned). Raw: {totals.kcal} consumed.
+            </Text>
+          )}
         </View>
 
-        {loadingNutrition && (
-          <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 20 }} />
-        )}
+        {isLoading && <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} />}
 
-        {/* Meal sections */}
+        {/* ── Meal sections ──────────────────────────────────────────── */}
         {MEAL_TYPES.map(mt => (
           <MealSection
             key={mt}
@@ -739,10 +1081,11 @@ export default function SentinelScreen() {
             onAdd={() => openSearch(mt)}
             onScan={() => openScan(mt)}
             onDelete={handleDelete}
+            isPro={isPro}
           />
         ))}
 
-        {/* Water tracker */}
+        {/* ── Water tracker ──────────────────────────────────────────── */}
         <WaterSection date={selectedDate} />
 
       </ScrollView>
@@ -757,19 +1100,33 @@ export default function SentinelScreen() {
         </View>
       )}
 
-      {/* Food search modal */}
+      {/* Modals */}
+      <ProLockedModal
+        visible={proModal.visible}
+        feature={proModal.feature}
+        onClose={() => setProModal({ visible: false, feature: '' })}
+      />
+      <CalendarModal
+        visible={showCalendar}
+        selectedDate={selectedDate}
+        onSelect={setSelectedDate}
+        onClose={() => setShowCalendar(false)}
+      />
+      <MacroEditModal
+        visible={showMacroEdit}
+        current={macros}
+        onClose={() => setShowMacroEdit(false)}
+      />
       <FoodSearchModal
         visible={showSearch}
         mealType={searchMealType}
         onClose={() => setShowSearch(false)}
-        onLog={handleLogMeal}
+        onLog={logMeal}
       />
-
-      {/* Scan result modal */}
       <ScanResultModal
         result={scanResult}
         mealType={scanMealType}
-        onConfirm={handleLogMeal}
+        onConfirm={logMeal}
         onClose={() => setScanResult(null)}
       />
     </SafeAreaView>
@@ -780,18 +1137,13 @@ export default function SentinelScreen() {
 
 const s = StyleSheet.create({
   container: {
-    flex: 1,
+    flex:            1,
     backgroundColor: COLORS.bg,
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
   screenTitle: {
-    fontFamily: FONTS.anton,
-    fontSize:   24,
-    color:      COLORS.text100,
+    fontFamily:    FONTS.anton,
+    fontSize:      24,
+    color:         COLORS.text100,
     letterSpacing: 2,
   },
   screenSub: {
@@ -802,11 +1154,11 @@ const s = StyleSheet.create({
     marginTop:     -2,
   },
   dateNav: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    justifyContent:  'space-between',
+    flexDirection:    'row',
+    alignItems:       'center',
+    justifyContent:   'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 8,
+    paddingVertical:  8,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
@@ -822,37 +1174,36 @@ const s = StyleSheet.create({
     fontSize:      10,
     color:         COLORS.text500,
     letterSpacing: 1,
-    marginBottom:  10,
   },
   mealItem: {
-    flexDirection:  'row',
-    alignItems:     'center',
+    flexDirection:   'row',
+    alignItems:      'center',
     paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(41,37,36,0.3)',
+    borderTopWidth:  1,
+    borderTopColor:  'rgba(41,37,36,0.3)',
   },
   addBtn: {
-    borderWidth:   1,
-    borderColor:   COLORS.border,
-    paddingVertical: 6,
+    borderWidth:       1,
+    borderColor:       COLORS.border,
+    paddingVertical:   6,
     paddingHorizontal: 12,
-    alignSelf:     'flex-start',
+    alignSelf:         'flex-start',
   },
   waterQuickBtn: {
-    borderWidth:   1,
-    borderColor:   COLORS.border,
-    paddingVertical: 5,
+    borderWidth:       1,
+    borderColor:       COLORS.border,
+    paddingVertical:   5,
     paddingHorizontal: 8,
   },
   input: {
-    borderWidth:     1,
-    borderColor:     COLORS.border,
-    backgroundColor: 'rgba(12,11,10,0.6)',
-    color:           COLORS.text300,
-    fontFamily:      FONTS.mono,
-    fontSize:        12,
+    borderWidth:       1,
+    borderColor:       COLORS.border,
+    backgroundColor:   'rgba(12,11,10,0.6)',
+    color:             COLORS.text300,
+    fontFamily:        FONTS.mono,
+    fontSize:          12,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical:   8,
   },
   fieldLabel: {
     fontFamily:    FONTS.mono,
@@ -862,10 +1213,25 @@ const s = StyleSheet.create({
     marginBottom:  4,
   },
   tabToggle: {
-    borderWidth:   1,
-    borderColor:   COLORS.border,
-    paddingVertical: 6,
+    borderWidth:       1,
+    borderColor:       COLORS.border,
+    paddingVertical:   6,
     paddingHorizontal: 14,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10,9,8,0.8)',
+    alignItems:      'center',
+    justifyContent:  'center',
+    padding:         24,
+  },
+  proCard: {
+    backgroundColor: 'rgba(18,17,16,0.98)',
+    borderWidth:     1,
+    borderColor:     COLORS.border,
+    padding:         24,
+    width:           '100%',
+    maxWidth:        320,
   },
   scanOverlay: {
     ...StyleSheet.absoluteFillObject,
