@@ -1,0 +1,306 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import * as ImagePicker from 'expo-image-picker';
+import { supabase } from '../lib/supabase';
+
+async function getUserId() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  return user.id;
+}
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+export interface NutritionLog {
+  id: string;
+  meal_name: string;
+  kcal: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snacks' | 'uncategorized';
+  source: 'manual' | 'vision_api' | 'barcode';
+  confidence: number | null;
+  logged_at: string;
+  serving_amount: number | null;
+  serving_unit: string | null;
+}
+
+export interface WaterLog {
+  id: string;
+  amount_ml: number;
+  logged_at: string;
+}
+
+export interface DailyNutrition {
+  logs: NutritionLog[];
+  totals: { kcal: number; protein: number; carbs: number; fat: number };
+}
+
+export interface WaterDay {
+  logs: WaterLog[];
+  total_ml: number;
+}
+
+export interface FoodResult {
+  fdcId: number;
+  name: string;
+  kcal: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+export interface ScanResult {
+  meal_name: string;
+  kcal: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  confidence: number;
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+function localDayRange(date: string) {
+  const start = new Date(date + 'T00:00:00');
+  const end   = new Date(date + 'T23:59:59.999');
+  return { start: start.toISOString(), end: end.toISOString() };
+}
+
+// ── useDailyNutrition ─────────────────────────────────────────────────────
+
+export function useDailyNutrition(date: string) {
+  return useQuery<DailyNutrition>({
+    queryKey: ['nutrition', date],
+    queryFn: async () => {
+      const userId = await getUserId();
+      const { start, end } = localDayRange(date);
+      const { data, error } = await supabase
+        .from('nutrition_logs')
+        .select('id, meal_name, kcal, protein_g, carbs_g, fat_g, meal_type, source, confidence, logged_at, serving_amount, serving_unit')
+        .eq('user_id', userId)
+        .gte('logged_at', start)
+        .lte('logged_at', end)
+        .order('logged_at', { ascending: true });
+      if (error) throw error;
+      const logs = (data ?? []) as NutritionLog[];
+      const totals = logs.reduce(
+        (acc, l) => ({
+          kcal:    acc.kcal    + (l.kcal     ?? 0),
+          protein: acc.protein + (l.protein_g ?? 0),
+          carbs:   acc.carbs   + (l.carbs_g   ?? 0),
+          fat:     acc.fat     + (l.fat_g     ?? 0),
+        }),
+        { kcal: 0, protein: 0, carbs: 0, fat: 0 },
+      );
+      return { logs, totals };
+    },
+    staleTime: 30_000,
+  });
+}
+
+// ── useNutritionHistory ────────────────────────────────────────────────────
+
+export function useNutritionHistory() {
+  return useQuery({
+    queryKey: ['nutrition-history'],
+    queryFn: async () => {
+      const userId = await getUserId();
+      const since = new Date();
+      since.setDate(since.getDate() - 30);
+      const { data, error } = await supabase
+        .from('nutrition_logs')
+        .select('kcal, logged_at')
+        .eq('user_id', userId)
+        .gte('logged_at', since.toISOString())
+        .order('logged_at', { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
+}
+
+// ── useLogMeal ────────────────────────────────────────────────────────────
+
+export function useLogMeal() {
+  const qc = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: async (entry: {
+      meal_name: string;
+      kcal: number;
+      protein_g: number;
+      carbs_g: number;
+      fat_g: number;
+      meal_type: string;
+      source?: string;
+      confidence?: number;
+      serving_amount?: number;
+      serving_unit?: string;
+    }) => {
+      const userId = await getUserId();
+      const { error } = await supabase.from('nutrition_logs').insert({
+        user_id:    userId,
+        ...entry,
+        source:     entry.source ?? 'manual',
+        logged_at:  new Date().toISOString(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nutrition'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+  return { logMeal: mutation.mutateAsync, isLoading: mutation.isPending, error: mutation.error };
+}
+
+// ── useDeleteMeal ─────────────────────────────────────────────────────────
+
+export function useDeleteMeal() {
+  const qc = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('nutrition_logs').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nutrition'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+  return { deleteMeal: mutation.mutateAsync, isLoading: mutation.isPending };
+}
+
+// ── useWaterLog ───────────────────────────────────────────────────────────
+
+export function useWaterLog(date: string) {
+  return useQuery<WaterDay>({
+    queryKey: ['water', date],
+    queryFn: async () => {
+      const userId = await getUserId();
+      const { start, end } = localDayRange(date);
+      const { data, error } = await supabase
+        .from('water_logs')
+        .select('id, amount_ml, logged_at')
+        .eq('user_id', userId)
+        .gte('logged_at', start)
+        .lte('logged_at', end)
+        .order('logged_at', { ascending: true });
+      if (error) throw error;
+      const logs = (data ?? []) as WaterLog[];
+      const total_ml = logs.reduce((sum, l) => sum + l.amount_ml, 0);
+      return { logs, total_ml };
+    },
+    staleTime: 30_000,
+  });
+}
+
+// ── useLogWater ───────────────────────────────────────────────────────────
+
+export function useLogWater() {
+  const qc = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: async (amount_ml: number) => {
+      const userId = await getUserId();
+      const { error } = await supabase.from('water_logs').insert({
+        user_id:   userId,
+        amount_ml,
+        logged_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['water'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+  return { logWater: mutation.mutateAsync, isLoading: mutation.isPending };
+}
+
+// ── useDeleteWater ────────────────────────────────────────────────────────
+
+export function useDeleteWater() {
+  const qc = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('water_logs').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['water'] });
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+  return { deleteWater: mutation.mutateAsync };
+}
+
+// ── useScanMeal ───────────────────────────────────────────────────────────
+
+export function useScanMeal() {
+  const mutation = useMutation({
+    mutationFn: async (): Promise<ScanResult> => {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) throw new Error('Camera permission denied');
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.7,
+        base64: true,
+      });
+      if (result.canceled || !result.assets?.[0]?.base64) throw new Error('Cancelled');
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+
+      const res = await fetch(
+        `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/analyze-meal-image`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type':  'application/json',
+            Authorization:   `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ image: result.assets[0].base64 }),
+        },
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as any;
+        throw new Error(err.message ?? 'Scan failed');
+      }
+      return res.json() as Promise<ScanResult>;
+    },
+  });
+  return { scanMeal: mutation.mutateAsync, isLoading: mutation.isPending, error: mutation.error };
+}
+
+// ── useFoodSearch ─────────────────────────────────────────────────────────
+
+const USDA_KEY = process.env.EXPO_PUBLIC_USDA_API_KEY ?? 'DEMO_KEY';
+
+function extractNutrient(nutrients: any[], id: number): number {
+  return Math.round(nutrients.find((n: any) => n.nutrientId === id)?.value ?? 0);
+}
+
+export function useFoodSearch(query: string) {
+  return useQuery<FoodResult[]>({
+    queryKey: ['food-search', query],
+    queryFn: async () => {
+      const url = `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(query)}&dataType=Branded,Foundation,SR%20Legacy&pageSize=25&api_key=${USDA_KEY}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Search failed');
+      const data = await res.json() as any;
+      return (data.foods ?? []).map((f: any) => ({
+        fdcId:     f.fdcId,
+        name:      f.description,
+        kcal:      extractNutrient(f.foodNutrients, 1008),
+        protein_g: extractNutrient(f.foodNutrients, 1003),
+        carbs_g:   extractNutrient(f.foodNutrients, 1005),
+        fat_g:     extractNutrient(f.foodNutrients, 1004),
+      })) as FoodResult[];
+    },
+    enabled: query.trim().length >= 2,
+    staleTime: 5 * 60_000,
+  });
+}

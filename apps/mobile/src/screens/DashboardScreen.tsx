@@ -4,6 +4,8 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTodayWorkout, useWeeklyWorkouts, useWeeklySets, useActivityFeed, useWeeklyMuscleVolumes } from '../hooks/useWorkout';
 import { useBiometricEntries } from '../hooks/useVault';
+import { useDailyNutrition } from '../hooks/useNutrition';
+import { useProfile } from '../hooks/useSettings';
 import {
   View,
   Text,
@@ -278,8 +280,6 @@ export default function DashboardScreen() {
   const [mapMode, setMapMode] = useState<'recovery' | 'growth'>('recovery');
   const [displayName, setDisplayName] = useState('');
   const [tier, setTier]               = useState('BASIC');
-  const [consumed, setConsumed]       = useState({ kcal: 0, protein: 0, carbs: 0, fat: 0, mealsLogged: 0 });
-  const [targets, setTargets]         = useState({ kcal: 2000, protein: 150, carbs: 200, fat: 65 });
   const [bio, setBio]                 = useState({ current: 0, weekAgo: 0, goal: 0, sparkline: [] as number[] });
   const [weekly, setWeekly]           = useState({ totalSets: 0, avgKcal: 0, avgProtein: 0, streak: 0 });
   // Real-time hooks
@@ -289,6 +289,15 @@ export default function DashboardScreen() {
   const { data: activityFeed }      = useActivityFeed();
   const { data: muscleVolumes }     = useWeeklyMuscleVolumes();
   const { data: biometricEntries = [] } = useBiometricEntries();
+  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local tz
+  const { data: nutritionDay }      = useDailyNutrition(todayStr);
+  const { data: profile }           = useProfile();
+  const consumed = nutritionDay?.totals
+    ? { ...nutritionDay.totals, mealsLogged: nutritionDay.logs.length }
+    : { kcal: 0, protein: 0, carbs: 0, fat: 0, mealsLogged: 0 };
+  const targets  = profile?.current_macros
+    ? { kcal: profile.current_macros.kcal, protein: profile.current_macros.protein, carbs: profile.current_macros.carbs, fat: profile.current_macros.fat }
+    : { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
   const qc = useQueryClient();
 
   // Derive bio values from biometric-entries query (auto-refreshes when Vault logs weight)
@@ -367,22 +376,7 @@ export default function DashboardScreen() {
       if (profile?.subscription_tier) setTier(profile.subscription_tier.toUpperCase());
       if (profile?.current_streak != null) setWeekly(w => ({ ...w, streak: profile.current_streak }));
 
-      // Today's nutrition
-      const { data: nlogs } = await supabase
-        .from('nutrition_logs')
-        .select('calories, protein_g, carbs_g, fat_g')
-        .eq('user_id', user.id)
-        .gte('logged_at', today + 'T00:00:00')
-        .lt('logged_at', today + 'T23:59:59');
-      if (nlogs?.length) {
-        const sum = nlogs.reduce((a, r) => ({
-          kcal: a.kcal + (r.calories ?? 0),
-          protein: a.protein + (r.protein_g ?? 0),
-          carbs: a.carbs + (r.carbs_g ?? 0),
-          fat: a.fat + (r.fat_g ?? 0),
-        }), { kcal: 0, protein: 0, carbs: 0, fat: 0 });
-        setConsumed({ ...sum, mealsLogged: nlogs.length });
-      }
+      // Nutrition is now handled by useDailyNutrition hook above
 
       // Weekly sets count is handled by useWeeklySets() hook above
     })();
@@ -490,7 +484,9 @@ export default function DashboardScreen() {
         <View style={s.card}>
           <View style={s.cardHeader}>
             <Text style={s.cardLabel}>Today's Macros</Text>
-            <Text style={s.cardTag}>→ SENTINEL</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Sentinel')}>
+              <Text style={s.cardTag}>→ SENTINEL</Text>
+            </TouchableOpacity>
           </View>
           <View style={s.macrosTop}>
             <CalorieRing consumed={consumed.kcal} target={targets.kcal} />
@@ -517,7 +513,7 @@ export default function DashboardScreen() {
               </View>
             ))}
           </View>
-          <TouchableOpacity style={s.secondaryBtn}>
+          <TouchableOpacity style={s.secondaryBtn} onPress={() => navigation.navigate('Sentinel')}>
             <Text style={s.secondaryBtnText}>Scan Meal</Text>
           </TouchableOpacity>
         </View>

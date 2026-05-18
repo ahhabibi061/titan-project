@@ -7,6 +7,7 @@ import { COLORS, FONTS } from '../constants/theme';
 import DashboardScreen from '../screens/DashboardScreen';
 import PlaceholderScreen from '../screens/PlaceholderScreen';
 import ForgeScreen from '../screens/ForgeScreen';
+import SentinelScreen from '../screens/SentinelScreen';
 import SessionReviewScreen from '../screens/SessionReviewScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import VaultScreen from '../screens/VaultScreen';
@@ -17,7 +18,7 @@ const Stack = createNativeStackNavigator();
 const TABS = [
   { name: 'Home',     label: 'Home',     icon: 'home',         Screen: () => <DashboardScreen /> },
   { name: 'Forge',    label: 'Forge',    icon: 'barbell',      Screen: () => <ForgeScreen /> },
-  { name: 'Sentinel', label: 'Sentinel', icon: 'eye',          Screen: () => <PlaceholderScreen name="Sentinel" /> },
+  { name: 'Sentinel', label: 'Sentinel', icon: 'eye',          Screen: () => <SentinelScreen /> },
   { name: 'Vault',    label: 'Vault',    icon: 'lock-closed',  Screen: () => <VaultScreen /> },
   { name: 'Oracle',   label: 'Oracle',   icon: 'sparkles',     Screen: () => <PlaceholderScreen name="Oracle" /> },
 ] as const;
