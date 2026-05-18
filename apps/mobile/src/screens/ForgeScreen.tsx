@@ -1227,6 +1227,31 @@ export default function ForgeScreen() {
     setShowSelector(true);
   }
 
+  async function handleCancelSession() {
+    const hasLoggedSets = doneSets > 0;
+
+    async function doCancel() {
+      if (workoutId) {
+        try { await supabase.from('workouts').delete().eq('id', workoutId); } catch {}
+      }
+      resetSession();
+    }
+
+    if (!hasLoggedSets) {
+      await doCancel();
+      return;
+    }
+
+    Alert.alert(
+      'Cancel Session?',
+      'Your progress will be lost. This cannot be undone.',
+      [
+        { text: 'Keep Training', style: 'cancel' },
+        { text: 'Cancel Session', style: 'destructive', onPress: doCancel },
+      ],
+    );
+  }
+
   function handleNewSession() {
     setShowSelector(false);
   }
@@ -1326,7 +1351,14 @@ export default function ForgeScreen() {
         {/* Header */}
         <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-            <Text style={{ fontFamily: FONTS.anton, fontSize: 28, color: COLORS.text100, lineHeight: 36, paddingTop: 2 }}>FORGE</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12 }}>
+              {sessionStarted && (
+                <TouchableOpacity onPress={handleCancelSession} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingBottom: 5 }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, textTransform: 'uppercase' }}>‹ CANCEL</Text>
+                </TouchableOpacity>
+              )}
+              <Text style={{ fontFamily: FONTS.anton, fontSize: 28, color: COLORS.text100, lineHeight: 36, paddingTop: 2 }}>FORGE</Text>
+            </View>
             <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: sessionStarted ? COLORS.accent : COLORS.text500 }}>
               {sessionStarted ? 'SESSION LIVE' : todayLabel}
             </Text>
