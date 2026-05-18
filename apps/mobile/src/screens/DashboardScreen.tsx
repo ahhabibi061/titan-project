@@ -2,23 +2,17 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '../lib/supabase';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
-import { useTodayWorkout, useWeeklyWorkouts, useWeeklySets, useActivityFeed, useWeeklyMuscleVolumes, useUpdateSet } from '../hooks/useWorkout';
+import { useTodayWorkout, useWeeklyWorkouts, useWeeklySets, useActivityFeed, useWeeklyMuscleVolumes } from '../hooks/useWorkout';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  Modal,
   StyleSheet,
   Dimensions,
   StatusBar,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, LinearGradient, Stop, Path, Rect } from 'react-native-svg';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import { BodyMapDual } from '../components/MuscleMap';
@@ -263,13 +257,7 @@ function WeeklyGrid({ days }: { days: DayAdherence[] }) {
 // ─── MAIN SCREEN ─────────────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
-  const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const [workoutModalVisible, setWorkoutModalVisible] = useState(false);
-  const [editedSets, setEditedSets] = useState<Record<string, { weight: string; reps: string }>>({});
-  const [savingChanges, setSavingChanges] = useState(false);
-  const [savedMsg, setSavedMsg] = useState(false);
-  const { mutateAsync: updateSet } = useUpdateSet();
   const [mapMode, setMapMode] = useState<'recovery' | 'growth'>('recovery');
   const [displayName, setDisplayName] = useState('');
   const [tier, setTier]               = useState('BASIC');
@@ -389,29 +377,6 @@ export default function DashboardScreen() {
     })();
   }, []);
 
-  useEffect(() => {
-    if (!workoutModalVisible || !todayWorkout) return;
-    const initial: Record<string, { weight: string; reps: string }> = {};
-    for (const we of (todayWorkout as any).workout_exercises ?? []) {
-      for (const s of (we.sets ?? [])) {
-        if (s.id) initial[s.id] = { weight: String(s.weight_kg ?? 0), reps: String(s.reps ?? 0) };
-      }
-    }
-    setEditedSets(initial);
-  }, [workoutModalVisible]);
-
-  async function handleSaveChanges() {
-    setSavingChanges(true);
-    for (const [setId, vals] of Object.entries(editedSets)) {
-      try {
-        await updateSet({ setId, weightKg: Number(vals.weight) || 0, reps: Number(vals.reps) || 0 });
-      } catch {}
-    }
-    setSavingChanges(false);
-    setSavedMsg(true);
-    setTimeout(() => { setSavedMsg(false); setWorkoutModalVisible(false); }, 1500);
-  }
-
   const coach = null; // populated once Oracle module is wired up
 
   const remaining   = targets.kcal - consumed.kcal;
@@ -527,7 +492,15 @@ export default function DashboardScreen() {
                     </View>
                   ))}
               </View>
-              <TouchableOpacity style={s.primaryBtn} onPress={() => todayWorkout.completed && setWorkoutModalVisible(true)}>
+              <TouchableOpacity
+                style={s.primaryBtn}
+                onPress={() => {
+                  if (todayWorkout.completed) {
+                    navigation.navigate('Forge', { reviewWorkoutId: todayWorkout.id });
+                  } else {
+                    navigation.navigate('Forge');
+                  }
+                }}>
                 <Text style={s.primaryBtnText}>{todayWorkout.completed ? 'View Workout →' : 'In Progress →'}</Text>
               </TouchableOpacity>
             </>
@@ -645,86 +618,6 @@ export default function DashboardScreen() {
         </View>
       </ScrollView>
 
-      {/* ── WORKOUT REVIEW MODAL ────────────────────────────────────── */}
-      <Modal visible={workoutModalVisible} animationType="slide" transparent onRequestClose={() => setWorkoutModalVisible(false)}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={s.modalOverlay}>
-            <View style={[s.modalSheet, { paddingBottom: 0, height: '90%' }]}>
-              {/* Header */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.xs }}>
-                <View style={{ flex: 1, marginRight: SPACING.md }}>
-                  <Text style={s.modalTitle}>{todayWorkout?.name ?? ''}</Text>
-                  <Text style={[s.metaText, { marginTop: 4 }]}>
-                    {new Date(todayWorkout?.started_at ?? '').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-                    {todayWorkout?.duration_seconds ? ` · ${Math.round(todayWorkout.duration_seconds / 60)}m` : ''}
-                    {todayWorkout?.total_volume_kg ? ` · ${Math.round(todayWorkout.total_volume_kg).toLocaleString()} kg·reps` : ''}
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={() => setWorkoutModalVisible(false)} style={{ paddingTop: 4 }}>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase' }}>CLOSE</Text>
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
-                {(todayWorkout?.workout_exercises ?? []).sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0)).map((we: any, i: number) => (
-                  <View key={we.id} style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 12 }}>
-                    <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-                      <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 24, paddingTop: 2 }}>{(we.notes ?? '').toUpperCase()}</Text>
-                    </View>
-                    {/* Column headers */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(28,25,23,0.5)', gap: 8 }}>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 24, textAlign: 'center', textTransform: 'uppercase' }}>SET</Text>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 62, textAlign: 'center', textTransform: 'uppercase' }}>KG</Text>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 62, textAlign: 'center', textTransform: 'uppercase' }}>REPS</Text>
-                    </View>
-                    {(we.sets ?? []).sort((a: any, b: any) => a.set_number - b.set_number).map((s: any, si: number) => (
-                      <View key={s.id ?? si} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 4, gap: 8, borderTopWidth: 1, borderTopColor: COLORS.borderLight, minHeight: 44 }}>
-                        <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text600, width: 24, textAlign: 'center' }}>{si + 1}</Text>
-                        <TextInput
-                          style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, height: 38, width: 62, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, lineHeight: 20, paddingTop: 2 }}
-                          value={s.id && editedSets[s.id] ? editedSets[s.id].weight : String(s.weight_kg ?? 0)}
-                          onChangeText={v => { if (s.id) setEditedSets(prev => ({ ...prev, [s.id]: { ...prev[s.id], weight: v } })); }}
-                          keyboardType="decimal-pad"
-                          placeholder="0"
-                          placeholderTextColor={COLORS.text700}
-                        />
-                        <TextInput
-                          style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, height: 38, width: 62, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, lineHeight: 20, paddingTop: 2 }}
-                          value={s.id && editedSets[s.id] ? editedSets[s.id].reps : String(s.reps ?? 0)}
-                          onChangeText={v => { if (s.id) setEditedSets(prev => ({ ...prev, [s.id]: { ...prev[s.id], reps: v } })); }}
-                          keyboardType="number-pad"
-                          placeholder="0"
-                          placeholderTextColor={COLORS.text700}
-                        />
-                      </View>
-                    ))}
-                    <View style={{ paddingVertical: 11, borderTopWidth: 1, borderTopColor: COLORS.borderLight, alignItems: 'center' }}>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 2 }}>+ ADD SET</Text>
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-
-              {/* Footer */}
-              <View style={{ paddingTop: SPACING.md, paddingBottom: insets.bottom + SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.border, gap: SPACING.sm }}>
-                <TouchableOpacity
-                  onPress={handleSaveChanges}
-                  disabled={savingChanges}
-                  style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent, opacity: savingChanges ? 0.7 : 1 }}>
-                  {savingChanges
-                    ? <ActivityIndicator color={COLORS.bg} />
-                    : <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>{savedMsg ? 'SAVED ✓' : 'SAVE CHANGES'}</Text>}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => { setWorkoutModalVisible(false); navigation.navigate('Forge'); }}
-                  style={{ paddingVertical: 10, alignItems: 'center' }}>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text600 }}>Start New Session →</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -865,10 +758,4 @@ const s = StyleSheet.create({
 
   // Divider
   divider: { height: 1, backgroundColor: COLORS.borderLight },
-
-  // Modal
-  modalOverlay:{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.7)' },
-  modalSheet:  { backgroundColor: '#0c0b0a', borderTopWidth: 1, borderTopColor: COLORS.border, padding: SPACING.xl },
-  modalHandle: { width: 40, height: 4, backgroundColor: COLORS.text600, alignSelf: 'center', marginBottom: SPACING.lg },
-  modalTitle:  { fontFamily: FONTS.anton, fontSize: 32, color: COLORS.text100, textTransform: 'uppercase', lineHeight: 40, paddingTop: 2, marginBottom: SPACING.xs },
 });

@@ -10,11 +10,11 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BodyMapDual } from '../components/MuscleMap';
 import * as Haptics from 'expo-haptics';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { COLORS, FONTS } from '../constants/theme';
 import { MUSCLES, EXERCISE_LIBRARY } from '../constants/exercises';
 import {
-  useStartWorkout, useAddWorkoutExercise, useLogSet, useFinishWorkout, useWorkoutHistory, useTodayWorkout,
+  useStartWorkout, useAddWorkoutExercise, useLogSet, useFinishWorkout, useWorkoutHistory, useTodayWorkout, useUpdateSet,
 } from '../hooks/useWorkout';
 
 // ─── Domain ──────────────────────────────────────────────────────────────────
@@ -904,9 +904,129 @@ function SessionSelector({
   );
 }
 
+// ─── Workout Review View ──────────────────────────────────────────────────────
+function WorkoutReviewView({ workout, onClose }: { workout: any; onClose: () => void }) {
+  const { mutateAsync: updateSet } = useUpdateSet();
+  const [editedSets, setEditedSets] = useState<Record<string, { weight: string; reps: string }>>(() => {
+    const init: Record<string, { weight: string; reps: string }> = {};
+    for (const we of workout.workout_exercises ?? []) {
+      for (const s of we.sets ?? []) {
+        if (s.id) init[s.id] = { weight: String(s.weight_kg ?? 0), reps: String(s.reps ?? 0) };
+      }
+    }
+    return init;
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved]   = useState(false);
+
+  const date = workout.started_at
+    ? new Date(workout.started_at).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })
+    : '';
+  const totalVol = workout.total_volume_kg ?? 0;
+  const duration = workout.duration_seconds ? Math.round(workout.duration_seconds / 60) : null;
+
+  async function handleSave() {
+    setSaving(true);
+    for (const [setId, vals] of Object.entries(editedSets)) {
+      try { await updateSet({ setId, weightKg: Number(vals.weight) || 0, reps: Number(vals.reps) || 0 }); } catch {}
+    }
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  const exercises = [...(workout.workout_exercises ?? [])].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }} edges={['top','left','right']}>
+      {/* Header */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 2 }}>
+          <Text style={{ fontFamily: FONTS.anton, fontSize: 28, color: COLORS.text100, lineHeight: 36, paddingTop: 2 }}>FORGE</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5 }}>← BACK</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.orange300, textTransform: 'uppercase', letterSpacing: 1.2 }}>SESSION REVIEW</Text>
+      </View>
+
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 14, paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+          {/* Session meta */}
+          <View style={{ marginBottom: 16, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+            <Text style={{ fontFamily: FONTS.anton, fontSize: 32, color: COLORS.text100, textTransform: 'uppercase', lineHeight: 40, paddingTop: 2 }}>{workout.name || 'Workout'}</Text>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, marginTop: 4 }}>
+              {date}{duration ? ` · ${duration}m` : ''}{totalVol ? ` · ${Math.round(totalVol).toLocaleString()} kg·reps` : ''}
+            </Text>
+          </View>
+
+          {/* Exercise list */}
+          {exercises.map((we: any, i: number) => (
+            <View key={we.id} style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 12 }}>
+              {/* Exercise header */}
+              <View style={{ paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border, flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 }}>{String(i + 1).padStart(2, '0')}</Text>
+                <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 24, paddingTop: 2 }}>{(we.notes ?? '').toUpperCase()}</Text>
+              </View>
+              {/* Column headers */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(28,25,23,0.5)', gap: 8 }}>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 24, textAlign: 'center', textTransform: 'uppercase' }}>SET</Text>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 62, textAlign: 'center', textTransform: 'uppercase' }}>KG</Text>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 62, textAlign: 'center', textTransform: 'uppercase' }}>REPS</Text>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, flex: 1, textAlign: 'right', textTransform: 'uppercase' }}>VOL</Text>
+              </View>
+              {/* Set rows */}
+              {[...(we.sets ?? [])].sort((a: any, b: any) => a.set_number - b.set_number).map((s: any, si: number) => {
+                const w = Number(editedSets[s.id]?.weight ?? s.weight_kg ?? 0);
+                const r = Number(editedSets[s.id]?.reps   ?? s.reps       ?? 0);
+                return (
+                  <View key={s.id ?? si} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 4, gap: 8, borderTopWidth: 1, borderTopColor: COLORS.borderLight, minHeight: 44 }}>
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text600, width: 24, textAlign: 'center' }}>{si + 1}</Text>
+                    <TextInput
+                      style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, height: 38, width: 62, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, lineHeight: 20, paddingTop: 2 }}
+                      value={editedSets[s.id]?.weight ?? String(s.weight_kg ?? 0)}
+                      onChangeText={v => { if (s.id) setEditedSets(p => ({ ...p, [s.id]: { ...p[s.id], weight: v } })); }}
+                      keyboardType="decimal-pad"
+                      placeholderTextColor={COLORS.text700}
+                    />
+                    <TextInput
+                      style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.text100, height: 38, width: 62, textAlign: 'center', backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, lineHeight: 20, paddingTop: 2 }}
+                      value={editedSets[s.id]?.reps ?? String(s.reps ?? 0)}
+                      onChangeText={v => { if (s.id) setEditedSets(p => ({ ...p, [s.id]: { ...p[s.id], reps: v } })); }}
+                      keyboardType="number-pad"
+                      placeholderTextColor={COLORS.text700}
+                    />
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.orange400, flex: 1, textAlign: 'right' }}>{fmt0(w * r)}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          ))}
+        </ScrollView>
+
+        {/* Footer */}
+        <View style={{ paddingHorizontal: 12, paddingBottom: 16, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 8 }}>
+          <TouchableOpacity
+            onPress={handleSave}
+            disabled={saving}
+            style={{ paddingVertical: 16, alignItems: 'center', backgroundColor: COLORS.accent, opacity: saving ? 0.7 : 1 }}>
+            {saving
+              ? <ActivityIndicator color={COLORS.bg} />
+              : <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, letterSpacing: 2 }}>{saved ? 'SAVED ✓' : 'SAVE CHANGES'}</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={{ paddingVertical: 10, alignItems: 'center' }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text600 }}>← Back to Forge</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ForgeScreen() {
   const navigation = useNavigation<any>();
+  const route      = useRoute<any>();
 
   const [workout, setWorkout]             = useState<WorkoutEntry[]>([]);
   const [showSelector, setShowSelector]   = useState(true);
@@ -933,6 +1053,14 @@ export default function ForgeScreen() {
   const { mutateAsync: finishWorkout, isPending: finishing  } = useFinishWorkout();
   const { data: historyData }                                = useWorkoutHistory();
   const { data: todayWorkout }                               = useTodayWorkout();
+
+  // Resolve workout to review from nav param — check todayWorkout first, then history
+  const reviewWorkoutId: string | undefined = route.params?.reviewWorkoutId;
+  const reviewWorkout = reviewWorkoutId
+    ? (todayWorkout?.id === reviewWorkoutId
+        ? todayWorkout
+        : (historyData ?? []).find((w: any) => w.id === reviewWorkoutId))
+    : null;
 
   // Build last-session map: exercise name (lower) → { sets, totalVol }
   const lastSessionMap = useMemo(() => {
@@ -1179,6 +1307,16 @@ export default function ForgeScreen() {
     } catch (e: any) {
       Alert.alert('Save Failed', e?.message ?? 'Unknown error. Keep this sheet open and try again.');
     }
+  }
+
+  // If navigated here with a specific workout ID, show full review view
+  if (reviewWorkout) {
+    return (
+      <WorkoutReviewView
+        workout={reviewWorkout}
+        onClose={() => navigation.setParams({ reviewWorkoutId: undefined })}
+      />
+    );
   }
 
   return (
