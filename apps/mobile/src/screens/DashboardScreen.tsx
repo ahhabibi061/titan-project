@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTodayWorkout, useWeeklyWorkouts, useWeeklySets, useActivityFeed, useWeeklyMuscleVolumes } from '../hooks/useWorkout';
+import { useBiometricEntries } from '../hooks/useVault';
 import {
   View,
   Text,
@@ -282,12 +283,18 @@ export default function DashboardScreen() {
   const [bio, setBio]                 = useState({ current: 0, weekAgo: 0, goal: 0, sparkline: [] as number[] });
   const [weekly, setWeekly]           = useState({ totalSets: 0, avgKcal: 0, avgProtein: 0, streak: 0 });
   // Real-time hooks
-  const { data: todayWorkout }   = useTodayWorkout();
-  const { data: weeklyWorkouts } = useWeeklyWorkouts();
-  const { data: weeklySets }     = useWeeklySets();
-  const { data: activityFeed }   = useActivityFeed();
-  const { data: muscleVolumes }  = useWeeklyMuscleVolumes();
+  const { data: todayWorkout }      = useTodayWorkout();
+  const { data: weeklyWorkouts }    = useWeeklyWorkouts();
+  const { data: weeklySets }        = useWeeklySets();
+  const { data: activityFeed }      = useActivityFeed();
+  const { data: muscleVolumes }     = useWeeklyMuscleVolumes();
+  const { data: biometricEntries = [] } = useBiometricEntries();
   const qc = useQueryClient();
+
+  // Derive bio values from biometric-entries query (auto-refreshes when Vault logs weight)
+  const bioCurrent   = biometricEntries[0]?.weight_kg ?? 0;
+  const bioWeekAgo   = biometricEntries.length > 1 ? biometricEntries[biometricEntries.length - 1].weight_kg : (biometricEntries[0]?.weight_kg ?? 0);
+  const bioSparkline = [...biometricEntries].reverse().slice(-8).map(r => r.weight_kg);
 
   const muscleVolumesData = muscleVolumes ?? {} as Record<string, number>;
   const muscleMaxVol = Math.max(1, ...Object.values(muscleVolumesData));
@@ -299,6 +306,7 @@ export default function DashboardScreen() {
     qc.invalidateQueries({ queryKey: ['weekly-sets'] });
     qc.invalidateQueries({ queryKey: ['activity-feed'] });
     qc.invalidateQueries({ queryKey: ['muscle-volumes'] });
+    qc.invalidateQueries({ queryKey: ['biometric-entries'] });
   }, [qc]));
 
   // Real-time activity feed subscription
@@ -376,19 +384,6 @@ export default function DashboardScreen() {
         setConsumed({ ...sum, mealsLogged: nlogs.length });
       }
 
-      // Latest biometric
-      const { data: brows } = await supabase
-        .from('biometric_entries')
-        .select('weight_kg, logged_at')
-        .eq('user_id', user.id)
-        .order('logged_at', { ascending: false })
-        .limit(8);
-      if (brows?.length) {
-        const sparkline = [...brows].reverse().map(r => r.weight_kg);
-        const weekAgo   = brows.length > 1 ? brows[brows.length - 1].weight_kg : brows[0].weight_kg;
-        setBio(b => ({ ...b, current: brows[0].weight_kg, weekAgo, sparkline }));
-      }
-
       // Weekly sets count is handled by useWeeklySets() hook above
     })();
   }, []);
@@ -396,7 +391,7 @@ export default function DashboardScreen() {
   const coach = null; // populated once Oracle module is wired up
 
   const remaining   = targets.kcal - consumed.kcal;
-  const weightDelta = bio.current && bio.weekAgo ? bio.current - bio.weekAgo : 0;
+  const weightDelta = bioCurrent && bioWeekAgo ? bioCurrent - bioWeekAgo : 0;
   const initials    = getInitials(displayName || 'A');
 
   return (
@@ -435,7 +430,7 @@ export default function DashboardScreen() {
           {/* Body Weight — top-left */}
           <View style={[s.statCard, s.statCardTL]}>
             <Text style={s.statLabel}>Weight</Text>
-            <Text style={s.statValue}>{bio.current}<Text style={s.statUnit}> kg</Text></Text>
+            <Text style={s.statValue}>{bioCurrent || '—'}<Text style={s.statUnit}> kg</Text></Text>
             <Text style={s.statSub}>{weightDelta < 0 ? '↓' : '↑'} {Math.abs(weightDelta).toFixed(1)} kg / 7d</Text>
           </View>
 
@@ -601,17 +596,17 @@ export default function DashboardScreen() {
             <Text style={s.cardLabel}>Body Comp</Text>
             <Text style={s.cardTag}>→ VAULT</Text>
           </View>
-          <Text style={s.bigWeight}>{bio.current}<Text style={[s.statUnit, { fontSize: 22 }]}> kg</Text></Text>
+          <Text style={s.bigWeight}>{bioCurrent || '—'}<Text style={[s.statUnit, { fontSize: 22 }]}> kg</Text></Text>
           <View style={s.weightDeltaRow}>
             <Text style={[s.metaText, { color: COLORS.orange300 }]}>{weightDelta < 0 ? '↓' : '↑'} {Math.abs(weightDelta).toFixed(1)} kg</Text>
             <Text style={[s.metaText, { marginLeft: SPACING.sm }]}>last 7d</Text>
           </View>
-          <View style={{ height: 30, marginVertical: SPACING.md }}><MiniSparkline values={bio.sparkline} /></View>
+          <View style={{ height: 30, marginVertical: SPACING.md }}><MiniSparkline values={bioSparkline} /></View>
           <View style={s.divider} />
           <View style={s.weightGoalRow}>
             <Text style={s.goalLabel}>Goal</Text>
-            <Text style={[s.metaText, { color: COLORS.orange300 }]}>{bio.goal} kg</Text>
-            <Text style={s.goalSub}>{Math.abs(bio.current - bio.goal).toFixed(1)} to go</Text>
+            <Text style={[s.metaText, { color: COLORS.orange300 }]}>{bio.goal ? `${bio.goal} kg` : '—'}</Text>
+            {bio.goal && bioCurrent ? <Text style={s.goalSub}>{Math.abs(bioCurrent - bio.goal).toFixed(1)} to go</Text> : null}
           </View>
         </View>
 

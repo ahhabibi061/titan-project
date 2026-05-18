@@ -8,6 +8,7 @@ import DashboardScreen from '../screens/DashboardScreen';
 import PlaceholderScreen from '../screens/PlaceholderScreen';
 import ForgeScreen from '../screens/ForgeScreen';
 import SessionReviewScreen from '../screens/SessionReviewScreen';
+import VaultScreen from '../screens/VaultScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -16,7 +17,7 @@ const TABS = [
   { name: 'Home',     label: 'Home',     icon: 'home',         Screen: () => <DashboardScreen /> },
   { name: 'Forge',    label: 'Forge',    icon: 'barbell',      Screen: () => <ForgeScreen /> },
   { name: 'Sentinel', label: 'Sentinel', icon: 'eye',          Screen: () => <PlaceholderScreen name="Sentinel" /> },
-  { name: 'Vault',    label: 'Vault',    icon: 'analytics',    Screen: () => <PlaceholderScreen name="Vault" /> },
+  { name: 'Vault',    label: 'Vault',    icon: 'lock-closed',  Screen: () => <VaultScreen /> },
   { name: 'Oracle',   label: 'Oracle',   icon: 'sparkles',     Screen: () => <PlaceholderScreen name="Oracle" /> },
 ] as const;
 
