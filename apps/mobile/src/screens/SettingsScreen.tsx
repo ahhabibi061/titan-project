@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput, Switch,
   StyleSheet, Alert, Linking, ActivityIndicator,
@@ -41,6 +41,24 @@ const DEFAULT_SETTINGS = {
   energy_unit: 'kcal', volume_unit: 'ml', distance_unit: 'km',
   theme: 'dark',
 };
+
+// ─── Unit conversion ─────────────────────────────────────────────────────────
+
+const KG_TO_LBS = 2.20462;
+const CM_TO_IN  = 0.393701;
+
+function toDisplayWeight(kg: number, unit: string) {
+  return unit === 'lbs' ? Math.round(kg * KG_TO_LBS * 10) / 10 : Math.round(kg * 10) / 10;
+}
+function toDisplayHeight(cm: number, unit: string) {
+  return unit === 'in' ? Math.round(cm * CM_TO_IN * 10) / 10 : Math.round(cm * 10) / 10;
+}
+function toBaseWeight(val: number, unit: string) {
+  return unit === 'lbs' ? val / KG_TO_LBS : val;
+}
+function toBaseHeight(val: number, unit: string) {
+  return unit === 'in' ? val / CM_TO_IN : val;
+}
 
 function calcMacros({ weightKg, heightCm, age, sex, activity, goal }: any) {
   if (!weightKg || !heightCm || !age) return null;
@@ -198,6 +216,10 @@ export default function SettingsScreen() {
   const [unitSaving,  setUnitSaving] = useState(false);
   const [unitSaved,   setUnitSaved]  = useState(false);
 
+  // Track previous unit so we can convert display values when unit toggles
+  const prevWeightUnit = useRef('kg');
+  const prevHeightUnit = useRef('cm');
+
   // ── Account
   const [signOutLoading,   setSignOutLoading]   = useState(false);
 
@@ -214,13 +236,27 @@ export default function SettingsScreen() {
     catch { return Intl.DateTimeFormat().resolvedOptions().timeZone; }
   });
 
+  // ── Convert biometric display values when weight unit changes
+  useEffect(() => {
+    const prev = prevWeightUnit.current;
+    prevWeightUnit.current = unitDraft.weight_unit;
+    if (prev === unitDraft.weight_unit) return;
+    setWeight(w => { const n = parseFloat(w); return n ? String(toDisplayWeight(toBaseWeight(n, prev), unitDraft.weight_unit)) : w; });
+    setGoalWeight(g => { const n = parseFloat(g); return n ? String(toDisplayWeight(toBaseWeight(n, prev), unitDraft.weight_unit)) : g; });
+  }, [unitDraft.weight_unit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Convert biometric display values when height unit changes
+  useEffect(() => {
+    const prev = prevHeightUnit.current;
+    prevHeightUnit.current = unitDraft.height_unit;
+    if (prev === unitDraft.height_unit) return;
+    setHeight(h => { const n = parseFloat(h); return n ? String(toDisplayHeight(toBaseHeight(n, prev), unitDraft.height_unit)) : h; });
+  }, [unitDraft.height_unit]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Populate from profile
   useEffect(() => {
     if (!profile) return;
     setDisplayName(profile.display_name ?? '');
-    setHeight(String(profile.height_cm ?? ''));
-    setWeight(String(profile.weight_kg ?? ''));
-    setGoalWeight(String(profile.goal_weight_kg ?? ''));
     setAge(String(profile.age ?? ''));
     setSex(profile.sex ?? 'male');
     setActivity((profile as any).activity_level ?? 'moderate');
@@ -228,13 +264,18 @@ export default function SettingsScreen() {
     const merged = { ...DEFAULT_SETTINGS, ...(profile.settings ?? {}) };
     setPrefs(merged as any);
     setMacroMode((merged as any).macro_mode ?? 'auto');
+    const wUnit = (merged as any).weight_unit ?? 'kg';
+    const hUnit = (merged as any).height_unit ?? 'cm';
     setUnitDraft({
-      weight_unit:   (merged as any).weight_unit   ?? 'kg',
-      height_unit:   (merged as any).height_unit   ?? 'cm',
+      weight_unit: wUnit, height_unit: hUnit,
       energy_unit:   (merged as any).energy_unit   ?? 'kcal',
       volume_unit:   (merged as any).volume_unit   ?? 'ml',
       distance_unit: (merged as any).distance_unit ?? 'km',
     });
+    // Set display values in the user's saved unit
+    setWeight(profile.weight_kg     ? String(toDisplayWeight(profile.weight_kg,     wUnit)) : '');
+    setHeight(profile.height_cm     ? String(toDisplayHeight(profile.height_cm,     hUnit)) : '');
+    setGoalWeight(profile.goal_weight_kg ? String(toDisplayWeight(profile.goal_weight_kg, wUnit)) : '');
     const cm = profile.current_macros;
     if (cm && cm.kcal > 0) {
       setCustomKcal(String(cm.kcal));
@@ -252,11 +293,11 @@ export default function SettingsScreen() {
   }, []);
 
   const macros = useMemo(() => calcMacros({
-    weightKg: parseFloat(weight) || 0,
-    heightCm: parseFloat(height) || 0,
-    age:      parseFloat(age)    || 0,
+    weightKg: parseFloat(weight) ? toBaseWeight(parseFloat(weight), unitDraft.weight_unit) : 0,
+    heightCm: parseFloat(height) ? toBaseHeight(parseFloat(height), unitDraft.height_unit) : 0,
+    age:      parseFloat(age) || 0,
     sex, activity, goal,
-  }), [weight, height, age, sex, activity, goal]);
+  }), [weight, height, age, sex, activity, goal, unitDraft.weight_unit, unitDraft.height_unit]);
 
   const customGrams = useMemo(() => {
     const kcal = parseFloat(customKcal) || 0;
@@ -285,11 +326,14 @@ export default function SettingsScreen() {
   const saveBiometrics = async () => {
     setBioSaving(true); setBioStatus({});
     try {
+      const weightKg     = parseFloat(weight)     ? toBaseWeight(parseFloat(weight),     unitDraft.weight_unit) : null;
+      const heightCm     = parseFloat(height)     ? toBaseHeight(parseFloat(height),     unitDraft.height_unit) : null;
+      const goalWeightKg = parseFloat(goalWeight) ? toBaseWeight(parseFloat(goalWeight), unitDraft.weight_unit) : null;
       await updateProfile({
-        height_cm:      parseFloat(height)     || null,
-        weight_kg:      parseFloat(weight)     || null,
-        goal_weight_kg: parseFloat(goalWeight) || null,
-        age:            parseInt(age, 10)      || null,
+        height_cm:      heightCm     || null,
+        weight_kg:      weightKg     || null,
+        goal_weight_kg: goalWeightKg || null,
+        age:            parseInt(age, 10) || null,
         sex, goal,
         activity_level: activity,
         current_macros: macros ?? undefined,
@@ -451,17 +495,17 @@ export default function SettingsScreen() {
             <View style={s.row2}>
               <View style={{ flex: 1 }}>
                 <FieldLabel>Height</FieldLabel>
-                <NumericInput value={height} onChange={setHeight} unit="cm" />
+                <NumericInput value={height} onChange={setHeight} unit={unitDraft.height_unit} />
               </View>
               <View style={{ flex: 1 }}>
                 <FieldLabel>Weight</FieldLabel>
-                <NumericInput value={weight} onChange={setWeight} unit="kg" />
+                <NumericInput value={weight} onChange={setWeight} unit={unitDraft.weight_unit} />
               </View>
             </View>
             <View style={[s.row2, { marginTop: 10 }]}>
               <View style={{ flex: 1 }}>
                 <FieldLabel>Goal Weight</FieldLabel>
-                <NumericInput value={goalWeight} onChange={setGoalWeight} unit="kg" />
+                <NumericInput value={goalWeight} onChange={setGoalWeight} unit={unitDraft.weight_unit} />
               </View>
               <View style={{ flex: 1 }}>
                 <FieldLabel>Age</FieldLabel>
