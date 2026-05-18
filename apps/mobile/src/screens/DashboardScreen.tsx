@@ -475,7 +475,7 @@ export default function DashboardScreen() {
           <View style={s.macrosTop}>
             <CalorieRing consumed={consumed.kcal} target={targets.kcal} />
             <View style={s.macrosSide}>
-              <Text style={[s.statValue, { color: COLORS.orange300, fontSize: 28 }]}>{fmt0(remaining)}</Text>
+              <Text style={[s.statValue, { color: COLORS.orange300, fontSize: 28, lineHeight: 38, paddingTop: 6 }]}>{fmt0(remaining)}</Text>
               <Text style={s.statLabel}>KCAL REMAINING</Text>
               <Text style={[s.statSub, { marginTop: 4 }]}>{consumed.mealsLogged} meals logged</Text>
             </View>
@@ -501,6 +501,9 @@ export default function DashboardScreen() {
             <Text style={s.secondaryBtnText}>Scan Meal</Text>
           </TouchableOpacity>
         </View>
+
+        {/* ── MUSCLE MAP ─────────────────────────────────────────────── */}
+        <BodyMapDual recoveryMap={MOCK_RECOVERY_MAP} growthMap={MOCK_GROWTH_MAP} mode={mapMode} setMode={setMapMode} />
 
         {/* ── 4. TODAY'S WORKOUT CARD ────────────────────────────────── */}
         <View style={s.card}>
@@ -544,9 +547,6 @@ export default function DashboardScreen() {
             <Text style={[s.workoutMeta, { color: COLORS.text600, marginTop: 8 }]}>No workout logged today. Head to Forge to start one.</Text>
           )}
         </View>
-
-        {/* ── FIX 2: MUSCLE MAP ──────────────────────────────────────── */}
-        <BodyMapDual recoveryMap={MOCK_RECOVERY_MAP} growthMap={MOCK_GROWTH_MAP} mode={mapMode} setMode={setMapMode} />
 
         {/* ── 7. THIS WEEK GRID ──────────────────────────────────────── */}
         <View style={s.card}>
@@ -646,15 +646,15 @@ const s = StyleSheet.create({
 
   // FIX 4: 2×2 stat grid
   statGrid:   { borderWidth: 1, borderColor: COLORS.border, flexDirection: 'row', flexWrap: 'wrap', marginBottom: SPACING.xl },
-  statCard:   { width: '50%', paddingHorizontal: SPACING.md, paddingVertical: 10, backgroundColor: COLORS.bgCard },
+  statCard:   { width: '50%', paddingHorizontal: SPACING.md, paddingVertical: 7, backgroundColor: COLORS.bgCard },
   statCardTL: { borderRightWidth: 1, borderBottomWidth: 1, borderColor: COLORS.border },
   statCardTR: { borderBottomWidth: 1, borderColor: COLORS.border },
   statCardBL: { borderRightWidth: 1, borderColor: COLORS.border },
   statCardBR: {},
-  statLabel:  { fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.8, marginBottom: 4 },
-  statValue:  { fontFamily: FONTS.anton, fontSize: 24, color: COLORS.text100, lineHeight: 30, paddingTop: 2 },
-  statUnit:   { fontFamily: FONTS.anton, fontSize: 10, color: COLORS.text500 },
-  statSub:    { fontFamily: FONTS.mono, fontSize: 8, color: COLORS.orange300, marginTop: 2 },
+  statLabel:  { fontFamily: FONTS.mono, fontSize: 6, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.8, marginBottom: 3 },
+  statValue:  { fontFamily: FONTS.anton, fontSize: 17, color: COLORS.text100, lineHeight: 21, paddingTop: 1 },
+  statUnit:   { fontFamily: FONTS.anton, fontSize: 7, color: COLORS.text500 },
+  statSub:    { fontFamily: FONTS.mono, fontSize: 6, color: COLORS.orange300, marginTop: 1 },
 
   // Coach banner
   coachBanner:   { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, borderWidth: 1, borderColor: COLORS.accentBorder, backgroundColor: 'rgba(237,122,42,0.07)', padding: SPACING.md, marginBottom: SPACING.xl },
