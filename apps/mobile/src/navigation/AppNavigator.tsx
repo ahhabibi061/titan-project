@@ -11,6 +11,7 @@ import SentinelScreen from '../screens/SentinelScreen';
 import SessionReviewScreen from '../screens/SessionReviewScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import VaultScreen from '../screens/VaultScreen';
+import CodexScreen from '../screens/CodexScreen';
 
 const Tab   = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -20,6 +21,7 @@ const TABS = [
   { name: 'Forge',    label: 'Forge',    icon: 'barbell',      Screen: () => <ForgeScreen /> },
   { name: 'Sentinel', label: 'Sentinel', icon: 'eye',          Screen: () => <SentinelScreen /> },
   { name: 'Vault',    label: 'Vault',    icon: 'lock-closed',  Screen: () => <VaultScreen /> },
+  { name: 'Codex',    label: 'Codex',    icon: 'book-outline', Screen: () => <CodexScreen /> },
   { name: 'Oracle',   label: 'Oracle',   icon: 'sparkles',     Screen: () => <PlaceholderScreen name="Oracle" /> },
 ] as const;
 
