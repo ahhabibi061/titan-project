@@ -437,70 +437,88 @@ const cal = StyleSheet.create({
 // ── BODY COMPOSITION PANEL ────────────────────────────────────────────────────
 
 function BodyCompositionPanel({ entries }: { entries: BiometricEntry[] }) {
-  const withFat = entries.filter(e => e.body_fat_pct != null);
-  if (withFat.length < 1) {
+  if (entries.length < 2) {
     return (
       <View style={bc.empty}>
-        <Text style={bc.emptyText}>Log body fat % with a weigh-in to unlock composition tracking</Text>
+        <Text style={bc.emptyText}>Log at least 2 weigh-ins to see body composition</Text>
       </View>
     );
   }
-  const latest  = withFat[0];
-  const oldest  = withFat[withFat.length - 1];
-  const latFat  = latest.weight_kg * ((latest.body_fat_pct ?? 0) / 100);
-  const latLean = latest.weight_kg - latFat;
-  const oldFat  = oldest.weight_kg * ((oldest.body_fat_pct ?? 0) / 100);
-  const oldLean = oldest.weight_kg - oldFat;
-  const maxW    = Math.max(latest.weight_kg, oldest.weight_kg);
-  const fatDelta  = oldFat  - latFat;
-  const leanDelta = oldLean - latLean;
+
+  const asc      = [...entries].reverse();
+  const first    = asc[0];
+  const last     = asc[asc.length - 1];
+
+  const firstFat  = first.weight_kg * ((first.body_fat_pct ?? 0) / 100);
+  const firstLean = first.weight_kg - firstFat;
+  const lastFat   = last.weight_kg  * ((last.body_fat_pct  ?? 0) / 100);
+  const lastLean  = last.weight_kg  - lastFat;
+  const fatLost   = firstFat  - lastFat;
+  const leanLost  = firstLean - lastLean;
+  const max       = Math.max(first.weight_kg, last.weight_kg);
 
   const BAR_MAX = SW - 32 - 32;
 
-  function Bar({ lean, fat, total, label, date }: { lean: number; fat: number; total: number; label: string; date: string }) {
-    const barW = BAR_MAX * (total / maxW);
+  function Bar({ lean, fat, total, label, date, hasBf }: {
+    lean: number; fat: number; total: number;
+    label: string; date: string; hasBf: boolean;
+  }) {
+    const barW = BAR_MAX * (total / max);
     return (
-      <View style={{ marginBottom: SPACING.md }}>
+      <View>
         <View style={bc.barHeaderRow}>
           <Text style={bc.barLabel}>{label}</Text>
           <Text style={bc.barDate}>{date}</Text>
         </View>
-        <View style={{ flexDirection: 'row', width: barW, height: 28 }}>
-          <View style={[bc.leanBar, { flex: lean / total }]}>
-            <Text style={bc.barText}>{fmt1(lean)}kg</Text>
+        {hasBf ? (
+          <View style={{ flexDirection: 'row', width: barW, height: 28 }}>
+            <View style={[bc.leanSeg, { flex: lean / total }]}>
+              <Text style={bc.segText}>{fmt1(lean)} kg</Text>
+            </View>
+            <View style={[bc.fatSeg, { flex: fat / total }]}>
+              <Text style={bc.segText}>{fmt1(fat)} kg</Text>
+            </View>
           </View>
-          <View style={[bc.fatBar, { flex: fat / total }]}>
-            <Text style={bc.barText}>{fmt1(fat)}kg</Text>
+        ) : (
+          <View style={[bc.noFatBar, { width: barW }]}>
+            <Text style={bc.noFatText}>No body fat % logged — tap the day in calendar to add</Text>
           </View>
-        </View>
+        )}
       </View>
     );
   }
 
   return (
     <View>
-      <Bar lean={latLean} fat={latFat} total={latest.weight_kg} label="Latest"      date={fmtDate(latest.logged_at)} />
-      {withFat.length >= 2 && (
-        <Bar lean={oldLean} fat={oldFat} total={oldest.weight_kg} label="First entry" date={fmtDate(oldest.logged_at)} />
-      )}
-      {withFat.length >= 2 && (
-        <View style={bc.deltaRow}>
-          <View>
-            <Text style={bc.deltaLabel}>Fat change</Text>
-            <Text style={[bc.deltaValue, { color: COLORS.orange400 }]}>
-              {fatDelta >= 0 ? '−' : '+'}{fmt1(Math.abs(fatDelta))}<Text style={bc.deltaUnit}>kg</Text>
-            </Text>
-          </View>
-          <View>
-            <Text style={bc.deltaLabel}>Lean change</Text>
-            <Text style={[bc.deltaValue, { color: leanDelta > 0.5 ? COLORS.red400 : COLORS.text300 }]}>
-              {leanDelta > 0 ? '−' : '+'}{fmt1(Math.abs(leanDelta))}<Text style={bc.deltaUnit}>kg</Text>
-            </Text>
-          </View>
+      <Bar
+        lean={firstLean} fat={firstFat} total={first.weight_kg}
+        label="CUT START" date={fmtDate(first.logged_at)}
+        hasBf={first.body_fat_pct != null}
+      />
+      <View style={{ height: SPACING.lg }} />
+      <Bar
+        lean={lastLean} fat={lastFat} total={last.weight_kg}
+        label="TODAY" date={fmtDate(last.logged_at)}
+        hasBf={last.body_fat_pct != null}
+      />
+
+      <View style={bc.summaryRow}>
+        <View>
+          <Text style={bc.summaryLabel}>Fat Lost</Text>
+          <Text style={[bc.summaryValue, { color: fatLost >= 0 ? COLORS.orange400 : COLORS.red400 }]}>
+            {fatLost >= 0 ? '−' : '+'}{fmt1(Math.abs(fatLost))}<Text style={bc.summaryUnit}> kg</Text>
+          </Text>
         </View>
-      )}
+        <View>
+          <Text style={bc.summaryLabel}>Lean Change</Text>
+          <Text style={[bc.summaryValue, { color: leanLost > 0.5 ? COLORS.red400 : COLORS.text300 }]}>
+            {leanLost > 0 ? '−' : '+'}{fmt1(Math.abs(leanLost))}<Text style={bc.summaryUnit}> kg</Text>
+          </Text>
+        </View>
+      </View>
+
       <View style={bc.legendRow}>
-        <View style={bc.legendItem}><View style={[bc.legendSwatch, { backgroundColor: '#a8a29e' }]} /><Text style={bc.legendText}>Lean</Text></View>
+        <View style={bc.legendItem}><View style={[bc.legendSwatch, { backgroundColor: COLORS.text400 }]} /><Text style={bc.legendText}>Lean</Text></View>
         <View style={bc.legendItem}><View style={[bc.legendSwatch, { backgroundColor: COLORS.orange500 }]} /><Text style={bc.legendText}>Fat</Text></View>
       </View>
     </View>
@@ -511,15 +529,17 @@ const bc = StyleSheet.create({
   empty:        { paddingVertical: SPACING.xl, alignItems: 'center' },
   emptyText:    { fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1, textAlign: 'center' },
   barHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 5 },
-  barLabel:     { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.5 },
-  barDate:      { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 },
-  leanBar:      { backgroundColor: '#a8a29e', alignItems: 'flex-end', justifyContent: 'center', paddingRight: 5 },
-  fatBar:       { backgroundColor: COLORS.orange500, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 5 },
-  barText:      { fontFamily: FONTS.mono, fontSize: 9, color: '#1c1917' },
-  deltaRow:     { flexDirection: 'row', justifyContent: 'space-between', paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.border, marginTop: SPACING.md },
-  deltaLabel:   { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 4 },
-  deltaValue:   { fontFamily: FONTS.anton, fontSize: 26, lineHeight: 32 },
-  deltaUnit:    { fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text500 },
+  barLabel:     { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.5 },
+  barDate:      { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 },
+  leanSeg:      { backgroundColor: COLORS.text400, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 5, overflow: 'hidden' },
+  fatSeg:       { backgroundColor: COLORS.orange500, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 5, overflow: 'hidden' },
+  segText:      { fontFamily: FONTS.mono, fontSize: 10, color: '#1c1917' },
+  noFatBar:     { height: 28, backgroundColor: 'rgba(41,37,36,0.4)', justifyContent: 'center', paddingHorizontal: SPACING.sm },
+  noFatText:    { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 },
+  summaryRow:   { flexDirection: 'row', justifyContent: 'space-between', paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.border, marginTop: SPACING.lg },
+  summaryLabel: { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 4 },
+  summaryValue: { fontFamily: FONTS.anton, fontSize: 24, lineHeight: 30 },
+  summaryUnit:  { fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text500 },
   legendRow:    { flexDirection: 'row', gap: SPACING.lg, marginTop: SPACING.md },
   legendItem:   { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendSwatch: { width: 12, height: 12 },
