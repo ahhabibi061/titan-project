@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   Modal, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView,
-  Platform, FlatList, Keyboard, Dimensions,
+  Platform, FlatList, Keyboard, Dimensions, Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, G, Path } from 'react-native-svg';
@@ -49,8 +49,39 @@ const GOAL_LABELS: Record<string, string> = {
 const WATER_QUICK = [250, 500, 750, 1000];
 const WATER_TARGET_ML = 2500;
 const DAY_LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const WEEK_DAY_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
                      'July', 'August', 'September', 'October', 'November', 'December'];
+
+type MacroKey = 'kcal' | 'protein' | 'carbs' | 'fat';
+
+const MACRO_SHEET_LABELS: Record<MacroKey, string> = {
+  kcal:    'CALORIE BREAKDOWN',
+  protein: 'PROTEIN BREAKDOWN',
+  carbs:   'CARBS BREAKDOWN',
+  fat:     'FAT BREAKDOWN',
+};
+
+const SOURCE_BADGE: Record<string, string> = {
+  manual:     'MANUAL',
+  vision_api: 'SCAN',
+  barcode:    'BARCODE',
+};
+
+const MICRO_CONFIG = [
+  { key: 'sodium_mg',       label: 'SODIUM',      unit: 'mg', rdv: 2300 },
+  { key: 'potassium_mg',    label: 'POTASSIUM',   unit: 'mg', rdv: 3500 },
+  { key: 'calcium_mg',      label: 'CALCIUM',     unit: 'mg', rdv: 1000 },
+  { key: 'iron_mg',         label: 'IRON',        unit: 'mg', rdv: 18   },
+  { key: 'vitamin_c_mg',    label: 'VIT. C',      unit: 'mg', rdv: 90   },
+  { key: 'vitamin_d_iu',    label: 'VIT. D',      unit: 'IU', rdv: 600  },
+  { key: 'magnesium_mg',    label: 'MAGNESIUM',   unit: 'mg', rdv: 420  },
+  { key: 'zinc_mg',         label: 'ZINC',        unit: 'mg', rdv: 11   },
+  { key: 'saturated_fat_g', label: 'SAT. FAT',    unit: 'g',  rdv: 20   },
+  { key: 'sugar_g',         label: 'SUGAR',       unit: 'g',  rdv: 50   },
+  { key: 'cholesterol_mg',  label: 'CHOLESTEROL', unit: 'mg', rdv: 300  },
+] as const;
+type MicroKey = typeof MICRO_CONFIG[number]['key'];
 
 // ── Date helpers ───────────────────────────────────────────────────────────
 
@@ -95,7 +126,7 @@ function CrownIcon({ size = 12, color = '#fbbf24' }: { size?: number; color?: st
 
 // ── CalorieRing ────────────────────────────────────────────────────────────
 
-function CalorieRing({ consumed, target }: { consumed: number; target: number }) {
+function CalorieRing({ consumed, target, onPress }: { consumed: number; target: number; onPress?: () => void }) {
   const r = 54;
   const cx = 68; const cy = 68;
   const circ = 2 * Math.PI * r;
@@ -105,7 +136,7 @@ function CalorieRing({ consumed, target }: { consumed: number; target: number })
   const over = consumed > target;
 
   return (
-    <View style={{ alignItems: 'center' }}>
+    <TouchableOpacity activeOpacity={onPress ? 0.7 : 1} onPress={onPress} style={{ alignItems: 'center' }}>
       <Svg width={136} height={136}>
         <G rotation="-90" origin={`${cx}, ${cy}`}>
           <Circle cx={cx} cy={cy} r={r} stroke="rgba(41,37,36,0.5)" strokeWidth={7} fill="none" />
@@ -131,18 +162,18 @@ function CalorieRing({ consumed, target }: { consumed: number; target: number })
           {over ? `+${consumed - target} over` : `${remaining} left`}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 // ── MacroBar ───────────────────────────────────────────────────────────────
 
-function MacroBar({ label, consumed, target, color }: {
-  label: string; consumed: number; target: number; color: string;
+function MacroBar({ label, consumed, target, color, onPress }: {
+  label: string; consumed: number; target: number; color: string; onPress?: () => void;
 }) {
   const pct = Math.min(consumed / Math.max(target, 1), 1);
   return (
-    <View style={{ marginBottom: 8 }}>
+    <TouchableOpacity activeOpacity={onPress ? 0.65 : 1} onPress={onPress} style={{ marginBottom: 8 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
         <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, letterSpacing: 1 }}>
           {label}
@@ -154,7 +185,7 @@ function MacroBar({ label, consumed, target, color }: {
       <View style={{ height: 4, backgroundColor: 'rgba(41,37,36,0.5)', borderRadius: 2 }}>
         <View style={{ height: 4, width: `${pct * 100}%` as any, backgroundColor: color, borderRadius: 2 }} />
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -166,6 +197,293 @@ function InfoPill({ label, color = COLORS.text600, bg = 'rgba(41,37,36,0.4)' }: 
   return (
     <View style={{ backgroundColor: bg, borderWidth: 1, borderColor: 'rgba(41,37,36,0.6)', paddingHorizontal: 8, paddingVertical: 3, marginRight: 6, marginBottom: 4 }}>
       <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color, letterSpacing: 1 }}>{label}</Text>
+    </View>
+  );
+}
+
+// ── MacroBreakdownSheet ────────────────────────────────────────────────────
+
+function MacroBreakdownSheet({ macro, logs, totals, targets, onClose }: {
+  macro: MacroKey | null;
+  logs: NutritionLog[];
+  totals: { kcal: number; protein: number; carbs: number; fat: number };
+  targets: { kcal: number; protein: number; carbs: number; fat: number };
+  onClose: () => void;
+}) {
+  const slideAnim = useRef(new Animated.Value(500)).current;
+
+  useEffect(() => {
+    if (macro !== null) {
+      slideAnim.setValue(500);
+      Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 12 }).start();
+    }
+  }, [macro]);
+
+  const getVal = (log: NutritionLog): number => {
+    if (macro === 'kcal') return log.kcal ?? 0;
+    if (macro === 'protein') return log.protein_g ?? 0;
+    if (macro === 'carbs') return log.carbs_g ?? 0;
+    return log.fat_g ?? 0;
+  };
+
+  const unit    = macro === 'kcal' ? 'kcal' : 'g';
+  const total   = macro === 'kcal' ? totals.kcal : macro === 'protein' ? totals.protein : macro === 'carbs' ? totals.carbs : totals.fat ?? 0;
+  const target  = macro === 'kcal' ? targets.kcal : macro === 'protein' ? targets.protein : macro === 'carbs' ? targets.carbs : targets.fat ?? 0;
+  const remaining = target - total;
+  const over    = remaining < 0;
+
+  return (
+    <Modal visible={macro !== null} transparent animationType="none" onRequestClose={onClose}>
+      <TouchableOpacity
+        style={{ flex: 1, backgroundColor: 'rgba(10,9,8,0.8)', justifyContent: 'flex-end' }}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <Animated.View style={{ transform: [{ translateY: slideAnim }] }}>
+          <TouchableOpacity activeOpacity={1}>
+            <View style={s.bottomSheet}>
+              {/* Handle */}
+              <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 8 }}>
+                <View style={{ width: 36, height: 4, backgroundColor: COLORS.border, borderRadius: 2 }} />
+              </View>
+              {/* Header */}
+              <View style={{ paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+                <Text style={{ fontFamily: FONTS.anton, fontSize: 22, color: COLORS.text100, letterSpacing: 1 }}>
+                  {macro ? MACRO_SHEET_LABELS[macro] : ''}
+                </Text>
+              </View>
+              {/* Rows */}
+              <ScrollView style={{ maxHeight: 300 }}>
+                {logs.length === 0 ? (
+                  <Text style={{ fontFamily: FONTS.sans, fontSize: 13, color: COLORS.text600, padding: 20, textAlign: 'center' }}>
+                    Nothing logged today.
+                  </Text>
+                ) : (
+                  logs.map(log => {
+                    const val = getVal(log);
+                    const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+                    return (
+                      <View key={log.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(41,37,36,0.2)' }}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <Text style={{ fontFamily: FONTS.anton, fontSize: 15, color: COLORS.text100, letterSpacing: 0.5 }} numberOfLines={1}>
+                            {log.meal_name}
+                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                            <View style={{ backgroundColor: 'rgba(41,37,36,0.6)', paddingHorizontal: 5, paddingVertical: 1 }}>
+                              <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, letterSpacing: 1 }}>
+                                {SOURCE_BADGE[log.source] ?? log.source.toUpperCase()}
+                              </Text>
+                            </View>
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: MEAL_COLORS[log.meal_type as MealType] ?? COLORS.text700 }} />
+                          </View>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.accent }}>
+                            {val}{unit}
+                          </Text>
+                          <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500 }}>{pct}%</Text>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </ScrollView>
+              {/* Footer */}
+              <View style={{ borderTopWidth: 1, borderTopColor: COLORS.border, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text300, letterSpacing: 1 }}>TOTAL</Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 13, color: COLORS.text100 }}>{total}{unit}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, letterSpacing: 1 }}>
+                    {over ? 'OVER BY' : 'REMAINING'}
+                  </Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: over ? COLORS.red400 : COLORS.accent }}>
+                    {Math.abs(remaining)}{unit}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+// ── MicronutrientsSection ──────────────────────────────────────────────────
+
+function MicronutrientsSection({ logs }: { logs: NutritionLog[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const animH = useRef(new Animated.Value(0)).current;
+
+  function toggle() {
+    const next = !expanded;
+    setExpanded(next);
+    Animated.spring(animH, { toValue: next ? 1 : 0, useNativeDriver: false, tension: 55, friction: 12 }).start();
+  }
+
+  const microTotals = useMemo(() => {
+    const result: Record<MicroKey, number | null> = {} as any;
+    for (const m of MICRO_CONFIG) {
+      const vals = logs
+        .map(l => (l as any)[m.key] as number | null | undefined)
+        .filter((v): v is number => v != null && v > 0);
+      result[m.key] = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : null;
+    }
+    return result;
+  }, [logs]);
+
+  const maxH = animH.interpolate({ inputRange: [0, 1], outputRange: [0, 480] });
+
+  return (
+    <View style={{ marginTop: 10 }}>
+      <TouchableOpacity onPress={toggle} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 4 }}>
+        <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text600, letterSpacing: 1, flex: 1 }}>
+          MICRONUTRIENTS
+        </Text>
+        <Ionicons name={expanded ? 'chevron-down' : 'chevron-forward'} size={13} color={COLORS.text600} />
+      </TouchableOpacity>
+
+      <Animated.View style={{ maxHeight: maxH, overflow: 'hidden' }}>
+        <View style={{ height: 1, backgroundColor: COLORS.border, marginTop: 8, marginBottom: 10 }} />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
+          {MICRO_CONFIG.map(m => {
+            const val = microTotals[m.key];
+            const hasVal = val !== null;
+            const pctRaw = hasVal ? (val! / m.rdv) * 100 : 0;
+            const pctCapped = Math.min(pctRaw, 100);
+            const barColor = !hasVal
+              ? 'rgba(41,37,36,0.3)'
+              : pctRaw > 100 ? COLORS.red400
+              : pctRaw >= 80  ? COLORS.green400
+              : pctRaw >= 50  ? COLORS.accent
+              : 'rgba(100,80,60,0.5)';
+
+            return (
+              <View key={m.key} style={{ width: '47%', padding: 9, backgroundColor: 'rgba(18,16,14,0.7)', borderWidth: 1, borderColor: COLORS.border }}>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, letterSpacing: 1, marginBottom: 4 }}>
+                  {m.label}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3, marginBottom: 5 }}>
+                  <Text style={{ fontFamily: FONTS.anton, fontSize: 16, color: hasVal ? COLORS.text100 : COLORS.text700 }}>
+                    {hasVal ? (val! < 10 ? val!.toFixed(1) : Math.round(val!)) : '—'}
+                  </Text>
+                  {hasVal && (
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500 }}>{m.unit}</Text>
+                  )}
+                </View>
+                <View style={{ height: 3, backgroundColor: 'rgba(41,37,36,0.4)', borderRadius: 1.5, marginBottom: 3 }}>
+                  <View style={{ height: 3, width: `${pctCapped}%` as any, backgroundColor: barColor, borderRadius: 1.5 }} />
+                </View>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500 }}>
+                  {hasVal ? `${Math.round(pctRaw)}% RDV` : 'No data'}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
+// ── WeekNav ────────────────────────────────────────────────────────────────
+
+function WeekNav({ today, selectedDate, onSelect, onOpenCalendar, streak }: {
+  today: string;
+  selectedDate: string;
+  onSelect: (date: string) => void;
+  onOpenCalendar: () => void;
+  streak: number;
+}) {
+  const todayD     = new Date(today + 'T12:00:00');
+  const dayOfWeek  = todayD.getDay();
+  const weekDates  = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(todayD);
+    d.setDate(todayD.getDate() - dayOfWeek + i);
+    return toLocalDateStr(d);
+  });
+
+  const { data: loggedDates } = useLoggedDates(todayD.getFullYear(), todayD.getMonth());
+
+  const displayLabel = selectedDate === today
+    ? 'Today'
+    : (() => {
+        const d = new Date(selectedDate + 'T12:00:00');
+        return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+      })();
+
+  return (
+    <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+      {/* Row 1: label + calendar + streak */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+        <TouchableOpacity onPress={onOpenCalendar} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <Text style={{ fontFamily: FONTS.anton, fontSize: 24, color: COLORS.text100, letterSpacing: 1 }}>
+            {displayLabel}
+          </Text>
+          <Ionicons name="chevron-down" size={16} color={COLORS.text500} style={{ marginTop: 5 }} />
+        </TouchableOpacity>
+        <View style={{ flex: 1 }} />
+        {streak > 0 && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Ionicons name="flash" size={14} color="#fbbf24" />
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 14, color: '#fbbf24', letterSpacing: 1 }}>{streak}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Row 2: 7 bubbles */}
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+        {weekDates.map((dateStr, i) => {
+          const isSelected = dateStr === selectedDate;
+          const isToday    = dateStr === today;
+          const isFuture   = dateStr > today;
+          const hasLog     = loggedDates?.has(dateStr) ?? false;
+
+          let bubbleBg     = 'transparent';
+          let bubbleBorder = COLORS.border;
+          let letterColor  = isFuture ? COLORS.text700 : COLORS.text600;
+          let showCheck    = false;
+
+          if (isSelected) {
+            bubbleBg = COLORS.accent; bubbleBorder = COLORS.accent; letterColor = '#fff';
+          } else if (hasLog) {
+            bubbleBg = 'rgba(41,37,36,0.6)'; showCheck = true; letterColor = COLORS.text500;
+          } else if (isToday) {
+            bubbleBorder = COLORS.accent; letterColor = COLORS.accent;
+          }
+
+          return (
+            <TouchableOpacity
+              key={dateStr}
+              onPress={() => !isFuture && onSelect(dateStr)}
+              disabled={isFuture}
+              style={{ alignItems: 'center', gap: 2, minWidth: 40 }}
+            >
+              {/* Today dot */}
+              <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: isToday ? COLORS.accent : 'transparent' }} />
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: letterColor }}>
+                {WEEK_DAY_SHORT[i]}
+              </Text>
+              <View style={{
+                width: 36, height: 36, borderRadius: 18,
+                borderWidth: 1, borderColor: bubbleBorder,
+                backgroundColor: bubbleBg,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                {showCheck && !isSelected ? (
+                  <Ionicons name="checkmark" size={16} color={COLORS.text400} />
+                ) : (
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: letterColor }}>
+                    {new Date(dateStr + 'T12:00:00').getDate()}
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -718,6 +1036,8 @@ function FoodSearchModal({ visible, mealType, onClose, onLog, onOpenBuilder }: {
   const [mP, setMP]                   = useState('');
   const [mC, setMC]                   = useState('');
   const [mF, setMF]                   = useState('');
+  const [micros, setMicros]           = useState<Record<string, string>>({});
+  const [showMicros, setShowMicros]   = useState(false);
   const debounceRef                   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const { data: mostLogged }          = useMostLoggedFoods();
   const { data: usdaResults, isFetching: fetchingUsda } = useFoodSearch(committed);
@@ -761,6 +1081,7 @@ function FoodSearchModal({ visible, mealType, onClose, onLog, onOpenBuilder }: {
   function reset() {
     setQuery(''); setCommitted(''); setHistory([]); setSelected(null); setServing('100');
     setTab('SEARCH'); setMName(''); setMKcal(''); setMP(''); setMC(''); setMF('');
+    setMicros({}); setShowMicros(false);
   }
   function close() { reset(); onClose(); }
   function scale(val: number) { return Math.round((val * (parseFloat(serving) || 100)) / 100); }
@@ -779,7 +1100,12 @@ function FoodSearchModal({ visible, mealType, onClose, onLog, onOpenBuilder }: {
     if (!mName.trim() || !mKcal) return;
     setLogging(true);
     try {
-      await onLog({ meal_name: mName.trim(), kcal: parseInt(mKcal, 10) || 0, protein_g: parseInt(mP, 10) || 0, carbs_g: parseInt(mC, 10) || 0, fat_g: parseInt(mF, 10) || 0, meal_type: mealType });
+      const microPayload: Record<string, number> = {};
+      for (const m of MICRO_CONFIG) {
+        const v = parseFloat(micros[m.key] || '');
+        if (!isNaN(v) && v > 0) microPayload[m.key] = v;
+      }
+      await onLog({ meal_name: mName.trim(), kcal: parseInt(mKcal, 10) || 0, protein_g: parseInt(mP, 10) || 0, carbs_g: parseInt(mC, 10) || 0, fat_g: parseInt(mF, 10) || 0, meal_type: mealType, ...microPayload });
       close();
     } catch { Alert.alert('Error', 'Could not log meal.'); }
     finally { setLogging(false); }
@@ -1012,6 +1338,32 @@ function FoodSearchModal({ visible, mealType, onClose, onLog, onOpenBuilder }: {
                     </View>
                   ))}
                 </View>
+                {/* Micronutrients toggle */}
+                <TouchableOpacity
+                  onPress={() => setShowMicros(v => !v)}
+                  style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 8, marginBottom: showMicros ? 10 : 4 }}
+                >
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, letterSpacing: 1, flex: 1 }}>
+                    {showMicros ? '▲ HIDE MICRONUTRIENTS' : '▼ SHOW MICRONUTRIENTS'}
+                  </Text>
+                </TouchableOpacity>
+                {showMicros && (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                    {MICRO_CONFIG.map(m => (
+                      <View key={m.key} style={{ width: '47%' }}>
+                        <Text style={s.fieldLabel}>{m.label} ({m.unit})</Text>
+                        <TextInput
+                          style={s.input}
+                          keyboardType="numeric"
+                          placeholder="—"
+                          placeholderTextColor={COLORS.text700}
+                          value={micros[m.key] ?? ''}
+                          onChangeText={v => setMicros(prev => ({ ...prev, [m.key]: v }))}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                )}
                 <TouchableOpacity
                   style={[s.addBtn, { alignSelf: 'stretch', alignItems: 'center', backgroundColor: COLORS.accentMuted, borderColor: COLORS.accentBorder, paddingVertical: 10 }]}
                   onPress={confirmManual}
@@ -1507,9 +1859,10 @@ function TemplatesModal({ visible, mealType, onClose, startMode = 'list' }: {
 export default function SentinelScreen() {
   const today = toLocalDateStr(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
-  const [showCalendar, setShowCalendar] = useState(false);
+  const [showCalendar, setShowCalendar]   = useState(false);
   const [showMacroEdit, setShowMacroEdit] = useState(false);
-  const [proModal, setProModal]         = useState({ visible: false, feature: '' });
+  const [proModal, setProModal]           = useState({ visible: false, feature: '' });
+  const [breakdownMacro, setBreakdownMacro] = useState<MacroKey | null>(null);
   const [searchMealType, setSearchMealType]       = useState<MealType>('breakfast');
   const [showSearch, setShowSearch]               = useState(false);
   const [scanMealType, setScanMealType]           = useState<MealType>('breakfast');
@@ -1577,21 +1930,13 @@ export default function SentinelScreen() {
         <Text style={s.screenSub}>Nutrition Logger</Text>
       </View>
 
-      {/* Date nav */}
-      <View style={s.dateNav}>
-        <TouchableOpacity onPress={prevDay} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 20, color: COLORS.text500 }}>‹</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setShowCalendar(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text300, letterSpacing: 1 }}>
-            {formatDisplayDate(selectedDate).toUpperCase()}
-          </Text>
-          <Ionicons name="calendar-outline" size={14} color={COLORS.text500} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={nextDay} disabled={isToday} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 20, color: isToday ? COLORS.text700 : COLORS.text500 }}>›</Text>
-        </TouchableOpacity>
-      </View>
+      <WeekNav
+        today={today}
+        selectedDate={selectedDate}
+        onSelect={setSelectedDate}
+        onOpenCalendar={() => setShowCalendar(true)}
+        streak={streak}
+      />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
@@ -1611,12 +1956,11 @@ export default function SentinelScreen() {
 
           {/* Ring + macro bars */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 }}>
-            <CalorieRing consumed={netDisplay ? netKcal : totals.kcal} target={macros.kcal} />
+            <CalorieRing consumed={netDisplay ? netKcal : totals.kcal} target={macros.kcal} onPress={() => setBreakdownMacro('kcal')} />
             <View style={{ flex: 1 }}>
-              {/* protein=orange, carbs=blue, fat=yellow */}
-              <MacroBar label="PROTEIN" consumed={totals.protein} target={macros.protein} color={COLORS.red400}  />
-              <MacroBar label="CARBS"   consumed={totals.carbs}   target={macros.carbs}   color={COLORS.blue400} />
-              <MacroBar label="FAT"     consumed={totals.fat}     target={macros.fat}     color="#fbbf24"        />
+              <MacroBar label="PROTEIN" consumed={totals.protein} target={macros.protein} color={COLORS.red400}  onPress={() => setBreakdownMacro('protein')} />
+              <MacroBar label="CARBS"   consumed={totals.carbs}   target={macros.carbs}   color={COLORS.blue400} onPress={() => setBreakdownMacro('carbs')} />
+              <MacroBar label="FAT"     consumed={totals.fat}     target={macros.fat}     color="#fbbf24"        onPress={() => setBreakdownMacro('fat')} />
             </View>
           </View>
 
@@ -1638,6 +1982,8 @@ export default function SentinelScreen() {
               Ring shows net kcal (consumed − burned). Raw: {totals.kcal} consumed.
             </Text>
           )}
+
+          <MicronutrientsSection logs={logs} />
         </View>
 
         {isLoading && <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} />}
@@ -1705,6 +2051,13 @@ export default function SentinelScreen() {
         mealType={scanMealType}
         onConfirm={logMeal}
         onClose={() => setScanResult(null)}
+      />
+      <MacroBreakdownSheet
+        macro={breakdownMacro}
+        logs={logs}
+        totals={totals}
+        targets={macros}
+        onClose={() => setBreakdownMacro(null)}
       />
     </SafeAreaView>
   );
@@ -1815,5 +2168,13 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(10,9,8,0.85)',
     alignItems:      'center',
     justifyContent:  'center',
+  },
+  bottomSheet: {
+    backgroundColor:     '#0d0c0b',
+    borderTopWidth:      1,
+    borderTopColor:      COLORS.border,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    paddingBottom:       32,
   },
 });

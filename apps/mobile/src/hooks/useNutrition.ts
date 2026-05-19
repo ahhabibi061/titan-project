@@ -23,6 +23,18 @@ export interface NutritionLog {
   logged_at: string;
   serving_amount: number | null;
   serving_unit: string | null;
+  // micronutrients
+  sodium_mg?: number | null;
+  potassium_mg?: number | null;
+  calcium_mg?: number | null;
+  iron_mg?: number | null;
+  vitamin_c_mg?: number | null;
+  vitamin_d_iu?: number | null;
+  magnesium_mg?: number | null;
+  zinc_mg?: number | null;
+  saturated_fat_g?: number | null;
+  sugar_g?: number | null;
+  cholesterol_mg?: number | null;
 }
 
 export interface WaterLog {
@@ -88,7 +100,7 @@ export function useDailyNutrition(date: string) {
       const { start, end } = localDayRange(date);
       const { data, error } = await supabase
         .from('nutrition_logs')
-        .select('id, meal_name, kcal, protein_g, carbs_g, fat_g, meal_type, source, confidence, logged_at, serving_amount, serving_unit')
+        .select('id, meal_name, kcal, protein_g, carbs_g, fat_g, meal_type, source, confidence, logged_at, serving_amount, serving_unit, sodium_mg, potassium_mg, calcium_mg, iron_mg, vitamin_c_mg, vitamin_d_iu, magnesium_mg, zinc_mg, saturated_fat_g, sugar_g, cholesterol_mg')
         .eq('user_id', userId)
         .gte('logged_at', start)
         .lte('logged_at', end)
