@@ -2100,7 +2100,6 @@ export default function SentinelScreen() {
             </Text>
           )}
 
-          <MicronutrientsSection logs={logs} />
         </View>
 
         {isLoading && <ActivityIndicator color={COLORS.accent} style={{ marginVertical: 16 }} />}
