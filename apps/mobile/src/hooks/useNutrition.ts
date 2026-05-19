@@ -100,7 +100,7 @@ export function useDailyNutrition(date: string) {
       const { start, end } = localDayRange(date);
       const { data, error } = await supabase
         .from('nutrition_logs')
-        .select('id, meal_name, kcal, protein_g, carbs_g, fat_g, meal_type, source, confidence, logged_at, serving_amount, serving_unit, sodium_mg, potassium_mg, calcium_mg, iron_mg, vitamin_c_mg, vitamin_d_iu, magnesium_mg, zinc_mg, saturated_fat_g, sugar_g, cholesterol_mg')
+        .select('*')
         .eq('user_id', userId)
         .gte('logged_at', start)
         .lte('logged_at', end)
