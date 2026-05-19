@@ -77,10 +77,10 @@ const MICRO_CONFIG = [
 type MicroKey = typeof MICRO_CONFIG[number]['key'];
 
 const SHEET_MEAL_COLORS: Record<MealType, string> = {
-  breakfast: '#f97316',
-  lunch:     '#fb923c',
-  dinner:    '#fdba74',
-  snacks:    '#78716c',
+  breakfast: '#fbbf24',  // yellow
+  lunch:     '#f97316',  // orange
+  dinner:    '#f43f5e',  // red-orange
+  snacks:    '#ef4444',  // red
 };
 
 const MICRO_SHEET_CONFIG: Array<{
@@ -1201,13 +1201,33 @@ function FoodSearchModal({ visible, mealType, onClose, onLog, onOpenBuilder }: {
     setMicros({}); setShowMicros(false);
   }
   function close() { reset(); onClose(); }
-  function scale(val: number) { return Math.round((val * (parseFloat(serving) || 100)) / 100); }
+  const servingG = parseFloat(serving) || 100;
+  function scale(val: number) { return Math.round((val * servingG) / 100); }
+  function scaleMicro(val?: number) { return val != null && val > 0 ? Math.round((val * servingG) / 100 * 100) / 100 : undefined; }
 
   async function confirmFood() {
     if (!selected) return;
     setLogging(true);
     try {
-      await onLog({ meal_name: selected.name, kcal: scale(selected.kcal), protein_g: scale(selected.protein_g), carbs_g: scale(selected.carbs_g), fat_g: scale(selected.fat_g), meal_type: mealType });
+      await onLog({
+        meal_name:       selected.name,
+        kcal:            scale(selected.kcal),
+        protein_g:       scale(selected.protein_g),
+        carbs_g:         scale(selected.carbs_g),
+        fat_g:           scale(selected.fat_g),
+        meal_type:       mealType,
+        sodium_mg:       scaleMicro(selected.sodium_mg),
+        potassium_mg:    scaleMicro(selected.potassium_mg),
+        calcium_mg:      scaleMicro(selected.calcium_mg),
+        iron_mg:         scaleMicro(selected.iron_mg),
+        vitamin_c_mg:    scaleMicro(selected.vitamin_c_mg),
+        vitamin_d_iu:    scaleMicro(selected.vitamin_d_iu),
+        magnesium_mg:    scaleMicro(selected.magnesium_mg),
+        zinc_mg:         scaleMicro(selected.zinc_mg),
+        saturated_fat_g: scaleMicro(selected.saturated_fat_g),
+        sugar_g:         scaleMicro(selected.sugar_g),
+        cholesterol_mg:  scaleMicro(selected.cholesterol_mg),
+      });
       close();
     } catch { Alert.alert('Error', 'Could not log meal.'); }
     finally { setLogging(false); }

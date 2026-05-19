@@ -60,6 +60,18 @@ export interface FoodResult {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  // micros — populated from USDA when available
+  sodium_mg?: number;
+  potassium_mg?: number;
+  calcium_mg?: number;
+  iron_mg?: number;
+  vitamin_c_mg?: number;
+  vitamin_d_iu?: number;
+  magnesium_mg?: number;
+  zinc_mg?: number;
+  saturated_fat_g?: number;
+  sugar_g?: number;
+  cholesterol_mg?: number;
   fromHistory?: boolean;
   count?: number;
 }
@@ -160,6 +172,17 @@ export function useLogMeal() {
       confidence?: number;
       serving_amount?: number;
       serving_unit?: string;
+      sodium_mg?: number;
+      potassium_mg?: number;
+      calcium_mg?: number;
+      iron_mg?: number;
+      vitamin_c_mg?: number;
+      vitamin_d_iu?: number;
+      magnesium_mg?: number;
+      zinc_mg?: number;
+      saturated_fat_g?: number;
+      sugar_g?: number;
+      cholesterol_mg?: number;
     }) => {
       const userId = await getUserId();
       const { error } = await supabase.from('nutrition_logs').insert({
@@ -307,6 +330,11 @@ function extractNutrient(nutrients: any[], id: number): number {
   return Math.round(nutrients.find((n: any) => n.nutrientId === id)?.value ?? 0);
 }
 
+function extractMicro(nutrients: any[], id: number): number | undefined {
+  const val = nutrients.find((n: any) => n.nutrientId === id)?.value;
+  return val != null && val > 0 ? Math.round(val * 100) / 100 : undefined;
+}
+
 export function useFoodSearch(query: string) {
   return useQuery<FoodResult[]>({
     queryKey: ['food-search', query],
@@ -322,6 +350,17 @@ export function useFoodSearch(query: string) {
         protein_g: extractNutrient(f.foodNutrients, 1003),
         carbs_g:   extractNutrient(f.foodNutrients, 1005),
         fat_g:     extractNutrient(f.foodNutrients, 1004),
+        sodium_mg:       extractMicro(f.foodNutrients, 1093),
+        potassium_mg:    extractMicro(f.foodNutrients, 1092),
+        calcium_mg:      extractMicro(f.foodNutrients, 1087),
+        iron_mg:         extractMicro(f.foodNutrients, 1089),
+        vitamin_c_mg:    extractMicro(f.foodNutrients, 1162),
+        vitamin_d_iu:    extractMicro(f.foodNutrients, 1114),
+        magnesium_mg:    extractMicro(f.foodNutrients, 1090),
+        zinc_mg:         extractMicro(f.foodNutrients, 1095),
+        saturated_fat_g: extractMicro(f.foodNutrients, 1258),
+        sugar_g:         extractMicro(f.foodNutrients, 2000),
+        cholesterol_mg:  extractMicro(f.foodNutrients, 1253),
       })) as FoodResult[];
     },
     enabled: query.trim().length >= 2,
