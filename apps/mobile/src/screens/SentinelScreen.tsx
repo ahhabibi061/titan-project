@@ -2072,7 +2072,7 @@ export default function SentinelScreen() {
           </View>
 
           {/* Ring + macro bars */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 12 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 6 }}>
             <CalorieRing consumed={netDisplay ? netKcal : totals.kcal} target={macros.kcal} onPress={() => setBreakdownMacro('kcal')} />
             <View style={{ flex: 1 }}>
               <MacroBar label="PROTEIN" consumed={totals.protein} target={macros.protein} color={COLORS.red400}  onPress={() => setBreakdownMacro('protein')} />
@@ -2080,6 +2080,9 @@ export default function SentinelScreen() {
               <MacroBar label="FAT"     consumed={totals.fat}     target={macros.fat}     color="#fbbf24"        onPress={() => setBreakdownMacro('fat')} />
             </View>
           </View>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, letterSpacing: 0.5, marginBottom: 10, opacity: 0.7 }}>
+            Tap ring or bars to view macro & micro breakdown
+          </Text>
 
           {/* Pill row: goal · calories burned · streak */}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 2 }}>
