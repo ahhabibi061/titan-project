@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 
@@ -8,6 +9,17 @@ async function getUserId() {
 }
 
 // ── useBiometricEntries ────────────────────────────────────────────────────────
+export interface BiometricEntry {
+  id: string;
+  weight_kg: number;
+  body_fat_pct: number | null;
+  notes: string | null;
+  logged_at: string; // 'YYYY-MM-DD'
+  waist_cm: number | null;
+  neck_cm: number | null;
+  hip_cm: number | null;
+}
+
 export function useBiometricEntries() {
   return useQuery({
     queryKey: ['biometric-entries'],
@@ -15,7 +27,7 @@ export function useBiometricEntries() {
       const userId = await getUserId();
       const { data, error } = await supabase
         .from('biometric_entries')
-        .select('id, weight_kg, body_fat_pct, notes, logged_at')
+        .select('id, weight_kg, body_fat_pct, notes, logged_at, waist_cm, neck_cm, hip_cm')
         .eq('user_id', userId)
         .order('logged_at', { ascending: false });
       if (error) throw error;
@@ -25,19 +37,18 @@ export function useBiometricEntries() {
   });
 }
 
-export interface BiometricEntry {
-  id: string;
-  weight_kg: number;
-  body_fat_pct: number | null;
-  notes: string | null;
-  logged_at: string; // 'YYYY-MM-DD'
-}
-
 // ── useLogWeight ───────────────────────────────────────────────────────────────
 export function useLogWeight() {
   const qc = useQueryClient();
   const mutation = useMutation({
-    mutationFn: async (params: { date: string; weight_kg: number; body_fat_pct?: number }) => {
+    mutationFn: async (params: {
+      date: string;
+      weight_kg: number;
+      body_fat_pct?: number;
+      waist_cm?: number;
+      neck_cm?: number;
+      hip_cm?: number;
+    }) => {
       const userId = await getUserId();
       const { error } = await supabase
         .from('biometric_entries')
@@ -47,6 +58,9 @@ export function useLogWeight() {
             logged_at:    params.date,
             weight_kg:    params.weight_kg,
             body_fat_pct: params.body_fat_pct ?? null,
+            waist_cm:     params.waist_cm ?? null,
+            neck_cm:      params.neck_cm ?? null,
+            hip_cm:       params.hip_cm ?? null,
           },
           { onConflict: 'user_id,logged_at' }
         );
@@ -120,7 +134,6 @@ export function useProgressPhotos() {
             .storage
             .from('progress-photos')
             .createSignedUrl(r.storage_path, 3600);
-          // derive angle from path: userId/date/angle.jpg
           const parts = r.storage_path.split('/');
           const angle = parts[parts.length - 1]?.replace('.jpg', '') ?? 'front';
           return {
@@ -139,7 +152,6 @@ export function useProgressPhotos() {
 }
 
 // ── useUploadPhoto ─────────────────────────────────────────────────────────────
-// Accepts base64 string (from expo-image-picker with base64:true option)
 export function useUploadPhoto() {
   const qc = useQueryClient();
   const mutation = useMutation({
@@ -147,7 +159,6 @@ export function useUploadPhoto() {
       const userId = await getUserId();
       const path   = `${userId}/${params.date}/${params.angle}.jpg`;
 
-      // decode base64 → Uint8Array
       const raw      = atob(params.base64);
       const bytes    = new Uint8Array(raw.length);
       for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
@@ -173,5 +184,77 @@ export function useUploadPhoto() {
     uploadPhoto: mutation.mutateAsync,
     isLoading:   mutation.isPending,
     error:       mutation.error,
+  };
+}
+
+// ── getMondayISO ───────────────────────────────────────────────────────────────
+function getMondayISO(): string {
+  const d = new Date();
+  const dow = d.getDay();
+  d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// ── useWeeklyCheckin ───────────────────────────────────────────────────────────
+export interface WeeklyCheckin {
+  mood:          number | null;
+  energy:        number | null;
+  sleep_quality: number | null;
+  notes:         string | null;
+}
+
+export function useWeeklyCheckin() {
+  const qc = useQueryClient();
+  const mondayISO = useMemo(() => getMondayISO(), []);
+
+  const query = useQuery({
+    queryKey: ['weekly-checkin', mondayISO],
+    queryFn: async () => {
+      const userId = await getUserId();
+      const { data } = await supabase
+        .from('weekly_checkins')
+        .select('mood, energy, sleep_quality, notes')
+        .eq('user_id', userId)
+        .eq('checkin_date', mondayISO)
+        .maybeSingle();
+      return (data ?? null) as WeeklyCheckin | null;
+    },
+    staleTime: 60_000,
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (params: {
+      mood:          number;
+      energy:        number;
+      sleep_quality: number;
+      notes:         string;
+    }) => {
+      const userId = await getUserId();
+      const { error } = await supabase
+        .from('weekly_checkins')
+        .upsert(
+          {
+            user_id:       userId,
+            checkin_date:  mondayISO,
+            mood:          params.mood,
+            energy:        params.energy,
+            sleep_quality: params.sleep_quality,
+            notes:         params.notes || null,
+          },
+          { onConflict: 'user_id,checkin_date' }
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['weekly-checkin', mondayISO] });
+    },
+  });
+
+  return {
+    checkin:      query.data ?? null,
+    isLoading:    query.isLoading,
+    submit:       mutation.mutateAsync,
+    isSubmitting: mutation.isPending,
+    error:        mutation.error,
   };
 }
