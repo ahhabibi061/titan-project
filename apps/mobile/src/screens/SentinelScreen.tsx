@@ -55,13 +55,6 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
 
 type MacroKey = 'kcal' | 'protein' | 'carbs' | 'fat';
 
-const MACRO_SHEET_LABELS: Record<MacroKey, string> = {
-  kcal:    'CALORIE BREAKDOWN',
-  protein: 'PROTEIN BREAKDOWN',
-  carbs:   'CARBS BREAKDOWN',
-  fat:     'FAT BREAKDOWN',
-};
-
 const SOURCE_BADGE: Record<string, string> = {
   manual:     'MANUAL',
   vision_api: 'SCAN',
@@ -82,6 +75,32 @@ const MICRO_CONFIG = [
   { key: 'cholesterol_mg',  label: 'CHOLESTEROL', unit: 'mg', rdv: 300  },
 ] as const;
 type MicroKey = typeof MICRO_CONFIG[number]['key'];
+
+const SHEET_MEAL_COLORS: Record<MealType, string> = {
+  breakfast: '#f97316',
+  lunch:     '#fb923c',
+  dinner:    '#fdba74',
+  snacks:    '#78716c',
+};
+
+const MICRO_SHEET_CONFIG: Array<{
+  key: string | null;
+  label: string;
+  unit: string;
+  rdv: number;
+  limitNutrient: boolean;
+}> = [
+  { key: null,              label: 'FIBER',       unit: 'g',  rdv: 25,   limitNutrient: false },
+  { key: 'sugar_g',         label: 'SUGAR',       unit: 'g',  rdv: 50,   limitNutrient: true  },
+  { key: 'sodium_mg',       label: 'SODIUM',      unit: 'mg', rdv: 2300, limitNutrient: true  },
+  { key: 'potassium_mg',    label: 'POTASSIUM',   unit: 'mg', rdv: 3500, limitNutrient: false },
+  { key: 'cholesterol_mg',  label: 'CHOLESTEROL', unit: 'mg', rdv: 300,  limitNutrient: true  },
+  { key: 'saturated_fat_g', label: 'SAT FAT',     unit: 'g',  rdv: 20,   limitNutrient: true  },
+  { key: null,              label: 'VITAMIN A',   unit: 'IU', rdv: 900,  limitNutrient: false },
+  { key: 'vitamin_c_mg',    label: 'VITAMIN C',   unit: 'mg', rdv: 90,   limitNutrient: false },
+  { key: 'calcium_mg',      label: 'CALCIUM',     unit: 'mg', rdv: 1000, limitNutrient: false },
+  { key: 'iron_mg',         label: 'IRON',        unit: 'mg', rdv: 18,   limitNutrient: false },
+];
 
 // ── Date helpers ───────────────────────────────────────────────────────────
 
@@ -203,37 +222,59 @@ function InfoPill({ label, color = COLORS.text600, bg = 'rgba(41,37,36,0.4)' }: 
 
 // ── MacroBreakdownSheet ────────────────────────────────────────────────────
 
-function MacroBreakdownSheet({ macro, logs, totals, targets, onClose }: {
-  macro: MacroKey | null;
+function MacroBreakdownSheet({ visible, logs, totals, targets, selectedDate, onClose }: {
+  visible: boolean;
   logs: NutritionLog[];
   totals: { kcal: number; protein: number; carbs: number; fat: number };
   targets: { kcal: number; protein: number; carbs: number; fat: number };
+  selectedDate: string;
   onClose: () => void;
 }) {
-  const slideAnim = useRef(new Animated.Value(500)).current;
+  const slideAnim = useRef(new Animated.Value(600)).current;
+  const [activeTab, setActiveTab] = useState<'MACROS' | 'MICROS'>('MACROS');
 
   useEffect(() => {
-    if (macro !== null) {
-      slideAnim.setValue(500);
+    if (visible) {
+      setActiveTab('MACROS');
+      slideAnim.setValue(600);
       Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 65, friction: 12 }).start();
     }
-  }, [macro]);
+  }, [visible]);
 
-  const getVal = (log: NutritionLog): number => {
-    if (macro === 'kcal') return log.kcal ?? 0;
-    if (macro === 'protein') return log.protein_g ?? 0;
-    if (macro === 'carbs') return log.carbs_g ?? 0;
-    return log.fat_g ?? 0;
-  };
+  const byMeal = useMemo(() => {
+    const groups: Record<MealType, NutritionLog[]> = { breakfast: [], lunch: [], dinner: [], snacks: [] };
+    for (const log of logs) {
+      const mt = log.meal_type as MealType;
+      if (groups[mt]) groups[mt].push(log);
+    }
+    return groups;
+  }, [logs]);
 
-  const unit    = macro === 'kcal' ? 'kcal' : 'g';
-  const total   = macro === 'kcal' ? totals.kcal : macro === 'protein' ? totals.protein : macro === 'carbs' ? totals.carbs : totals.fat ?? 0;
-  const target  = macro === 'kcal' ? targets.kcal : macro === 'protein' ? targets.protein : macro === 'carbs' ? targets.carbs : targets.fat ?? 0;
-  const remaining = target - total;
-  const over    = remaining < 0;
+  const macroSections = [
+    { label: 'CALORIES', unit: 'kcal', total: totals.kcal,    target: targets.kcal,    getVal: (l: NutritionLog) => l.kcal      ?? 0 },
+    { label: 'PROTEIN',  unit: 'g',    total: totals.protein,  target: targets.protein, getVal: (l: NutritionLog) => l.protein_g ?? 0 },
+    { label: 'CARBS',    unit: 'g',    total: totals.carbs,    target: targets.carbs,   getVal: (l: NutritionLog) => l.carbs_g   ?? 0 },
+    { label: 'FAT',      unit: 'g',    total: totals.fat,      target: targets.fat,     getVal: (l: NutritionLog) => l.fat_g     ?? 0 },
+  ];
+
+  const microTotals = useMemo(() => {
+    const result: Record<string, number | null> = {};
+    for (const m of MICRO_SHEET_CONFIG) {
+      if (!m.key) { result[m.label] = null; continue; }
+      const vals = logs
+        .map(l => (l as any)[m.key!] as number | null | undefined)
+        .filter((v): v is number => v != null && v > 0);
+      result[m.label] = vals.length > 0 ? vals.reduce((a, b) => a + b, 0) : null;
+    }
+    return result;
+  }, [logs]);
+
+  const displayDate = selectedDate === toLocalDateStr(new Date())
+    ? 'TODAY'
+    : new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }).toUpperCase();
 
   return (
-    <Modal visible={macro !== null} transparent animationType="none" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onClose}>
       <TouchableOpacity
         style={{ flex: 1, backgroundColor: 'rgba(10,9,8,0.8)', justifyContent: 'flex-end' }}
         activeOpacity={1}
@@ -243,66 +284,142 @@ function MacroBreakdownSheet({ macro, logs, totals, targets, onClose }: {
           <TouchableOpacity activeOpacity={1}>
             <View style={s.bottomSheet}>
               {/* Handle */}
-              <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 8 }}>
+              <View style={{ alignItems: 'center', paddingTop: 10, paddingBottom: 6 }}>
                 <View style={{ width: 36, height: 4, backgroundColor: COLORS.border, borderRadius: 2 }} />
               </View>
+
               {/* Header */}
-              <View style={{ paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-                <Text style={{ fontFamily: FONTS.anton, fontSize: 22, color: COLORS.text100, letterSpacing: 1 }}>
-                  {macro ? MACRO_SHEET_LABELS[macro] : ''}
-                </Text>
-              </View>
-              {/* Rows */}
-              <ScrollView style={{ maxHeight: 300 }}>
-                {logs.length === 0 ? (
-                  <Text style={{ fontFamily: FONTS.sans, fontSize: 13, color: COLORS.text600, padding: 20, textAlign: 'center' }}>
-                    Nothing logged today.
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 16, paddingBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: FONTS.anton, fontSize: 22, color: COLORS.text100, letterSpacing: 1 }}>
+                    TODAY'S BREAKDOWN
                   </Text>
-                ) : (
-                  logs.map(log => {
-                    const val = getVal(log);
-                    const pct = total > 0 ? Math.round((val / total) * 100) : 0;
-                    return (
-                      <View key={log.id} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(41,37,36,0.2)' }}>
-                        <View style={{ flex: 1, marginRight: 8 }}>
-                          <Text style={{ fontFamily: FONTS.anton, fontSize: 15, color: COLORS.text100, letterSpacing: 0.5 }} numberOfLines={1}>
-                            {log.meal_name}
-                          </Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                            <View style={{ backgroundColor: 'rgba(41,37,36,0.6)', paddingHorizontal: 5, paddingVertical: 1 }}>
-                              <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, letterSpacing: 1 }}>
-                                {SOURCE_BADGE[log.source] ?? log.source.toUpperCase()}
-                              </Text>
-                            </View>
-                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: MEAL_COLORS[log.meal_type as MealType] ?? COLORS.text700 }} />
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text600, marginTop: 1 }}>
+                    {displayDate}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 20, color: COLORS.text500 }}>×</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Tab row */}
+              <View style={{ flexDirection: 'row', paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginBottom: 14 }}>
+                {(['MACROS', 'MICROS'] as const).map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    onPress={() => setActiveTab(t)}
+                    style={{ marginRight: 24, paddingBottom: 10, borderBottomWidth: 2, borderBottomColor: activeTab === t ? COLORS.accent : 'transparent' }}
+                  >
+                    <Text style={{ fontFamily: FONTS.anton, fontSize: 13, color: activeTab === t ? COLORS.accent : COLORS.text600, letterSpacing: 1 }}>
+                      {t}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Meal color legend */}
+              <View style={{ flexDirection: 'row', paddingHorizontal: 16, marginBottom: 14, gap: 14, flexWrap: 'wrap' }}>
+                {MEAL_TYPES.map(mt => (
+                  <View key={mt} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: SHEET_MEAL_COLORS[mt] }} />
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      {mt}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+                {activeTab === 'MACROS' ? (
+                  <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
+                    {macroSections.map(section => {
+                      const mealTotals = MEAL_TYPES.map(mt => ({
+                        mt,
+                        val: byMeal[mt].reduce((sum, l) => sum + section.getVal(l), 0),
+                        color: SHEET_MEAL_COLORS[mt],
+                      }));
+                      const grandTotal = section.total;
+                      const nonZero = mealTotals.filter(m => m.val > 0);
+                      return (
+                        <View key={section.label} style={{ marginBottom: 20 }}>
+                          {/* Label + total */}
+                          <View style={{ flexDirection: 'row', alignItems: 'flex-end', marginBottom: 8 }}>
+                            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, letterSpacing: 1, flex: 1 }}>
+                              {section.label}
+                            </Text>
+                            <Text style={{ fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text100, letterSpacing: -0.5 }}>
+                              {grandTotal}
+                            </Text>
+                            <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, marginLeft: 3, marginBottom: 2 }}>
+                              {section.unit}
+                            </Text>
                           </View>
+
+                          {/* Stacked segmented bar — no border radius, adjacent segments */}
+                          <View style={{ flexDirection: 'row', height: 8, backgroundColor: 'rgba(41,37,36,0.4)', marginBottom: 8, overflow: 'hidden' }}>
+                            {grandTotal > 0
+                              ? nonZero.map(m => (
+                                  <View
+                                    key={m.mt}
+                                    style={{ width: `${(m.val / grandTotal) * 100}%` as any, height: 8, backgroundColor: m.color }}
+                                  />
+                                ))
+                              : null}
+                          </View>
+
+                          {/* Breakdown text */}
+                          {nonZero.length > 0 ? (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                              {nonZero.map(m => (
+                                <Text key={m.mt} style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 }}>
+                                  <Text style={{ color: m.color }}>●</Text>
+                                  {' '}{m.mt.charAt(0).toUpperCase() + m.mt.slice(1)} {m.val}{section.unit}
+                                </Text>
+                              ))}
+                            </View>
+                          ) : (
+                            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700 }}>
+                              Nothing logged yet
+                            </Text>
+                          )}
                         </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.accent }}>
-                            {val}{unit}
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
+                    {MICRO_SHEET_CONFIG.map(m => {
+                      const val = microTotals[m.label];
+                      const hasVal = val !== null;
+                      const pctRaw = hasVal ? (val! / m.rdv) * 100 : 0;
+                      const pctCapped = Math.min(pctRaw, 100);
+                      const isOver = pctRaw > 100;
+                      const barColor = !hasVal
+                        ? 'rgba(41,37,36,0.3)'
+                        : m.limitNutrient && isOver
+                        ? '#fb923c'
+                        : COLORS.green400;
+
+                      return (
+                        <View key={m.label} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 14 }}>
+                          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, width: 100, letterSpacing: 0.5 }}>
+                            {m.label}
                           </Text>
-                          <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500 }}>{pct}%</Text>
+                          <View style={{ flex: 1, height: 6, backgroundColor: 'rgba(41,37,36,0.4)', marginHorizontal: 10 }}>
+                            <View style={{ height: 6, width: `${pctCapped}%` as any, backgroundColor: barColor }} />
+                          </View>
+                          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: hasVal ? COLORS.text400 : COLORS.text700, width: 80, textAlign: 'right' }}>
+                            {hasVal
+                              ? `${val! < 10 ? val!.toFixed(1) : Math.round(val!)}/${m.rdv}${m.unit}`
+                              : `—/${m.rdv}${m.unit}`}
+                          </Text>
                         </View>
-                      </View>
-                    );
-                  })
+                      );
+                    })}
+                  </View>
                 )}
               </ScrollView>
-              {/* Footer */}
-              <View style={{ borderTopWidth: 1, borderTopColor: COLORS.border, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text300, letterSpacing: 1 }}>TOTAL</Text>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 13, color: COLORS.text100 }}>{total}{unit}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, letterSpacing: 1 }}>
-                    {over ? 'OVER BY' : 'REMAINING'}
-                  </Text>
-                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: over ? COLORS.red400 : COLORS.accent }}>
-                    {Math.abs(remaining)}{unit}
-                  </Text>
-                </View>
-              </View>
             </View>
           </TouchableOpacity>
         </Animated.View>
@@ -2053,10 +2170,11 @@ export default function SentinelScreen() {
         onClose={() => setScanResult(null)}
       />
       <MacroBreakdownSheet
-        macro={breakdownMacro}
+        visible={breakdownMacro !== null}
         logs={logs}
         totals={totals}
         targets={macros}
+        selectedDate={selectedDate}
         onClose={() => setBreakdownMacro(null)}
       />
     </SafeAreaView>

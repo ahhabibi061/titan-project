@@ -172,6 +172,7 @@ export function useLogMeal() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['nutrition'] });
+      qc.refetchQueries({ queryKey: ['nutrition'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
