@@ -507,16 +507,14 @@ function MicronutrientsSection({ logs }: { logs: NutritionLog[] }) {
 
 // ── WeekNav ────────────────────────────────────────────────────────────────
 
-function WeekNav({ today, selectedDate, onSelect, onOpenCalendar, streak }: {
+function WeekNav({ today, selectedDate, onSelect }: {
   today: string;
   selectedDate: string;
   onSelect: (date: string) => void;
-  onOpenCalendar: () => void;
-  streak: number;
 }) {
-  const todayD     = new Date(today + 'T12:00:00');
-  const dayOfWeek  = todayD.getDay();
-  const weekDates  = Array.from({ length: 7 }, (_, i) => {
+  const todayD    = new Date(today + 'T12:00:00');
+  const dayOfWeek = todayD.getDay();
+  const weekDates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(todayD);
     d.setDate(todayD.getDate() - dayOfWeek + i);
     return toLocalDateStr(d);
@@ -524,33 +522,9 @@ function WeekNav({ today, selectedDate, onSelect, onOpenCalendar, streak }: {
 
   const { data: loggedDates } = useLoggedDates(todayD.getFullYear(), todayD.getMonth());
 
-  const displayLabel = selectedDate === today
-    ? 'Today'
-    : (() => {
-        const d = new Date(selectedDate + 'T12:00:00');
-        return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-      })();
-
   return (
-    <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
-      {/* Row 1: label + calendar + streak */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-        <TouchableOpacity onPress={onOpenCalendar} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-          <Text style={{ fontFamily: FONTS.anton, fontSize: 24, color: COLORS.text100, letterSpacing: 1 }}>
-            {displayLabel}
-          </Text>
-          <Ionicons name="chevron-down" size={16} color={COLORS.text500} style={{ marginTop: 5 }} />
-        </TouchableOpacity>
-        <View style={{ flex: 1 }} />
-        {streak > 0 && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <Ionicons name="flash" size={14} color="#fbbf24" />
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 14, color: '#fbbf24', letterSpacing: 1 }}>{streak}</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Row 2: 7 bubbles */}
+    <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+      {/* Week bubbles */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         {weekDates.map((dateStr, i) => {
           const isSelected = dateStr === selectedDate;
@@ -2059,20 +2033,39 @@ export default function SentinelScreen() {
   const netKcal    = totals.kcal - caloriesBurned;
   const netDisplay = netKcal !== totals.kcal;
 
+  const displayLabel = selectedDate === today
+    ? 'Today'
+    : new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
   return (
     <SafeAreaView style={s.container} edges={['top']}>
       {/* Header */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 2 }}>
-        <Text style={s.screenTitle}>SENTINEL</Text>
-        <Text style={s.screenSub}>Nutrition Logger</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 }}>
+        <View>
+          <Text style={s.screenTitle}>SENTINEL</Text>
+          <Text style={s.screenSub}>Nutrition Logger</Text>
+        </View>
+        <View style={{ flex: 1 }} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {streak > 0 && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name="flash" size={13} color="#fbbf24" />
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 13, color: '#fbbf24', letterSpacing: 1 }}>{streak}</Text>
+            </View>
+          )}
+          <TouchableOpacity onPress={() => setShowCalendar(true)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, letterSpacing: 1 }}>
+              {displayLabel}
+            </Text>
+            <Ionicons name="chevron-down" size={14} color={COLORS.text500} style={{ marginTop: 3 }} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <WeekNav
         today={today}
         selectedDate={selectedDate}
         onSelect={setSelectedDate}
-        onOpenCalendar={() => setShowCalendar(true)}
-        streak={streak}
       />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
