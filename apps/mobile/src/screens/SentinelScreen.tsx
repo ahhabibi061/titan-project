@@ -111,7 +111,7 @@ function CalorieRing({ consumed, target }: { consumed: number; target: number })
           <Circle cx={cx} cy={cy} r={r} stroke="rgba(41,37,36,0.5)" strokeWidth={7} fill="none" />
           <Circle
             cx={cx} cy={cy} r={r}
-            stroke={over ? COLORS.red400 : COLORS.green400}
+            stroke={over ? COLORS.accentHot : COLORS.accent}
             strokeWidth={7}
             fill="none"
             strokeDasharray={`${circ} ${circ}`}
@@ -1614,7 +1614,7 @@ export default function SentinelScreen() {
             <CalorieRing consumed={netDisplay ? netKcal : totals.kcal} target={macros.kcal} />
             <View style={{ flex: 1 }}>
               {/* protein=orange, carbs=blue, fat=yellow */}
-              <MacroBar label="PROTEIN" consumed={totals.protein} target={macros.protein} color={COLORS.accent}   />
+              <MacroBar label="PROTEIN" consumed={totals.protein} target={macros.protein} color={COLORS.red400}  />
               <MacroBar label="CARBS"   consumed={totals.carbs}   target={macros.carbs}   color={COLORS.blue400} />
               <MacroBar label="FAT"     consumed={totals.fat}     target={macros.fat}     color="#fbbf24"        />
             </View>
