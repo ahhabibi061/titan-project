@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet,
   Dimensions, Alert, Modal, Image, ActivityIndicator, KeyboardAvoidingView,
@@ -6,7 +6,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Line, Text as SvgText, Defs, LinearGradient, Stop } from 'react-native-svg';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
 import * as ImagePicker from 'expo-image-picker';
 import { COLORS, FONTS, SPACING } from '../constants/theme';
 import {
@@ -656,40 +655,33 @@ const pp = StyleSheet.create({
 
 function HistoryRow({ entry, isLast }: { entry: BiometricEntry; isLast: boolean }) {
   const { deleteEntry } = useDeleteEntry();
-  const swipeRef = useRef<Swipeable>(null);
 
-  const fat   = entry.body_fat_pct;
-  const lean  = fat != null ? (entry.weight_kg * (1 - fat / 100)) : null;
+  const fat  = entry.body_fat_pct;
+  const lean = fat != null ? (entry.weight_kg * (1 - fat / 100)) : null;
 
-  function renderRightActions() {
-    return (
-      <TouchableOpacity
-        style={ht.deleteAction}
-        onPress={() => {
-          Alert.alert(
-            'Delete entry',
-            `Remove ${fmt1(entry.weight_kg)} kg on ${fmtDate(entry.logged_at)}?`,
-            [
-              { text: 'Cancel', style: 'cancel', onPress: () => swipeRef.current?.close() },
-              { text: 'Delete', style: 'destructive', onPress: () => deleteEntry(entry.id) },
-            ]
-          );
-        }}
-      >
-        <Text style={ht.deleteText}>Delete</Text>
-      </TouchableOpacity>
+  function confirmDelete() {
+    Alert.alert(
+      'Delete entry',
+      `Remove ${fmt1(entry.weight_kg)} kg on ${fmtDate(entry.logged_at)}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => deleteEntry(entry.id) },
+      ]
     );
   }
 
   return (
-    <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
-      <View style={[ht.row, isLast && { borderBottomWidth: 0 }]}>
-        <Text style={[ht.cell, ht.dateCell]}>{fmtDate(entry.logged_at)}</Text>
-        <Text style={[ht.cell, ht.weightCell]}>{fmt1(entry.weight_kg)}</Text>
-        <Text style={[ht.cell, ht.bfCell]}>{fat != null ? fmt1(fat) + '%' : '—'}</Text>
-        <Text style={[ht.cell, ht.leanCell]}>{lean != null ? fmt1(lean) : '—'}</Text>
-      </View>
-    </Swipeable>
+    <TouchableOpacity
+      activeOpacity={0.7}
+      onLongPress={confirmDelete}
+      style={[ht.row, isLast && { borderBottomWidth: 0 }]}
+    >
+      <Text style={[ht.cell, ht.dateCell]}>{fmtDate(entry.logged_at)}</Text>
+      <Text style={[ht.cell, ht.weightCell]}>{fmt1(entry.weight_kg)}</Text>
+      <Text style={[ht.cell, ht.bfCell]}>{fat != null ? fmt1(fat) + '%' : '—'}</Text>
+      <Text style={[ht.cell, ht.leanCell]}>{lean != null ? fmt1(lean) : '—'}</Text>
+      <Text style={ht.deleteHint}>⋯</Text>
+    </TouchableOpacity>
   );
 }
 
@@ -713,7 +705,7 @@ function BiometricHistoryTable({ entries }: { entries: BiometricEntry[] }) {
       {entries.map((e, i) => (
         <HistoryRow key={e.id} entry={e} isLast={i === entries.length - 1} />
       ))}
-      <Text style={ht.hint}>Swipe left on a row to delete</Text>
+      <Text style={ht.hint}>Long-press a row to delete</Text>
     </View>
   );
 }
@@ -727,8 +719,7 @@ const ht = StyleSheet.create({
   weightCell:   { flex: 1.5, textAlign: 'right' as any },
   bfCell:       { flex: 1.2, textAlign: 'right' as any },
   leanCell:     { flex: 1.5, textAlign: 'right' as any },
-  deleteAction: { backgroundColor: '#dc2626', alignItems: 'center', justifyContent: 'center', width: 80 },
-  deleteText:   { fontFamily: FONTS.mono, fontSize: 11, color: '#fff', textTransform: 'uppercase', letterSpacing: 1 },
+  deleteHint:   { fontFamily: FONTS.mono, fontSize: 14, color: COLORS.text700, paddingLeft: SPACING.sm },
   empty:        { paddingVertical: SPACING.xl, alignItems: 'center' },
   emptyText:    { fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1 },
   hint:         { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1, marginTop: SPACING.md },
