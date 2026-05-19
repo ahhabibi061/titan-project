@@ -111,7 +111,7 @@ function CalorieRing({ consumed, target }: { consumed: number; target: number })
           <Circle cx={cx} cy={cy} r={r} stroke="rgba(41,37,36,0.5)" strokeWidth={7} fill="none" />
           <Circle
             cx={cx} cy={cy} r={r}
-            stroke={over ? COLORS.accentHot : COLORS.accent}
+            stroke={over ? COLORS.red400 : COLORS.blue400}
             strokeWidth={7}
             fill="none"
             strokeDasharray={`${circ} ${circ}`}
@@ -522,12 +522,11 @@ function MealItem({ item, onDelete }: { item: NutritionLog; onDelete: (id: strin
 
 // ── MealSection ────────────────────────────────────────────────────────────
 
-function MealSection({ type, items, onAdd, onScan, onTemplates, onDelete, isPro }: {
+function MealSection({ type, items, onAdd, onScan, onDelete, isPro }: {
   type: MealType;
   items: NutritionLog[];
   onAdd: () => void;
   onScan: () => void;
-  onTemplates: () => void;
   onDelete: (id: string) => void;
   isPro: boolean;
 }) {
@@ -571,11 +570,6 @@ function MealSection({ type, items, onAdd, onScan, onTemplates, onDelete, isPro 
             </Text>
           </View>
         </TouchableOpacity>
-        <TouchableOpacity style={[s.addBtn, { paddingHorizontal: 10 }]} onPress={onTemplates}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, letterSpacing: 1 }}>
-            ⊞ TEMPLATES
-          </Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -584,15 +578,29 @@ function MealSection({ type, items, onAdd, onScan, onTemplates, onDelete, isPro 
 // ── WaterSection ───────────────────────────────────────────────────────────
 
 function WaterSection({ date }: { date: string }) {
-  const { data: waterDay }          = useWaterLog(date);
-  const { logWater, isLoading }     = useLogWater();
-  const { deleteWater }             = useDeleteWater();
-  const [customInput, setCustomInput] = useState('');
-  const [showCustom, setShowCustom]   = useState(false);
+  const { data: waterDay }              = useWaterLog(date);
+  const { logWater, isLoading }         = useLogWater();
+  const { deleteWater }                 = useDeleteWater();
+  const { data: profile }               = useProfile();
+  const { updateProfile }               = useUpdateProfile();
+  const [customInput, setCustomInput]   = useState('');
+  const [showCustom, setShowCustom]     = useState(false);
+  const [editingTarget, setEditingTarget] = useState(false);
+  const [targetInput, setTargetInput]   = useState('');
 
+  const waterTarget = (profile?.settings?.water_target_ml as number | undefined) ?? WATER_TARGET_ML;
   const totalMl = waterDay?.total_ml ?? 0;
   const logs    = waterDay?.logs ?? [];
-  const pct     = Math.min(totalMl / WATER_TARGET_ML, 1);
+  const pct     = Math.min(totalMl / waterTarget, 1);
+
+  async function saveTarget() {
+    const val = parseInt(targetInput, 10);
+    if (!val || val < 100 || val > 10000) { Alert.alert('Invalid', 'Enter a value between 100 and 10,000 ml.'); return; }
+    try {
+      await updateProfile({ settings: { ...(profile?.settings ?? {}), water_target_ml: val } });
+    } catch { Alert.alert('Error', 'Could not save target.'); }
+    setEditingTarget(false);
+  }
 
   async function add(ml: number) {
     if (!ml || ml <= 0) return;
@@ -601,14 +609,38 @@ function WaterSection({ date }: { date: string }) {
 
   return (
     <View style={s.card}>
-      <Text style={s.sectionLabel}>💧  WATER</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+        <Text style={[s.sectionLabel, { flex: 1 }]}>💧  WATER</Text>
+        <TouchableOpacity
+          onPress={() => { setTargetInput(String(waterTarget)); setEditingTarget(v => !v); }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, letterSpacing: 1 }}>✎ TARGET</Text>
+        </TouchableOpacity>
+      </View>
+
+      {editingTarget && (
+        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>DAILY TARGET (ml)</Text>
+          <TextInput
+            style={[s.input, { width: 90 }]}
+            keyboardType="numeric"
+            value={targetInput}
+            onChangeText={setTargetInput}
+            autoFocus
+          />
+          <TouchableOpacity style={s.addBtn} onPress={saveTarget}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent }}>SAVE</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 10 }}>
         <Text style={{ fontFamily: FONTS.mono, fontSize: 20, color: COLORS.text100, marginRight: 6 }}>
           {totalMl < 1000 ? `${totalMl}ml` : `${(totalMl / 1000).toFixed(1)}L`}
         </Text>
         <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500 }}>
-          / {WATER_TARGET_ML / 1000}L
+          / {waterTarget >= 1000 ? `${(waterTarget / 1000).toFixed(1)}L` : `${waterTarget}ml`}
         </Text>
       </View>
 
@@ -667,19 +699,20 @@ function WaterSection({ date }: { date: string }) {
 
 // ── FoodSearchModal ────────────────────────────────────────────────────────
 
-function FoodSearchModal({ visible, mealType, onClose, onLog }: {
+function FoodSearchModal({ visible, mealType, onClose, onLog, onOpenBuilder }: {
   visible: boolean;
   mealType: MealType;
   onClose: () => void;
   onLog: (entry: any) => Promise<void>;
+  onOpenBuilder: () => void;
 }) {
+  const [tab, setTab]                 = useState<'SEARCH' | 'MANUAL' | 'MY MEALS'>('SEARCH');
   const [query, setQuery]             = useState('');
   const [committed, setCommitted]     = useState('');
   const [historyResults, setHistory]  = useState<MostLoggedFood[]>([]);
   const [selected, setSelected]       = useState<FoodResult | null>(null);
   const [serving, setServing]         = useState('100');
   const [logging, setLogging]         = useState(false);
-  const [manual, setManual]           = useState(false);
   const [mName, setMName]             = useState('');
   const [mKcal, setMKcal]             = useState('');
   const [mP, setMP]                   = useState('');
@@ -688,6 +721,9 @@ function FoodSearchModal({ visible, mealType, onClose, onLog }: {
   const debounceRef                   = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const { data: mostLogged }          = useMostLoggedFoods();
   const { data: usdaResults, isFetching: fetchingUsda } = useFoodSearch(committed);
+  const { data: templates = [] }      = useMealTemplates();
+  const { logTemplate, isLoading: loggingTemplate } = useLogTemplate();
+  const { deleteTemplate }            = useDeleteTemplate();
 
   // Debounce both USDA commit + history search together
   function handleQueryChange(text: string) {
@@ -724,7 +760,7 @@ function FoodSearchModal({ visible, mealType, onClose, onLog }: {
 
   function reset() {
     setQuery(''); setCommitted(''); setHistory([]); setSelected(null); setServing('100');
-    setManual(false); setMName(''); setMKcal(''); setMP(''); setMC(''); setMF('');
+    setTab('SEARCH'); setMName(''); setMKcal(''); setMP(''); setMC(''); setMF('');
   }
   function close() { reset(); onClose(); }
   function scale(val: number) { return Math.round((val * (parseFloat(serving) || 100)) / 100); }
@@ -771,20 +807,76 @@ function FoodSearchModal({ visible, mealType, onClose, onLog }: {
 
           {/* Tab toggle */}
           <View style={{ flexDirection: 'row', marginHorizontal: 16, marginTop: 12, gap: 8 }}>
-            {(['SEARCH', 'MANUAL'] as const).map(tab => (
+            {(['SEARCH', 'MANUAL', 'MY MEALS'] as const).map(t => (
               <TouchableOpacity
-                key={tab}
-                style={[s.tabToggle, (tab === 'MANUAL') === manual && { borderColor: COLORS.accent }]}
-                onPress={() => setManual(tab === 'MANUAL')}
+                key={t}
+                style={[s.tabToggle, tab === t && { borderColor: COLORS.accent }]}
+                onPress={() => setTab(t)}
               >
-                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, letterSpacing: 1, color: (tab === 'MANUAL') === manual ? COLORS.accent : COLORS.text500 }}>
-                  {tab}
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, letterSpacing: 1, color: tab === t ? COLORS.accent : COLORS.text500 }}>
+                  {t}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          {!manual ? (
+          {tab === 'MY MEALS' ? (
+            <ScrollView style={{ flex: 1, padding: 16 }} keyboardShouldPersistTaps="handled">
+              <TouchableOpacity
+                style={[s.addBtn, { alignSelf: 'flex-start', marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 6 }]}
+                onPress={() => { close(); onOpenBuilder(); }}
+              >
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, letterSpacing: 1 }}>⊞ BUILD NEW MEAL</Text>
+              </TouchableOpacity>
+
+              {templates.length === 0 && (
+                <Text style={{ fontFamily: FONTS.sans, fontSize: 13, color: COLORS.text600, textAlign: 'center', paddingTop: 24 }}>
+                  No saved meals yet. Build one above.
+                </Text>
+              )}
+
+              {templates.map(tmpl => (
+                <View key={tmpl.id} style={[s.card, { marginBottom: 10 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={{ fontFamily: FONTS.sansSB, fontSize: 13, color: COLORS.text100, flex: 1 }}>{tmpl.name}</Text>
+                    <TouchableOpacity onPress={() => deleteTemplate(tmpl.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text700 }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, marginBottom: 8 }}>
+                    {tmpl.kcal} kcal · P {tmpl.protein_g}g · C {tmpl.carbs_g}g · F {tmpl.fat_g}g
+                    {tmpl.times_used > 0 ? ` · used ${tmpl.times_used}×` : ''}
+                  </Text>
+                  {tmpl.items.length > 0 && (
+                    <View style={{ marginBottom: 8 }}>
+                      {tmpl.items.map((item, i) => (
+                        <Text key={i} style={{ fontFamily: FONTS.sans, fontSize: 11, color: COLORS.text600, lineHeight: 18 }}>
+                          · {item.name} — {item.kcal} kcal
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    style={[s.addBtn, { backgroundColor: COLORS.accentMuted, borderColor: COLORS.accentBorder, alignItems: 'center', paddingVertical: 8 }]}
+                    onPress={async () => {
+                      try {
+                        await logTemplate({ template: tmpl, mealType });
+                        close();
+                      } catch { Alert.alert('Error', 'Could not log meal.'); }
+                    }}
+                    disabled={loggingTemplate}
+                  >
+                    {loggingTemplate
+                      ? <ActivityIndicator size="small" color={COLORS.accent} />
+                      : <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, letterSpacing: 1 }}>
+                          LOG ALL → {mealType.toUpperCase()}
+                        </Text>
+                    }
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          ) : tab === 'SEARCH' ? (
             <>
               {/* Search bar */}
               <View style={{ flexDirection: 'row', marginHorizontal: 16, marginTop: 12, gap: 8 }}>
@@ -905,6 +997,7 @@ function FoodSearchModal({ visible, mealType, onClose, onLog }: {
               )}
             </>
           ) : (
+            /* tab === 'MANUAL' */
             <ScrollView style={{ padding: 16 }} keyboardShouldPersistTaps="handled">
               <View style={s.card}>
                 <Text style={s.fieldLabel}>FOOD NAME</Text>
@@ -1067,12 +1160,13 @@ function ScanResultModal({ result, mealType, onConfirm, onClose }: {
 
 // ── TemplatesModal ─────────────────────────────────────────────────────────
 
-function TemplatesModal({ visible, mealType, onClose }: {
+function TemplatesModal({ visible, mealType, onClose, startMode = 'list' }: {
   visible: boolean;
   mealType: MealType;
   onClose: () => void;
+  startMode?: 'list' | 'builder';
 }) {
-  const [mode, setMode]               = useState<'list' | 'builder'>('list');
+  const [mode, setMode]               = useState<'list' | 'builder'>(startMode);
   const { data: templates = [] }      = useMealTemplates();
   const { saveTemplate, isLoading: saving }   = useSaveTemplate();
   const { deleteTemplate }            = useDeleteTemplate();
@@ -1080,6 +1174,8 @@ function TemplatesModal({ visible, mealType, onClose }: {
   const { scanMeal, isLoading: scanning }     = useScanMeal();
   const { data: profile }             = useProfile();
   const isPro = profile?.subscription_tier === 'pro' || profile?.subscription_tier === 'elite';
+
+  useEffect(() => { if (visible) setMode(startMode); }, [visible]);
 
   // Builder state
   const [tName, setTName]             = useState('');
@@ -1448,8 +1544,8 @@ export default function SentinelScreen() {
   }
   const isToday = selectedDate === today;
 
-  function openSearch(mt: MealType)    { setSearchMealType(mt);    setShowSearch(true); }
-  function openTemplates(mt: MealType) { setTemplatesMealType(mt); setShowTemplates(true); }
+  function openSearch(mt: MealType) { setSearchMealType(mt); setShowSearch(true); }
+  function openBuilder(mt: MealType) { setTemplatesMealType(mt); setShowTemplates(true); }
 
   async function openScan(mt: MealType) {
     if (!isPro) { setProModal({ visible: true, feature: 'Meal scanning' }); return; }
@@ -1519,7 +1615,7 @@ export default function SentinelScreen() {
             <View style={{ flex: 1 }}>
               {/* protein=orange, carbs=blue, fat=yellow */}
               <MacroBar label="PROTEIN" consumed={totals.protein} target={macros.protein} color={COLORS.accent}   />
-              <MacroBar label="CARBS"   consumed={totals.carbs}   target={macros.carbs}   color={COLORS.blue400} />
+              <MacroBar label="CARBS"   consumed={totals.carbs}   target={macros.carbs}   color={COLORS.green400} />
               <MacroBar label="FAT"     consumed={totals.fat}     target={macros.fat}     color="#fbbf24"        />
             </View>
           </View>
@@ -1554,7 +1650,6 @@ export default function SentinelScreen() {
             items={logs.filter(l => l.meal_type === mt)}
             onAdd={() => openSearch(mt)}
             onScan={() => openScan(mt)}
-            onTemplates={() => openTemplates(mt)}
             onDelete={handleDelete}
             isPro={isPro}
           />
@@ -1596,12 +1691,14 @@ export default function SentinelScreen() {
         visible={showTemplates}
         mealType={templatesMealType}
         onClose={() => setShowTemplates(false)}
+        startMode="builder"
       />
       <FoodSearchModal
         visible={showSearch}
         mealType={searchMealType}
         onClose={() => setShowSearch(false)}
         onLog={logMeal}
+        onOpenBuilder={() => openBuilder(searchMealType)}
       />
       <ScanResultModal
         result={scanResult}
