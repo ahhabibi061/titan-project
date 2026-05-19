@@ -492,7 +492,7 @@ function BodyCompositionPanel({ entries }: { entries: BiometricEntry[] }) {
     <View>
       <Bar
         lean={firstLean} fat={firstFat} total={first.weight_kg}
-        label="CUT START" date={fmtDate(first.logged_at)}
+        label="FIRST ENTRY" date={fmtDate(first.logged_at)}
         hasBf={first.body_fat_pct != null}
       />
       <View style={{ height: SPACING.lg }} />
