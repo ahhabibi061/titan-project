@@ -317,80 +317,185 @@ function CalendarModal({ visible, selectedDate, onSelect, onClose }: {
 
 // ── MacroEditModal ─────────────────────────────────────────────────────────
 
+const MACRO_PRESETS = [
+  { label: 'HIGH PROTEIN', p: 40, c: 35, f: 25 },
+  { label: 'BALANCED',     p: 30, c: 40, f: 30 },
+  { label: 'MUSCLE BUILD', p: 35, c: 45, f: 20 },
+  { label: 'KETO',         p: 25, c:  5, f: 70 },
+] as const;
+
 function MacroEditModal({ visible, current, onClose }: {
   visible: boolean;
   current: { kcal: number; protein: number; carbs: number; fat: number };
   onClose: () => void;
 }) {
   const { updateProfile, isLoading } = useUpdateProfile();
-  const [kcal, setKcal]       = useState(String(current.kcal));
-  const [protein, setProtein] = useState(String(current.protein));
-  const [carbs, setCarbs]     = useState(String(current.carbs));
-  const [fat, setFat]         = useState(String(current.fat));
+  const [kcalStr, setKcalStr]   = useState('');
+  const [protPct, setProtPct]   = useState('');
+  const [carbPct, setCarbPct]   = useState('');
+  const [fatPct,  setFatPct]    = useState('');
 
+  // Seed from current macros (back-calculate percentages)
   useEffect(() => {
-    if (visible) {
-      setKcal(String(current.kcal));
-      setProtein(String(current.protein));
-      setCarbs(String(current.carbs));
-      setFat(String(current.fat));
+    if (!visible) return;
+    const k = current.kcal || 2000;
+    setKcalStr(String(k));
+    const protCal = current.protein * 4;
+    const carbCal = current.carbs   * 4;
+    const fatCal  = current.fat     * 9;
+    const total   = protCal + carbCal + fatCal;
+    if (total > 0) {
+      setProtPct(String(Math.round(protCal / total * 100)));
+      setCarbPct(String(Math.round(carbCal / total * 100)));
+      setFatPct(String(Math.round(fatCal  / total * 100)));
+    } else {
+      setProtPct('30'); setCarbPct('40'); setFatPct('30');
     }
   }, [visible]);
 
+  const kcalNum    = parseInt(kcalStr, 10) || 0;
+  const protPctNum = parseFloat(protPct)   || 0;
+  const carbPctNum = parseFloat(carbPct)   || 0;
+  const fatPctNum  = parseFloat(fatPct)    || 0;
+  const totalPct   = protPctNum + carbPctNum + fatPctNum;
+
+  const protG = Math.round(kcalNum * protPctNum / 100 / 4);
+  const carbG = Math.round(kcalNum * carbPctNum / 100 / 4);
+  const fatG  = Math.round(kcalNum * fatPctNum  / 100 / 9);
+
+  const pctOk  = Math.abs(totalPct - 100) < 1;
+  const pctColor = pctOk ? COLORS.green400 : '#fbbf24';
+
+  function applyPreset(p: number, c: number, f: number) {
+    setProtPct(String(p)); setCarbPct(String(c)); setFatPct(String(f));
+  }
+
   async function save() {
+    if (!pctOk) { Alert.alert('Check split', `Percentages add up to ${Math.round(totalPct)}%. They must total 100%.`); return; }
+    if (!kcalNum) { Alert.alert('Enter calories', 'Set your daily calorie target first.'); return; }
     try {
-      await updateProfile({
-        current_macros: {
-          kcal:    parseInt(kcal, 10)    || 0,
-          protein: parseInt(protein, 10) || 0,
-          carbs:   parseInt(carbs, 10)   || 0,
-          fat:     parseInt(fat, 10)     || 0,
-        },
-      });
+      await updateProfile({ current_macros: { kcal: kcalNum, protein: protG, carbs: carbG, fat: fatG } });
       onClose();
     } catch { Alert.alert('Error', 'Could not save macro targets.'); }
   }
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={s.overlay} activeOpacity={1} onPress={onClose}>
-        <TouchableOpacity activeOpacity={1} style={s.proCard}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.accent, letterSpacing: 1, marginBottom: 14 }}>
-            EDIT MACRO TARGETS
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.fieldLabel}>KCAL</Text>
-              <TextInput style={s.input} value={kcal} onChangeText={setKcal} keyboardType="numeric" placeholderTextColor={COLORS.text600} />
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg }}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          {/* Header */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.accent, letterSpacing: 1, flex: 1 }}>
+              EDIT MACRO TARGETS
+            </Text>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text500 }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ flex: 1, padding: 16 }} keyboardShouldPersistTaps="handled">
+
+            {/* Daily calories */}
+            <View style={s.card}>
+              <Text style={s.fieldLabel}>DAILY CALORIES (kcal)</Text>
+              <TextInput
+                style={[s.input, { marginTop: 4, fontSize: 20, paddingVertical: 10 }]}
+                value={kcalStr}
+                onChangeText={setKcalStr}
+                keyboardType="numeric"
+                placeholder="2000"
+                placeholderTextColor={COLORS.text600}
+              />
             </View>
-          </View>
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-            {[
-              { label: 'PROTEIN (g)', val: protein, set: setProtein },
-              { label: 'CARBS (g)',   val: carbs,   set: setCarbs   },
-              { label: 'FAT (g)',     val: fat,      set: setFat     },
-            ].map(f => (
-              <View key={f.label} style={{ flex: 1 }}>
-                <Text style={s.fieldLabel}>{f.label}</Text>
-                <TextInput style={s.input} value={f.val} onChangeText={f.set} keyboardType="numeric" placeholderTextColor={COLORS.text600} />
+
+            {/* Macro split */}
+            <View style={s.card}>
+              <Text style={[s.sectionLabel, { marginBottom: 12 }]}>MACRO SPLIT — % OF CALORIES</Text>
+
+              {/* Table header */}
+              <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 72 }}>MACRO</Text>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 64 }}>%</Text>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, flex: 1 }}>GRAMS / DAY</Text>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, width: 56, textAlign: 'right' }}>KCAL/G</Text>
               </View>
-            ))}
-          </View>
-          <TouchableOpacity
-            style={[s.addBtn, { alignSelf: 'stretch', alignItems: 'center', backgroundColor: COLORS.accentMuted, borderColor: COLORS.accentBorder, paddingVertical: 10, marginBottom: 8 }]}
-            onPress={save}
-            disabled={isLoading}
-          >
-            {isLoading
-              ? <ActivityIndicator size="small" color={COLORS.accent} />
-              : <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, letterSpacing: 1 }}>SAVE TARGETS</Text>
-            }
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onClose} style={{ alignSelf: 'stretch', alignItems: 'center', paddingVertical: 8 }}>
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 }}>CANCEL</Text>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </TouchableOpacity>
+
+              {/* Rows */}
+              {[
+                { label: 'PROTEIN', color: COLORS.accent,   pct: protPct, set: setProtPct, g: protG, cal: 4 },
+                { label: 'CARBS',   color: COLORS.blue400,  pct: carbPct, set: setCarbPct, g: carbG, cal: 4 },
+                { label: 'FAT',     color: '#fbbf24',        pct: fatPct,  set: setFatPct,  g: fatG,  cal: 9 },
+              ].map(row => (
+                <View key={row.label} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', width: 72, gap: 6 }}>
+                    <View style={{ width: 3, height: 14, backgroundColor: row.color }} />
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400 }}>{row.label}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', width: 64, gap: 2 }}>
+                    <TextInput
+                      style={[s.input, { width: 44, paddingVertical: 6, paddingHorizontal: 8, textAlign: 'center' }]}
+                      value={row.pct}
+                      onChangeText={row.set}
+                      keyboardType="numeric"
+                      maxLength={3}
+                      placeholderTextColor={COLORS.text600}
+                    />
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text600 }}>%</Text>
+                  </View>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 14, color: row.g > 0 ? COLORS.text100 : COLORS.text700, flex: 1, letterSpacing: -0.5 }}>
+                    {row.g > 0 ? `${row.g}g` : '—'}
+                  </Text>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, width: 56, textAlign: 'right' }}>{row.cal} kcal/g</Text>
+                </View>
+              ))}
+
+              {/* Total */}
+              <View style={{ borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 10, flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, flex: 1 }}>TOTAL</Text>
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 13, color: pctColor, letterSpacing: 1 }}>
+                  {Math.round(totalPct)}%  {pctOk ? '✓' : `(need ${Math.round(100 - totalPct) > 0 ? '+' : ''}${Math.round(100 - totalPct)} more)`}
+                </Text>
+              </View>
+            </View>
+
+            {/* Quick presets */}
+            <View style={s.card}>
+              <Text style={[s.sectionLabel, { marginBottom: 10 }]}>QUICK PRESETS</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {MACRO_PRESETS.map(preset => (
+                  <TouchableOpacity
+                    key={preset.label}
+                    style={[s.addBtn, { paddingHorizontal: 10 }]}
+                    onPress={() => applyPreset(preset.p, preset.c, preset.f)}
+                  >
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text400, letterSpacing: 1 }}>
+                      {preset.label}
+                    </Text>
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, marginTop: 2 }}>
+                      P{preset.p} C{preset.c} F{preset.f}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Save */}
+            <TouchableOpacity
+              style={[s.addBtn, { alignSelf: 'stretch', alignItems: 'center', paddingVertical: 13, backgroundColor: pctOk ? COLORS.accentMuted : 'transparent', borderColor: pctOk ? COLORS.accentBorder : COLORS.border }]}
+              onPress={save}
+              disabled={isLoading}
+            >
+              {isLoading
+                ? <ActivityIndicator size="small" color={COLORS.accent} />
+                : <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: pctOk ? COLORS.accent : COLORS.text600, letterSpacing: 1 }}>
+                    SAVE TARGETS
+                  </Text>
+              }
+            </TouchableOpacity>
+
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -460,7 +565,7 @@ function MealSection({ type, items, onAdd, onScan, onTemplates, onDelete, isPro 
         </TouchableOpacity>
         <TouchableOpacity style={[s.addBtn, { paddingHorizontal: 10 }]} onPress={onScan}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            {!isPro && <CrownIcon size={9} color="#fbbf24" />}
+            {!isPro && <CrownIcon size={12} color="#fbbf24" />}
             <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: isPro ? COLORS.text400 : COLORS.text600, letterSpacing: 1 }}>
               SCAN BARCODE
             </Text>
@@ -973,6 +1078,8 @@ function TemplatesModal({ visible, mealType, onClose }: {
   const { deleteTemplate }            = useDeleteTemplate();
   const { logTemplate, isLoading: logging }   = useLogTemplate();
   const { scanMeal, isLoading: scanning }     = useScanMeal();
+  const { data: profile }             = useProfile();
+  const isPro = profile?.subscription_tier === 'pro' || profile?.subscription_tier === 'elite';
 
   // Builder state
   const [tName, setTName]             = useState('');
@@ -1020,6 +1127,7 @@ function TemplatesModal({ visible, mealType, onClose }: {
   }
 
   async function handleScan() {
+    if (!isPro) { Alert.alert('Pro Feature', 'Meal scanning requires a Pro or Elite subscription.'); return; }
     try {
       const result = await scanMeal();
       setIngredients(prev => [...prev, { name: result.meal_name, kcal: result.kcal, protein_g: result.protein_g, carbs_g: result.carbs_g, fat_g: result.fat_g }]);
@@ -1207,7 +1315,8 @@ function TemplatesModal({ visible, mealType, onClose }: {
                     {scanning
                       ? <ActivityIndicator size="small" color={COLORS.accent} />
                       : <>
-                          <Ionicons name="barcode-outline" size={16} color={COLORS.text400} />
+                          {!isPro && <View style={{ marginBottom: 2 }}><CrownIcon size={10} color="#fbbf24" /></View>}
+                          <Ionicons name="barcode-outline" size={16} color={isPro ? COLORS.text400 : COLORS.text600} />
                           <Text style={{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text500, marginTop: 2 }}>SCAN</Text>
                         </>
                     }
