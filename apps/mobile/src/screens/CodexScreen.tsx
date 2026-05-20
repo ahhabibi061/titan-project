@@ -680,6 +680,11 @@ export default function CodexScreen() {
 
   const isPro = false; // wire to subscription hook when available
 
+  const sortIdx   = SORTS.findIndex(s => s.id === sortBy);
+  const cycleSort = useCallback(() => {
+    setSortBy(SORTS[(sortIdx + 1) % SORTS.length].id);
+  }, [sortIdx]);
+
   const toggleMuscle = useCallback((id: string) => {
     setActiveMuscles(prev => {
       const next = new Set(prev);
@@ -768,19 +773,15 @@ export default function CodexScreen() {
         ))}
       </ScrollView>
 
-      {/* ROW 5 — SORT chips + result count right-aligned */}
+      {/* ROW 5 — SORT cycle button + result count */}
       <View style={sc.sortRow}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={sc.filterRow}>
-          {SORTS.map(s => (
-            <Chip key={s.id} active={sortBy === s.id} onPress={() => setSortBy(s.id)}>
-              {s.label}
-            </Chip>
-          ))}
-        </ScrollView>
+        <TouchableOpacity style={sc.sortBtn} onPress={cycleSort} activeOpacity={0.8}>
+          <Text style={sc.sortBtnText}>{SORTS[sortIdx]?.label ?? 'Sort'} ▾</Text>
+        </TouchableOpacity>
         <Text style={sc.resultCount}>{filtered.length} exercises</Text>
       </View>
     </View>
-  ), [search, activeSplit, activeMuscles, activeEquipment, sortBy, filtered.length, toggleMuscle, toggleEquipment]);
+  ), [search, activeSplit, activeMuscles, activeEquipment, sortIdx, cycleSort, filtered.length, toggleMuscle, toggleEquipment]);
 
   if (isLoading) {
     return (
@@ -833,8 +834,10 @@ const sc = StyleSheet.create({
   searchInput:  { fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text100, backgroundColor: 'rgba(12,11,10,0.6)', borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: SPACING.sm, paddingVertical: Platform.OS === 'ios' ? SPACING.xs : 5, height: 36, marginBottom: SPACING.sm },
   filterRow:    { flexDirection: 'row', gap: SPACING.xs, paddingBottom: SPACING.sm, alignItems: 'center' },
   groupLabel:   { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5, marginLeft: SPACING.xs, marginRight: 2, alignSelf: 'center' },
-  sortRow:      { flexDirection: 'row', alignItems: 'center' },
-  resultCount:  { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1, marginLeft: SPACING.sm, flexShrink: 0 },
+  sortRow:      { flexDirection: 'row', alignItems: 'center', marginBottom: SPACING.sm },
+  sortBtn:      { paddingHorizontal: SPACING.sm, height: 36, borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,11,10,0.6)', alignItems: 'center', justifyContent: 'center' },
+  sortBtnText:  { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text400, textTransform: 'uppercase', letterSpacing: 1 },
+  resultCount:  { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1, marginLeft: SPACING.sm },
 
   empty:           { paddingVertical: 80, alignItems: 'center' },
   emptyTitle:      { fontFamily: FONTS.anton, fontSize: 28, color: COLORS.text700, textTransform: 'uppercase', marginBottom: SPACING.xs },
