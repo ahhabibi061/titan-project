@@ -435,7 +435,12 @@ function FinishConfirmSheet({ visible, onConfirm, onDiscard, onClose, totalVolum
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.8)' }}>
         <View style={{ backgroundColor: '#111110', borderTopWidth: 1, borderTopColor: '#292524', padding: 20 }}>
-          <Text style={{ fontFamily: FONTS.anton, fontSize: 24, color: COLORS.text100, lineHeight: 30, paddingTop: 2, marginBottom: 4 }}>FINISH WORKOUT?</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+            <Text style={{ fontFamily: FONTS.anton, fontSize: 24, color: COLORS.text100, lineHeight: 30, paddingTop: 2 }}>FINISH WORKOUT?</Text>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 16, color: COLORS.text600 }}>×</Text>
+            </TouchableOpacity>
+          </View>
           <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 20 }}>Review and confirm</Text>
 
           <View style={{ flexDirection: 'row', borderWidth: 1, borderColor: COLORS.border, marginBottom: 16 }}>
@@ -622,6 +627,64 @@ const TEMPLATES: Template[] = [
   },
 ];
 
+const BRO_TEMPLATES: Template[] = [
+  {
+    name: 'Bro Chest',
+    estimatedMins: 65,
+    exercises: [
+      { exerciseId: 'bench',           setsTarget: 4 },
+      { exerciseId: 'incline_db',      setsTarget: 4 },
+      { exerciseId: 'cable_fly',       setsTarget: 3 },
+      { exerciseId: 'dips',            setsTarget: 3 },
+      { exerciseId: 'cable_fly',       setsTarget: 3 },
+    ],
+  },
+  {
+    name: 'Bro Back',
+    estimatedMins: 65,
+    exercises: [
+      { exerciseId: 'pullup',          setsTarget: 4 },
+      { exerciseId: 'row',             setsTarget: 4 },
+      { exerciseId: 'lat_pulldown',    setsTarget: 3 },
+      { exerciseId: 'tbar_row',        setsTarget: 3 },
+      { exerciseId: 'face_pull',       setsTarget: 3 },
+    ],
+  },
+  {
+    name: 'Bro Legs',
+    estimatedMins: 70,
+    exercises: [
+      { exerciseId: 'squat',           setsTarget: 4 },
+      { exerciseId: 'leg_press',       setsTarget: 4 },
+      { exerciseId: 'rdl',             setsTarget: 3 },
+      { exerciseId: 'leg_curl',        setsTarget: 3 },
+      { exerciseId: 'calf_raise',      setsTarget: 4 },
+    ],
+  },
+  {
+    name: 'Bro Shoulders',
+    estimatedMins: 60,
+    exercises: [
+      { exerciseId: 'ohp',             setsTarget: 4 },
+      { exerciseId: 'lateral_raise',   setsTarget: 4 },
+      { exerciseId: 'rear_delt_fly',   setsTarget: 3 },
+      { exerciseId: 'face_pull',       setsTarget: 3 },
+      { exerciseId: 'shrug',           setsTarget: 3 },
+    ],
+  },
+  {
+    name: 'Bro Arms',
+    estimatedMins: 60,
+    exercises: [
+      { exerciseId: 'curl',            setsTarget: 4 },
+      { exerciseId: 'hammer_curl',     setsTarget: 3 },
+      { exerciseId: 'preacher_curl',   setsTarget: 3 },
+      { exerciseId: 'skullcrusher',    setsTarget: 4 },
+      { exerciseId: 'tricep_pushdown', setsTarget: 3 },
+    ],
+  },
+];
+
 // ─── Create Split Sheet ───────────────────────────────────────────────────────
 function CreateSplitSheet({ visible, mode, onClose, onSaved }: {
   visible: boolean;
@@ -643,7 +706,8 @@ function CreateSplitSheet({ visible, mode, onClose, onSaved }: {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
-      const col = mode === 'split' ? 'my_splits' : 'my_templates';
+      // Splits persist to custom_splits; templates persist to my_templates
+      const col = mode === 'split' ? 'custom_splits' : 'my_templates';
       const { data: profile } = await supabase.from('profiles').select(col).eq('id', user.id).single();
       const current = ((profile as any)?.[col] ?? []) as UserSplit[];
       const newSplit: UserSplit = { id: Date.now().toString(), name: name.trim(), exercises };
@@ -832,6 +896,7 @@ function SessionSelector({
               style={{ paddingVertical: 12, borderWidth: 1, borderColor: COLORS.accent, backgroundColor: COLORS.accentMuted, alignItems: 'center', marginBottom: 12 }}>
               <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, textTransform: 'uppercase', letterSpacing: 1.5 }}>+ CREATE TEMPLATE</Text>
             </TouchableOpacity>
+            {/* PPL / standard templates */}
             {TEMPLATES.map((tmpl, i) => {
               const exerciseNames = tmpl.exercises.map(e => EXERCISE_LIBRARY.find(ex => ex.id === e.exerciseId)?.name ?? e.exerciseId);
               return (
@@ -852,6 +917,31 @@ function SessionSelector({
                 </TouchableOpacity>
               );
             })}
+            {/* BRO SPLIT header + templates */}
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 2, marginTop: 8, marginBottom: 10 }}>
+              ── BRO SPLIT
+            </Text>
+            {BRO_TEMPLATES.map((tmpl, i) => {
+              const exerciseNames = tmpl.exercises.map(e => EXERCISE_LIBRARY.find(ex => ex.id === e.exerciseId)?.name ?? e.exerciseId);
+              return (
+                <TouchableOpacity key={`bro-${i}`} onPress={() => onSelectTemplate(tmpl.exercises)}
+                  style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 10, padding: 14 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <Text style={{ fontFamily: FONTS.anton, fontSize: 18, color: COLORS.text100, lineHeight: 24, paddingTop: 2 }}>{tmpl.name.toUpperCase()}</Text>
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>~{tmpl.estimatedMins}m</Text>
+                  </View>
+                  {exerciseNames.slice(0, 4).map((name, j) => (
+                    <Text key={j} style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, marginBottom: 2 }}>
+                      {tmpl.exercises[j].setsTarget}× {name}
+                    </Text>
+                  ))}
+                  {exerciseNames.length > 4 && (
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, marginTop: 2 }}>+{exerciseNames.length - 4} more</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+            {/* User-created templates */}
             {userTemplates.map(tmpl => (
               <TouchableOpacity key={tmpl.id} onPress={() => onSelectSplit(tmpl.exercises)}
                 style={{ borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,10,8,0.4)', marginBottom: 10, padding: 14 }}>
@@ -1116,9 +1206,9 @@ export default function ForgeScreen() {
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-        const { data } = await supabase.from('profiles').select('my_splits, my_templates').eq('id', user.id).single();
-        if (data?.my_splits)    setUserSplits(data.my_splits as UserSplit[]);
-        if (data?.my_templates) setUserTemplates(data.my_templates as UserSplit[]);
+        const { data } = await supabase.from('profiles').select('custom_splits, my_templates').eq('id', user.id).single();
+        if (data?.custom_splits) setUserSplits(data.custom_splits as UserSplit[]);
+        if (data?.my_templates)  setUserTemplates(data.my_templates as UserSplit[]);
       } catch {}
     })();
   }, []);
@@ -1365,11 +1455,22 @@ export default function ForgeScreen() {
         <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12 }}>
-              {sessionStarted && (
+              {showSelector && !sessionStarted ? (
+                // Selector mode: back to Home tab
+                <TouchableOpacity onPress={() => navigation.navigate('Home')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingBottom: 5 }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, textTransform: 'uppercase' }}>‹ HOME</Text>
+                </TouchableOpacity>
+              ) : !showSelector && !sessionStarted ? (
+                // Exercises chosen but session not started: back to selector
+                <TouchableOpacity onPress={() => setShowSelector(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingBottom: 5 }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, textTransform: 'uppercase' }}>‹ BACK</Text>
+                </TouchableOpacity>
+              ) : sessionStarted ? (
+                // Active session: cancel
                 <TouchableOpacity onPress={handleCancelSession} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ paddingBottom: 5 }}>
                   <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text500, textTransform: 'uppercase' }}>‹ CANCEL</Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
               <Text style={{ fontFamily: FONTS.anton, fontSize: 28, color: COLORS.text100, lineHeight: 36, paddingTop: 2 }}>FORGE</Text>
             </View>
             <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: sessionStarted ? COLORS.accent : COLORS.text500 }}>

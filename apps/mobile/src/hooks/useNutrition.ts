@@ -197,6 +197,7 @@ export function useLogMeal() {
       qc.invalidateQueries({ queryKey: ['nutrition'] });
       qc.refetchQueries({ queryKey: ['nutrition'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['this-week'] });
     },
   });
   return { logMeal: mutation.mutateAsync, isLoading: mutation.isPending, error: mutation.error };
@@ -260,9 +261,76 @@ export function useLogWater() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['water'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['this-week'] });
     },
   });
   return { logWater: mutation.mutateAsync, isLoading: mutation.isPending };
+}
+
+// ── useWeeklyNutritionDays ────────────────────────────────────────────────
+
+export function useWeeklyNutritionDays() {
+  return useQuery<Record<string, number>>({
+    queryKey: ['this-week', 'nutrition'],
+    queryFn: async () => {
+      const userId = await getUserId();
+      const now = new Date();
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay()); // Sunday
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+      const { data, error } = await supabase
+        .from('nutrition_logs')
+        .select('kcal, logged_at')
+        .eq('user_id', userId)
+        .gte('logged_at', weekStart.toISOString())
+        .lte('logged_at', weekEnd.toISOString());
+      if (error) throw error;
+      const byDate: Record<string, number> = {};
+      for (const row of data ?? []) {
+        const d = new Date(row.logged_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        byDate[key] = (byDate[key] ?? 0) + (row.kcal ?? 0);
+      }
+      return byDate;
+    },
+    staleTime: 30_000,
+  });
+}
+
+// ── useWeeklyWaterDays ────────────────────────────────────────────────────
+
+export function useWeeklyWaterDays() {
+  return useQuery<Record<string, number>>({
+    queryKey: ['this-week', 'water'],
+    queryFn: async () => {
+      const userId = await getUserId();
+      const now = new Date();
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - now.getDay());
+      weekStart.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+      const { data, error } = await supabase
+        .from('water_logs')
+        .select('amount_ml, logged_at')
+        .eq('user_id', userId)
+        .gte('logged_at', weekStart.toISOString())
+        .lte('logged_at', weekEnd.toISOString());
+      if (error) throw error;
+      const byDate: Record<string, number> = {};
+      for (const row of data ?? []) {
+        const d = new Date(row.logged_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        byDate[key] = (byDate[key] ?? 0) + (row.amount_ml ?? 0);
+      }
+      return byDate;
+    },
+    staleTime: 30_000,
+  });
 }
 
 // ── useDeleteWater ────────────────────────────────────────────────────────

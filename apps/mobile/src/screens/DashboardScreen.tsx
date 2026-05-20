@@ -4,7 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTodayWorkout, useWeeklyWorkouts, useWeeklySets, useActivityFeed, useWeeklyMuscleVolumes } from '../hooks/useWorkout';
 import { useBiometricEntries } from '../hooks/useVault';
-import { useDailyNutrition } from '../hooks/useNutrition';
+import { useDailyNutrition, useWeeklyNutritionDays, useWeeklyWaterDays } from '../hooks/useNutrition';
 import { useProfile } from '../hooks/useSettings';
 import {
   View,
@@ -100,7 +100,7 @@ const MOCK_GROWTH_MAP: Record<string, { status: string; growthPct: number; curre
 
 interface DayAdherence {
   day: string; label: string; today: boolean; future: boolean; rest: boolean;
-  workout: boolean; meals: boolean; weight: boolean;
+  workout: boolean; meals: boolean; weight: boolean; water: boolean;
   workoutId?: string;
 }
 interface ActivityItem { time: string; type: string; text: string; }
@@ -183,17 +183,46 @@ function CalorieRing({ consumed, target }: { consumed: number; target: number })
 
 // ─── MINI SPARKLINE ──────────────────────────────────────────────────────────
 
-function MiniSparkline({ values }: { values: number[] }) {
+function MiniSparkline({ values, bfValues }: { values: number[]; bfValues?: (number | null)[] }) {
   if (!values || values.length < 2) return null;
-  const min = Math.min(...values), max = Math.max(...values), range = max - min || 1;
   const W = 120, H = 30;
-  const pts = values.map((v, i) => ({ x: (i / (values.length - 1)) * W, y: H - 2 - ((v - min) / range) * (H - 4) }));
-  const d   = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-  const last = pts[pts.length - 1];
+  const n = values.length;
+
+  // Weight line (orange)
+  const wMin = Math.min(...values), wMax = Math.max(...values), wRange = wMax - wMin || 1;
+  const wPts = values.map((v, i) => ({ x: (i / (n - 1)) * W, y: H - 2 - ((v - wMin) / wRange) * (H - 4) }));
+  const wPath = wPts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const wLast = wPts[n - 1];
+
+  // BF% line (yellow) — dual Y axis, independent scale
+  const bfValid = (bfValues ?? []).filter((v): v is number => v != null);
+  const showBf = bfValid.length >= 2;
+  let bfPath = '';
+  const bfDots: { x: number; y: number }[] = [];
+
+  if (showBf && bfValues) {
+    const bfMin = Math.min(...bfValid), bfMax = Math.max(...bfValid), bfRange = bfMax - bfMin || 1;
+    let segmentStarted = false;
+    bfValues.forEach((v, i) => {
+      const x = (i / (n - 1)) * W;
+      if (v == null) { segmentStarted = false; return; }
+      const y = H - 2 - ((v - bfMin) / bfRange) * (H - 4);
+      bfDots.push({ x, y });
+      bfPath += segmentStarted ? `L ${x.toFixed(1)},${y.toFixed(1)} ` : `M ${x.toFixed(1)},${y.toFixed(1)} `;
+      segmentStarted = true;
+    });
+  }
+
   return (
     <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-      <Path d={d} stroke={COLORS.accent} strokeWidth={1.5} fill="none" />
-      <Circle cx={last.x} cy={last.y} r={2} fill={COLORS.accent} />
+      <Path d={wPath} stroke={COLORS.accent} strokeWidth={1.5} fill="none" />
+      <Circle cx={wLast.x} cy={wLast.y} r={2} fill={COLORS.accent} />
+      {showBf && bfPath ? (
+        <>
+          <Path d={bfPath.trim()} stroke="#facc15" strokeWidth={1.5} fill="none" />
+          {bfDots.map((dot, i) => <Circle key={i} cx={dot.x} cy={dot.y} r={2} fill="#facc15" />)}
+        </>
+      ) : null}
     </Svg>
   );
 }
@@ -207,17 +236,18 @@ function cellColor(status: string) {
   return 'transparent';
 }
 
-function getCellStatus(d: DayAdherence, key: 'workout' | 'meals' | 'weight') {
+function getCellStatus(d: DayAdherence, key: 'workout' | 'meals' | 'weight' | 'water') {
   if (d.future) return 'future';
   if (key === 'workout') { if (d.rest) return 'rest'; return d.workout ? 'done' : (d.today ? 'future' : 'missed'); }
   return d[key] ? 'done' : (d.today || d.future ? 'future' : 'missed');
 }
 
 function WeeklyGrid({ days, navigation }: { days: DayAdherence[]; navigation: any }) {
-  const rows: { key: 'workout' | 'meals' | 'weight'; label: string }[] = [
+  const rows: { key: 'workout' | 'meals' | 'weight' | 'water'; label: string }[] = [
     { key: 'workout', label: 'Workout'   },
     { key: 'meals',   label: 'Nutrition' },
     { key: 'weight',  label: 'Weight'    },
+    { key: 'water',   label: 'Water'     },
   ];
   return (
     <View>
@@ -282,6 +312,7 @@ export default function DashboardScreen() {
   const [tier, setTier]               = useState('BASIC');
   const [bio, setBio]                 = useState({ current: 0, weekAgo: 0, goal: 0, sparkline: [] as number[] });
   const [weekly, setWeekly]           = useState({ totalSets: 0, avgKcal: 0, avgProtein: 0, streak: 0 });
+  const [feedExpanded, setFeedExpanded] = useState(false);
   // Real-time hooks
   const { data: todayWorkout }      = useTodayWorkout();
   const { data: weeklyWorkouts }    = useWeeklyWorkouts();
@@ -289,6 +320,8 @@ export default function DashboardScreen() {
   const { data: activityFeed }      = useActivityFeed();
   const { data: muscleVolumes }     = useWeeklyMuscleVolumes();
   const { data: biometricEntries = [] } = useBiometricEntries();
+  const { data: weeklyNutritionDays }   = useWeeklyNutritionDays();
+  const { data: weeklyWaterDays }       = useWeeklyWaterDays();
   const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local tz
   const { data: nutritionDay }      = useDailyNutrition(todayStr);
   const { data: profile }           = useProfile();
@@ -303,7 +336,9 @@ export default function DashboardScreen() {
   // Derive bio values from biometric-entries query (auto-refreshes when Vault logs weight)
   const bioCurrent   = biometricEntries[0]?.weight_kg ?? 0;
   const bioWeekAgo   = biometricEntries.length > 1 ? biometricEntries[biometricEntries.length - 1].weight_kg : (biometricEntries[0]?.weight_kg ?? 0);
-  const bioSparkline = [...biometricEntries].reverse().slice(-8).map(r => r.weight_kg);
+  const bfEntries    = [...biometricEntries].reverse().slice(-8);
+  const bioSparkline = bfEntries.map(r => r.weight_kg);
+  const bfSparkline  = bfEntries.map(r => r.body_fat_pct ?? null);
 
   const muscleVolumesData = muscleVolumes ?? {} as Record<string, number>;
   const muscleMaxVol = Math.max(1, ...Object.values(muscleVolumesData));
@@ -316,6 +351,7 @@ export default function DashboardScreen() {
     qc.invalidateQueries({ queryKey: ['activity-feed'] });
     qc.invalidateQueries({ queryKey: ['muscle-volumes'] });
     qc.invalidateQueries({ queryKey: ['biometric-entries'] });
+    qc.invalidateQueries({ queryKey: ['this-week'] });
   }, [qc]));
 
   // Real-time activity feed subscription
@@ -336,29 +372,37 @@ export default function DashboardScreen() {
     return () => { if (channel) supabase.removeChannel(channel); };
   }, []);
 
-  // Compute weekly adherence grid from real workouts
-  const days = useCallback((): typeof MOCK_WEEKLY => {
+  // Compute weekly adherence grid from real data
+  const days = useCallback((): DayAdherence[] => {
     const now = new Date();
     const sunday = new Date(now);
     sunday.setDate(now.getDate() - now.getDay());
     sunday.setHours(0, 0, 0, 0);
 
+    // Biometric entries indexed by YYYY-MM-DD (logged_at is already 'YYYY-MM-DD')
+    const weightDays = new Set(biometricEntries.map(e => e.logged_at));
+
     const LABELS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
     return LABELS.map((day, i) => {
       const date = new Date(sunday);
       date.setDate(sunday.getDate() + i);
-      const isoDate = date.toISOString().split('T')[0];
-      const isToday  = isoDate === now.toISOString().split('T')[0];
+      const isoDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const isToday  = isoDate === todayStr;
       const isFuture = date > now && !isToday;
       const completedW = (weeklyWorkouts ?? []).find(w => w.started_at?.startsWith(isoDate) && w.completed);
+      const mealKcal = weeklyNutritionDays?.[isoDate] ?? 0;
+      const waterMl  = weeklyWaterDays?.[isoDate] ?? 0;
       return {
         day, label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         today: isToday, future: isFuture, rest: false,
-        workout: !!completedW, meals: false, weight: false,
+        workout: !!completedW,
+        meals:   mealKcal >= (targets.kcal * 0.5),
+        weight:  weightDays.has(isoDate),
+        water:   waterMl >= 500,
         workoutId: completedW?.id,
       };
     });
-  }, [weeklyWorkouts])();
+  }, [weeklyWorkouts, biometricEntries, weeklyNutritionDays, weeklyWaterDays, targets.kcal, todayStr])();
 
   useEffect(() => {
     (async () => {
@@ -606,7 +650,24 @@ export default function DashboardScreen() {
             <Text style={[s.metaText, { color: COLORS.orange300 }]}>{weightDelta < 0 ? '↓' : '↑'} {Math.abs(weightDelta).toFixed(1)} kg</Text>
             <Text style={[s.metaText, { marginLeft: SPACING.sm }]}>last 7d</Text>
           </View>
-          <View style={{ height: 30, marginVertical: SPACING.md }}><MiniSparkline values={bioSparkline} /></View>
+          <View style={{ height: 30, marginVertical: SPACING.md }}>
+            <MiniSparkline values={bioSparkline} bfValues={bfSparkline} />
+          </View>
+          {/* Chart legend */}
+          {bioSparkline.length >= 2 && (
+            <View style={{ flexDirection: 'row', gap: SPACING.lg, marginBottom: SPACING.sm }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.accent }} />
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>Weight</Text>
+              </View>
+              {bfSparkline.filter(v => v != null).length >= 2 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#facc15' }} />
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600 }}>Body Fat %</Text>
+                </View>
+              )}
+            </View>
+          )}
           <View style={s.divider} />
           <View style={s.weightGoalRow}>
             <Text style={s.goalLabel}>Goal</Text>
@@ -623,22 +684,37 @@ export default function DashboardScreen() {
           </View>
           {(activityFeed ?? []).length === 0 ? (
             <Text style={[s.metaText, { color: COLORS.text600, marginTop: 8 }]}>No activity logged today.</Text>
-          ) : (activityFeed ?? []).map((a: any, i: number) => {
-            const time = new Date(a.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-            const type = a.event_type === 'workout_complete' ? 'workout' : a.event_type;
-            const text = a.event_type === 'workout_complete'
-              ? `${a.payload?.workout_name ?? 'Workout'} — ${Math.round((a.payload?.volume_kg ?? 0))} kg·reps`
-              : a.payload?.text ?? a.event_type;
+          ) : (() => {
+            const feed = activityFeed ?? [];
+            const visible = feedExpanded ? feed : feed.slice(0, 5);
             return (
-              <View key={a.id} style={[s.feedRow, i === (activityFeed ?? []).length - 1 && { borderBottomWidth: 0 }]}>
-                <Text style={s.feedTime}>{time}</Text>
-                <View style={[s.feedIconBox, type === 'coach' && { borderColor: COLORS.accentBorder, backgroundColor: COLORS.accentMuted }]}>
-                  <ActivityIcon type={type} />
-                </View>
-                <Text style={s.feedText} numberOfLines={1}>{text}</Text>
-              </View>
+              <>
+                {visible.map((a: any, i: number) => {
+                  const time = new Date(a.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+                  const type = a.event_type === 'workout_complete' ? 'workout' : a.event_type;
+                  const text = a.event_type === 'workout_complete'
+                    ? `${a.payload?.workout_name ?? 'Workout'} — ${Math.round((a.payload?.volume_kg ?? 0))} kg·reps`
+                    : a.payload?.text ?? a.event_type;
+                  return (
+                    <View key={a.id} style={[s.feedRow, i === visible.length - 1 && feed.length <= 5 && { borderBottomWidth: 0 }]}>
+                      <Text style={s.feedTime}>{time}</Text>
+                      <View style={[s.feedIconBox, type === 'coach' && { borderColor: COLORS.accentBorder, backgroundColor: COLORS.accentMuted }]}>
+                        <ActivityIcon type={type} />
+                      </View>
+                      <Text style={s.feedText} numberOfLines={1}>{text}</Text>
+                    </View>
+                  );
+                })}
+                {feed.length > 5 && (
+                  <TouchableOpacity onPress={() => setFeedExpanded(v => !v)} style={{ paddingTop: 10, alignItems: 'center' }}>
+                    <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, letterSpacing: 1 }}>
+                      {feedExpanded ? 'Show less ↑' : `View all ${feed.length} →`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </>
             );
-          })}
+          })()}
         </View>
       </ScrollView>
 

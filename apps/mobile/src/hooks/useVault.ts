@@ -76,6 +76,7 @@ export function useLogWeight() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['biometric-entries'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['this-week'] });
     },
   });
   return {
