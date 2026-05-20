@@ -198,7 +198,6 @@ function MiniSparkline({ values, bfValues }: { values: number[]; bfValues?: (num
   const bfValid = (bfValues ?? []).filter((v): v is number => v != null);
   const showBf = bfValid.length >= 2;
   let bfPath = '';
-  const bfDots: { x: number; y: number }[] = [];
 
   if (showBf && bfValues) {
     const bfMin = Math.min(...bfValid), bfMax = Math.max(...bfValid), bfRange = bfMax - bfMin || 1;
@@ -207,7 +206,6 @@ function MiniSparkline({ values, bfValues }: { values: number[]; bfValues?: (num
       const x = (i / (n - 1)) * W;
       if (v == null) { segmentStarted = false; return; }
       const y = H - 2 - ((v - bfMin) / bfRange) * (H - 4);
-      bfDots.push({ x, y });
       bfPath += segmentStarted ? `L ${x.toFixed(1)},${y.toFixed(1)} ` : `M ${x.toFixed(1)},${y.toFixed(1)} `;
       segmentStarted = true;
     });
@@ -220,7 +218,6 @@ function MiniSparkline({ values, bfValues }: { values: number[]; bfValues?: (num
       {showBf && bfPath ? (
         <>
           <Path d={bfPath.trim()} stroke="#facc15" strokeWidth={1.5} fill="none" strokeOpacity={0.5} />
-          {bfDots.map((dot, i) => <Circle key={i} cx={dot.x} cy={dot.y} r={2} fill="#facc15" fillOpacity={0.5} />)}
         </>
       ) : null}
     </Svg>
