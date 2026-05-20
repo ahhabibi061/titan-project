@@ -505,9 +505,9 @@ export function useTodayCaloriesBurned() {
         .from('workouts')
         .select('calories_burned')
         .eq('user_id', userId)
-        .not('completed_at', 'is', null)
-        .gte('completed_at', start)
-        .lte('completed_at', end);
+        .eq('completed', true)
+        .gte('finished_at', start)
+        .lte('finished_at', end);
       return (data ?? []).reduce((sum, w) => sum + (w.calories_burned ?? 0), 0);
     },
     staleTime: 60_000,

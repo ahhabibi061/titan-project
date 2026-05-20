@@ -180,6 +180,7 @@ export function useFinishWorkout() {
       qc.invalidateQueries({ queryKey: ['activity-feed'] });
       qc.invalidateQueries({ queryKey: ['muscle-volumes'] });
       qc.invalidateQueries({ queryKey: ['this-week'] });
+      qc.invalidateQueries({ queryKey: ['today-calories-burned'] });
     },
   });
 }

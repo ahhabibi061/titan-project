@@ -4,7 +4,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTodayWorkout, useWeeklyWorkouts, useWeeklySets, useActivityFeed, useWeeklyMuscleVolumes } from '../hooks/useWorkout';
 import { useBiometricEntries } from '../hooks/useVault';
-import { useDailyNutrition, useWeeklyNutritionDays, useWeeklyWaterDays } from '../hooks/useNutrition';
+import { useDailyNutrition, useWeeklyNutritionDays } from '../hooks/useNutrition';
 import { useProfile } from '../hooks/useSettings';
 import {
   View,
@@ -100,15 +100,15 @@ const MOCK_GROWTH_MAP: Record<string, { status: string; growthPct: number; curre
 
 interface DayAdherence {
   day: string; label: string; today: boolean; future: boolean; rest: boolean;
-  workout: boolean; meals: boolean; weight: boolean; water: boolean;
+  workout: boolean; meals: boolean; weight: boolean;
   workoutId?: string;
 }
 interface ActivityItem { time: string; type: string; text: string; }
 
 const MOCK_WEEKLY: DayAdherence[] = [
-  { day: 'MON', label: 'May 11', today: false, future: false, rest: false, workout: true,  meals: true,  weight: true  },
-  { day: 'TUE', label: 'May 12', today: false, future: false, rest: false, workout: true,  meals: true,  weight: true  },
-  { day: 'WED', label: 'May 13', today: false, future: false, rest: true,  workout: false, meals: true,  weight: true  },
+  { day: 'MON', label: 'May 11', today: false, future: false, rest: false, workout: true,  meals: true,  weight: true },
+  { day: 'TUE', label: 'May 12', today: false, future: false, rest: false, workout: true,  meals: true,  weight: true },
+  { day: 'WED', label: 'May 13', today: false, future: false, rest: true,  workout: false, meals: true,  weight: true },
   { day: 'THU', label: 'May 14', today: false, future: false, rest: false, workout: true,  meals: false, weight: true  },
   { day: 'FRI', label: 'May 15', today: false, future: false, rest: false, workout: true,  meals: true,  weight: true  },
   { day: 'SAT', label: 'May 16', today: true,  future: false, rest: false, workout: false, meals: true,  weight: true  },
@@ -219,8 +219,8 @@ function MiniSparkline({ values, bfValues }: { values: number[]; bfValues?: (num
       <Circle cx={wLast.x} cy={wLast.y} r={2} fill={COLORS.accent} />
       {showBf && bfPath ? (
         <>
-          <Path d={bfPath.trim()} stroke="#facc15" strokeWidth={1.5} fill="none" />
-          {bfDots.map((dot, i) => <Circle key={i} cx={dot.x} cy={dot.y} r={2} fill="#facc15" />)}
+          <Path d={bfPath.trim()} stroke="#facc15" strokeWidth={1.5} fill="none" strokeOpacity={0.5} />
+          {bfDots.map((dot, i) => <Circle key={i} cx={dot.x} cy={dot.y} r={2} fill="#facc15" fillOpacity={0.5} />)}
         </>
       ) : null}
     </Svg>
@@ -236,18 +236,17 @@ function cellColor(status: string) {
   return 'transparent';
 }
 
-function getCellStatus(d: DayAdherence, key: 'workout' | 'meals' | 'weight' | 'water') {
+function getCellStatus(d: DayAdherence, key: 'workout' | 'meals' | 'weight') {
   if (d.future) return 'future';
   if (key === 'workout') { if (d.rest) return 'rest'; return d.workout ? 'done' : (d.today ? 'future' : 'missed'); }
   return d[key] ? 'done' : (d.today || d.future ? 'future' : 'missed');
 }
 
 function WeeklyGrid({ days, navigation }: { days: DayAdherence[]; navigation: any }) {
-  const rows: { key: 'workout' | 'meals' | 'weight' | 'water'; label: string }[] = [
+  const rows: { key: 'workout' | 'meals' | 'weight'; label: string }[] = [
     { key: 'workout', label: 'Workout'   },
     { key: 'meals',   label: 'Nutrition' },
     { key: 'weight',  label: 'Weight'    },
-    { key: 'water',   label: 'Water'     },
   ];
   return (
     <View>
@@ -321,7 +320,6 @@ export default function DashboardScreen() {
   const { data: muscleVolumes }     = useWeeklyMuscleVolumes();
   const { data: biometricEntries = [] } = useBiometricEntries();
   const { data: weeklyNutritionDays }   = useWeeklyNutritionDays();
-  const { data: weeklyWaterDays }       = useWeeklyWaterDays();
   const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD in local tz
   const { data: nutritionDay }      = useDailyNutrition(todayStr);
   const { data: profile }           = useProfile();
@@ -391,18 +389,16 @@ export default function DashboardScreen() {
       const isFuture = date > now && !isToday;
       const completedW = (weeklyWorkouts ?? []).find(w => w.started_at?.startsWith(isoDate) && w.completed);
       const mealKcal = weeklyNutritionDays?.[isoDate] ?? 0;
-      const waterMl  = weeklyWaterDays?.[isoDate] ?? 0;
       return {
         day, label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         today: isToday, future: isFuture, rest: false,
         workout: !!completedW,
         meals:   mealKcal >= (targets.kcal * 0.5),
         weight:  weightDays.has(isoDate),
-        water:   waterMl >= 500,
         workoutId: completedW?.id,
       };
     });
-  }, [weeklyWorkouts, biometricEntries, weeklyNutritionDays, weeklyWaterDays, targets.kcal, todayStr])();
+  }, [weeklyWorkouts, biometricEntries, weeklyNutritionDays, targets.kcal, todayStr])();
 
   useEffect(() => {
     (async () => {
