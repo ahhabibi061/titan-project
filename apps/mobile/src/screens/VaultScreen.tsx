@@ -14,7 +14,8 @@ import {
   useDeleteEntry,
   useProgressPhotos,
   useUploadPhoto,
-  useWeeklyCheckin,
+  useMonthCheckins,
+  useCheckinForDate,
   type BiometricEntry,
   type ProgressPhoto,
 } from '../hooks/useVault';
@@ -90,6 +91,8 @@ function todayISO() {
 function isoFromYM(year: number, month: number, day: number) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
+
+const MOOD_EMOJI = ['😞', '😐', '🙂', '😀', '🤩'];
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 
@@ -297,6 +300,7 @@ function CalendarSection({ entries, onDayPress }: { entries: BiometricEntry[]; o
   const [viewMonth, setViewMonth] = useState(today.getMonth());
 
   const loggedSet = useMemo(() => new Set(entries.map(e => e.logged_at)), [entries]);
+  const { data: checkinSet } = useMonthCheckins(viewYear, viewMonth);
 
   const { currentStreak, longestStreak } = useMemo(() => {
     if (entries.length === 0) return { currentStreak: 0, longestStreak: 0 };
@@ -370,10 +374,11 @@ function CalendarSection({ entries, onDayPress }: { entries: BiometricEntry[]; o
       <View style={cal.grid}>
         {cells.map((day, i) => {
           if (day == null) return <View key={i} style={cal.cell} />;
-          const iso      = isoFromYM(viewYear, viewMonth, day);
-          const logged   = loggedSet.has(iso);
-          const isToday  = iso === todayIso;
-          const isFuture = iso > todayIso;
+          const iso        = isoFromYM(viewYear, viewMonth, day);
+          const logged     = loggedSet.has(iso);
+          const hasCheckin = checkinSet?.has(iso) ?? false;
+          const isToday    = iso === todayIso;
+          const isFuture   = iso > todayIso;
           return (
             <TouchableOpacity
               key={i}
@@ -389,6 +394,9 @@ function CalendarSection({ entries, onDayPress }: { entries: BiometricEntry[]; o
               ]}>
                 {day}
               </Text>
+              {hasCheckin && !isFuture && (
+                <View style={{ position: 'absolute', bottom: 3, width: 4, height: 4, borderRadius: 2, backgroundColor: '#4ade80' }} />
+              )}
             </TouchableOpacity>
           );
         })}
@@ -685,7 +693,7 @@ const dm = StyleSheet.create({
   oracleNote: { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1, marginTop: SPACING.md, textAlign: 'center', lineHeight: 14 },
 });
 
-// ── LOG DAY SHEET (Fix 3: bottom sheet for any calendar day) ─────────────────
+// ── LOG DAY SHEET ─────────────────────────────────────────────────────────────
 
 function LogDaySheet({
   date,
@@ -698,28 +706,48 @@ function LogDaySheet({
   entries: BiometricEntry[];
   profile: ProfileData;
 }) {
-  const { logWeight, isLoading } = useLogWeight();
+  const { logWeight, isLoading }             = useLogWeight();
+  const { checkin, submit, isSubmitting }    = useCheckinForDate(date);
   const existing = date ? entries.find(e => e.logged_at === date) ?? null : null;
 
+  const [tab, setTab] = useState<'LOG WEIGHT' | 'CHECK-IN'>(
+    existing ? 'CHECK-IN' : 'LOG WEIGHT'
+  );
+
+  // Weight form
   const [weight,      setWeight]      = useState('');
   const [bf,          setBf]          = useState('');
   const [showMeasure, setShowMeasure] = useState(false);
   const [waist,       setWaist]       = useState('');
   const [neck,        setNeck]        = useState('');
   const [hip,         setHip]         = useState('');
-  const [error,       setError]       = useState('');
+  const [weightError, setWeightError] = useState('');
+
+  // Check-in form
+  const [mood,   setMood]   = useState(3);
+  const [energy, setEnergy] = useState(3);
+  const [sleep,  setSleep]  = useState(3);
+  const [notes,  setNotes]  = useState('');
 
   React.useEffect(() => {
     if (date) {
+      setTab(existing ? 'CHECK-IN' : 'LOG WEIGHT');
       setWeight(existing ? String(existing.weight_kg) : '');
       setBf(existing?.body_fat_pct != null ? fmt1(existing.body_fat_pct) : '');
       setWaist(existing?.waist_cm  != null ? String(existing.waist_cm)   : '');
       setNeck(existing?.neck_cm    != null ? String(existing.neck_cm)    : '');
       setHip(existing?.hip_cm      != null ? String(existing.hip_cm)     : '');
       setShowMeasure(false);
-      setError('');
+      setWeightError('');
     }
   }, [date]);
+
+  React.useEffect(() => {
+    setMood(checkin?.mood          ?? 3);
+    setEnergy(checkin?.energy      ?? 3);
+    setSleep(checkin?.sleep_quality ?? 3);
+    setNotes(checkin?.notes        ?? '');
+  }, [checkin]);
 
   const computedBf = useMemo(() => {
     const w = parseFloat(waist);
@@ -735,10 +763,10 @@ function LogDaySheet({
     }
   }, [computedBf]);
 
-  async function handleSave() {
+  async function handleSaveWeight() {
     if (!date) return;
     const w = parseFloat(weight);
-    if (!w || w < 30 || w > 300) { setError('Enter a weight between 30–300 kg'); return; }
+    if (!w || w < 30 || w > 300) { setWeightError('Enter a weight between 30–300 kg'); return; }
     try {
       await logWeight({
         date,
@@ -750,8 +778,38 @@ function LogDaySheet({
       });
       onClose();
     } catch (e: any) {
-      setError(e.message ?? 'Failed to save');
+      setWeightError(e.message ?? 'Failed to save');
     }
+  }
+
+  async function handleSaveCheckin() {
+    try {
+      await submit({ mood, energy, sleep_quality: sleep, notes });
+      onClose();
+    } catch {}
+  }
+
+  const sheetTitle = date
+    ? new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).toUpperCase()
+    : '';
+
+  function Scale({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
+    return (
+      <View style={{ marginBottom: SPACING.lg }}>
+        <Text style={lw.inputLabel}>{label}</Text>
+        <View style={{ flexDirection: 'row', gap: SPACING.sm }}>
+          {[1, 2, 3, 4, 5].map(n => (
+            <TouchableOpacity
+              key={n}
+              style={{ flex: 1, paddingVertical: SPACING.md, alignItems: 'center', borderWidth: 1, borderColor: value === n ? COLORS.accentBorder : COLORS.border, backgroundColor: value === n ? COLORS.accentMuted : 'transparent' }}
+              onPress={() => onChange(n)}
+            >
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 14, color: value === n ? COLORS.orange300 : COLORS.text500 }}>{n}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
   }
 
   return (
@@ -759,83 +817,139 @@ function LogDaySheet({
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={lw.overlay}>
           <View style={lw.sheet}>
+            {/* Header */}
             <View style={lw.sheetHeader}>
-              <View>
-                <Text style={lw.sheetDate}>{date ? fmtDateLong(date) : ''}</Text>
-                <Text style={lw.sheetTitle}>{existing ? 'Update Weight' : 'Log Weight'}</Text>
-              </View>
+              <Text style={lw.sheetTitle}>{sheetTitle}</Text>
               <TouchableOpacity onPress={onClose}>
                 <Text style={lw.sheetClose}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={lw.inputLabel}>Weight (kg)</Text>
-            <TextInput
-              style={lw.weightInput}
-              value={weight}
-              onChangeText={setWeight}
-              keyboardType="decimal-pad"
-              placeholder="84.0"
-              placeholderTextColor={COLORS.text700}
-              returnKeyType="done"
-            />
+            {/* Tabs */}
+            <View style={{ flexDirection: 'row', marginBottom: SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+              {(['LOG WEIGHT', 'CHECK-IN'] as const).map(t => (
+                <TouchableOpacity
+                  key={t}
+                  style={{ flex: 1, paddingVertical: SPACING.sm, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: tab === t ? COLORS.accent : 'transparent' }}
+                  onPress={() => setTab(t)}
+                >
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: tab === t ? COLORS.orange300 : COLORS.text500, letterSpacing: 1 }}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-            <Text style={lw.inputLabel}>
-              Body fat % <Text style={{ color: COLORS.text700 }}>(optional)</Text>
-            </Text>
-            <TextInput
-              style={lw.bfInput}
-              value={bf}
-              onChangeText={setBf}
-              keyboardType="decimal-pad"
-              placeholder="18.5"
-              placeholderTextColor={COLORS.text700}
-              returnKeyType="done"
-            />
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              {tab === 'LOG WEIGHT' ? (
+                <>
+                  <Text style={lw.inputLabel}>Weight (kg)</Text>
+                  <TextInput
+                    style={lw.weightInput}
+                    value={weight}
+                    onChangeText={setWeight}
+                    keyboardType="decimal-pad"
+                    placeholder="84.0"
+                    placeholderTextColor={COLORS.text700}
+                    returnKeyType="done"
+                  />
 
-            <TouchableOpacity style={lw.measureToggle} onPress={() => setShowMeasure(v => !v)}>
-              <Text style={lw.measureToggleText}>
-                {showMeasure ? '▾' : '▸'} Body Measurements (US Navy formula)
-              </Text>
-            </TouchableOpacity>
+                  <Text style={lw.inputLabel}>
+                    Body fat % <Text style={{ color: COLORS.text700 }}>(optional)</Text>
+                  </Text>
+                  <TextInput
+                    style={lw.bfInput}
+                    value={bf}
+                    onChangeText={setBf}
+                    keyboardType="decimal-pad"
+                    placeholder="18.5"
+                    placeholderTextColor={COLORS.text700}
+                    returnKeyType="done"
+                  />
 
-            {showMeasure && (
-              <View style={lw.measureGroup}>
-                <Text style={lw.measureInfo}>
-                  {profile.height_cm ? `Height ${profile.height_cm}cm` : 'Height not set in profile'} ·{' '}
-                  {profile.sex ?? 'Sex not set in profile'}
-                </Text>
-                <View style={lw.measureRow}>
-                  <View style={lw.measureField}>
-                    <Text style={lw.inputLabel}>Waist cm</Text>
-                    <TextInput style={lw.measureInput} value={waist} onChangeText={setWaist} keyboardType="decimal-pad" placeholder="82" placeholderTextColor={COLORS.text700} />
-                  </View>
-                  <View style={lw.measureField}>
-                    <Text style={lw.inputLabel}>Neck cm</Text>
-                    <TextInput style={lw.measureInput} value={neck} onChangeText={setNeck} keyboardType="decimal-pad" placeholder="37" placeholderTextColor={COLORS.text700} />
-                  </View>
-                  {profile.sex === 'female' && (
-                    <View style={lw.measureField}>
-                      <Text style={lw.inputLabel}>Hip cm</Text>
-                      <TextInput style={lw.measureInput} value={hip} onChangeText={setHip} keyboardType="decimal-pad" placeholder="92" placeholderTextColor={COLORS.text700} />
+                  <TouchableOpacity style={lw.measureToggle} onPress={() => setShowMeasure(v => !v)}>
+                    <Text style={lw.measureToggleText}>
+                      {showMeasure ? '▾' : '▸'} Body Measurements (US Navy formula)
+                    </Text>
+                  </TouchableOpacity>
+
+                  {showMeasure && (
+                    <View style={lw.measureGroup}>
+                      <Text style={lw.measureInfo}>
+                        {profile.height_cm ? `Height ${profile.height_cm}cm` : 'Height not set in profile'} ·{' '}
+                        {profile.sex ?? 'Sex not set in profile'}
+                      </Text>
+                      <View style={lw.measureRow}>
+                        <View style={lw.measureField}>
+                          <Text style={lw.inputLabel}>Waist cm</Text>
+                          <TextInput style={lw.measureInput} value={waist} onChangeText={setWaist} keyboardType="decimal-pad" placeholder="82" placeholderTextColor={COLORS.text700} />
+                        </View>
+                        <View style={lw.measureField}>
+                          <Text style={lw.inputLabel}>Neck cm</Text>
+                          <TextInput style={lw.measureInput} value={neck} onChangeText={setNeck} keyboardType="decimal-pad" placeholder="37" placeholderTextColor={COLORS.text700} />
+                        </View>
+                        {profile.sex === 'female' && (
+                          <View style={lw.measureField}>
+                            <Text style={lw.inputLabel}>Hip cm</Text>
+                            <TextInput style={lw.measureInput} value={hip} onChangeText={setHip} keyboardType="decimal-pad" placeholder="92" placeholderTextColor={COLORS.text700} />
+                          </View>
+                        )}
+                      </View>
+                      {computedBf != null && computedBf > 3 && computedBf < 60 && (
+                        <Text style={lw.computedBf}>Navy formula → {fmt1(computedBf)}% body fat</Text>
+                      )}
                     </View>
                   )}
-                </View>
-                {computedBf != null && computedBf > 3 && computedBf < 60 && (
-                  <Text style={lw.computedBf}>Navy formula → {fmt1(computedBf)}% body fat</Text>
-                )}
-              </View>
-            )}
 
-            {error !== '' && <Text style={lw.error}>{error}</Text>}
+                  {weightError !== '' && <Text style={lw.error}>{weightError}</Text>}
 
-            <TouchableOpacity
-              style={[lw.logBtn, isLoading && { opacity: 0.5 }]}
-              onPress={handleSave}
-              disabled={isLoading}
-            >
-              <Text style={lw.logBtnText}>{isLoading ? 'Saving…' : existing ? 'Update' : 'Log Weight'}</Text>
-            </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[lw.logBtn, isLoading && { opacity: 0.5 }]}
+                    onPress={handleSaveWeight}
+                    disabled={isLoading}
+                  >
+                    <Text style={lw.logBtnText}>{isLoading ? 'Saving…' : existing ? 'Update Weight' : 'Log Weight'}</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={[lw.inputLabel, { marginBottom: SPACING.sm }]}>Mood</Text>
+                  <View style={{ flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.lg }}>
+                    {MOOD_EMOJI.map((emoji, i) => (
+                      <TouchableOpacity
+                        key={i}
+                        style={{ flex: 1, paddingVertical: SPACING.md, alignItems: 'center', borderWidth: 1, borderColor: mood === i + 1 ? COLORS.accentBorder : COLORS.border, backgroundColor: mood === i + 1 ? COLORS.accentMuted : 'transparent' }}
+                        onPress={() => setMood(i + 1)}
+                      >
+                        <Text style={{ fontSize: 22 }}>{emoji}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Scale value={energy} onChange={setEnergy} label="Energy" />
+                  <Scale value={sleep}  onChange={setSleep}  label="Sleep Quality" />
+
+                  <Text style={lw.inputLabel}>
+                    Notes <Text style={{ color: COLORS.text700 }}>(optional)</Text>
+                  </Text>
+                  <TextInput
+                    style={[lw.bfInput, { minHeight: 60, textAlignVertical: 'top', marginBottom: SPACING.md }]}
+                    value={notes}
+                    onChangeText={setNotes}
+                    multiline
+                    numberOfLines={3}
+                    placeholder="How's the day going…"
+                    placeholderTextColor={COLORS.text700}
+                  />
+
+                  <TouchableOpacity
+                    style={[lw.logBtn, isSubmitting && { opacity: 0.5 }]}
+                    onPress={handleSaveCheckin}
+                    disabled={isSubmitting}
+                  >
+                    <Text style={lw.logBtnText}>{isSubmitting ? 'Saving…' : checkin ? 'Update Check-In' : 'Save Daily Check-In'}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -846,9 +960,8 @@ function LogDaySheet({
 const lw = StyleSheet.create({
   overlay:           { flex: 1, backgroundColor: 'rgba(10,9,8,0.85)', justifyContent: 'flex-end' },
   sheet:             { backgroundColor: '#111110', borderTopWidth: 1, borderTopColor: COLORS.border, padding: SPACING.lg, paddingBottom: 36 },
-  sheetHeader:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.lg },
-  sheetDate:         { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 2 },
-  sheetTitle:        { fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text100, textTransform: 'uppercase' },
+  sheetHeader:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.md },
+  sheetTitle:        { fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text100, textTransform: 'uppercase', flex: 1, flexWrap: 'wrap' },
   sheetClose:        { fontFamily: FONTS.mono, fontSize: 18, color: COLORS.text400, padding: SPACING.xs },
   inputLabel:        { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 5 },
   weightInput:       { fontFamily: FONTS.anton, fontSize: 36, color: COLORS.text100, borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,11,10,0.6)', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, marginBottom: SPACING.md },
@@ -1338,143 +1451,12 @@ const ht = StyleSheet.create({
   hint:       { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1, marginTop: SPACING.md },
 });
 
-// ── WEEKLY CHECK-IN MODAL (Fix 2) ─────────────────────────────────────────────
-
-const MOOD_EMOJI = ['😞', '😐', '🙂', '😀', '🤩'];
-
-function WeeklyCheckinModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { checkin, submit, isSubmitting } = useWeeklyCheckin();
-
-  const [mood,   setMood]   = useState(3);
-  const [energy, setEnergy] = useState(3);
-  const [sleep,  setSleep]  = useState(3);
-  const [notes,  setNotes]  = useState('');
-  const [error,  setError]  = useState('');
-
-  React.useEffect(() => {
-    if (visible) {
-      setMood(checkin?.mood   ?? 3);
-      setEnergy(checkin?.energy ?? 3);
-      setSleep(checkin?.sleep_quality ?? 3);
-      setNotes(checkin?.notes ?? '');
-      setError('');
-    }
-  }, [visible, checkin]);
-
-  async function handleSubmit() {
-    try {
-      await submit({ mood, energy, sleep_quality: sleep, notes });
-      onClose();
-    } catch (e: any) {
-      setError(e.message ?? 'Failed to save check-in');
-    }
-  }
-
-  function Scale({ value, onChange, label }: { value: number; onChange: (n: number) => void; label: string }) {
-    return (
-      <View style={wc.scaleWrap}>
-        <Text style={wc.scaleLabel}>{label}</Text>
-        <View style={wc.scaleRow}>
-          {[1, 2, 3, 4, 5].map(n => (
-            <TouchableOpacity
-              key={n}
-              style={[wc.scaleBtn, value === n && wc.scaleBtnActive]}
-              onPress={() => onChange(n)}
-            >
-              <Text style={[wc.scaleBtnText, value === n && wc.scaleBtnTextActive]}>{n}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    );
-  }
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View style={wc.overlay}>
-          <View style={wc.sheet}>
-            <View style={wc.header}>
-              <Text style={wc.title}>Weekly Check-In</Text>
-              <TouchableOpacity onPress={onClose}><Text style={wc.close}>✕</Text></TouchableOpacity>
-            </View>
-
-            <Text style={wc.sectionLabel}>Mood</Text>
-            <View style={wc.emojiRow}>
-              {MOOD_EMOJI.map((emoji, i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={[wc.emojiBtn, mood === i + 1 && wc.emojiBtnActive]}
-                  onPress={() => setMood(i + 1)}
-                >
-                  <Text style={wc.emojiText}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <Scale value={energy} onChange={setEnergy} label="Energy" />
-            <Scale value={sleep}  onChange={setSleep}  label="Sleep Quality" />
-
-            <Text style={wc.sectionLabel}>
-              Notes <Text style={{ color: COLORS.text700 }}>(optional)</Text>
-            </Text>
-            <TextInput
-              style={wc.notesInput}
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={3}
-              placeholder="How's the week going…"
-              placeholderTextColor={COLORS.text700}
-            />
-
-            {error !== '' && <Text style={wc.error}>{error}</Text>}
-
-            <TouchableOpacity
-              style={[wc.submitBtn, isSubmitting && { opacity: 0.5 }]}
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-            >
-              <Text style={wc.submitText}>{isSubmitting ? 'Saving…' : 'Submit Check-In'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-const wc = StyleSheet.create({
-  overlay:           { flex: 1, backgroundColor: 'rgba(10,9,8,0.85)', justifyContent: 'flex-end' },
-  sheet:             { backgroundColor: '#111110', borderTopWidth: 1, borderTopColor: COLORS.border, padding: SPACING.lg, paddingBottom: 36 },
-  header:            { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.lg },
-  title:             { fontFamily: FONTS.anton, fontSize: 22, color: COLORS.text100, textTransform: 'uppercase' },
-  close:             { fontFamily: FONTS.mono, fontSize: 18, color: COLORS.text400, padding: SPACING.xs },
-  sectionLabel:      { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: SPACING.sm },
-  emojiRow:          { flexDirection: 'row', gap: SPACING.sm, marginBottom: SPACING.lg },
-  emojiBtn:          { flex: 1, paddingVertical: SPACING.md, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
-  emojiBtnActive:    { borderColor: COLORS.accentBorder, backgroundColor: COLORS.accentMuted },
-  emojiText:         { fontSize: 22 },
-  scaleWrap:         { marginBottom: SPACING.lg },
-  scaleLabel:        { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: SPACING.sm },
-  scaleRow:          { flexDirection: 'row', gap: SPACING.sm },
-  scaleBtn:          { flex: 1, paddingVertical: SPACING.md, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
-  scaleBtnActive:    { borderColor: COLORS.accentBorder, backgroundColor: COLORS.accentMuted },
-  scaleBtnText:      { fontFamily: FONTS.mono, fontSize: 14, color: COLORS.text500 },
-  scaleBtnTextActive:{ color: COLORS.orange300 },
-  notesInput:        { fontFamily: FONTS.mono, fontSize: 13, color: COLORS.text100, borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,11,10,0.6)', paddingHorizontal: SPACING.md, paddingVertical: SPACING.md, minHeight: 72, textAlignVertical: 'top', marginBottom: SPACING.md },
-  error:             { fontFamily: FONTS.mono, fontSize: 11, color: COLORS.red400, marginBottom: SPACING.sm },
-  submitBtn:         { paddingVertical: SPACING.md, backgroundColor: COLORS.accent, alignItems: 'center' },
-  submitText:        { fontFamily: FONTS.anton, fontSize: 16, color: COLORS.bg, textTransform: 'uppercase', letterSpacing: 1 },
-});
-
 // ── MAIN SCREEN ───────────────────────────────────────────────────────────────
 
 export default function VaultScreen() {
   const { data: entries = [], isLoading } = useBiometricEntries();
   const [profile,     setProfile]     = useState<ProfileData>({ goal_weight_kg: null, height_cm: null, sex: null });
-  const [showCheckin, setShowCheckin] = useState(false);
-  const [logDate,     setLogDate]     = useState<string | null>(null);
+  const [logDate, setLogDate] = useState<string | null>(null);
 
   React.useEffect(() => {
     (async () => {
@@ -1550,9 +1532,6 @@ export default function VaultScreen() {
             <Text style={s.subtitle}>
               {entries.length} weigh-ins{goalWeight ? ` · Goal ${fmt1(goalWeight)} kg` : ''}
             </Text>
-            <TouchableOpacity style={s.checkinBtn} onPress={() => setShowCheckin(true)}>
-              <Text style={s.checkinBtnText}>Weekly Check-In</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -1604,7 +1583,7 @@ export default function VaultScreen() {
             <Text style={s.cardTag}>Consistency</Text>
           </View>
           <CalendarSection entries={entries} onDayPress={date => setLogDate(date)} />
-          <Text style={s.calHint}>Tap any day to log or update your weight.</Text>
+          <Text style={s.calHint}>Tap any day to log weight · orange fill · or daily check-in · green dot</Text>
         </View>
 
         {/* ── 4. WEIGHT TREND CHART ─────────────────────────────────────────── */}
@@ -1669,7 +1648,6 @@ export default function VaultScreen() {
 
       </ScrollView>
 
-      <WeeklyCheckinModal visible={showCheckin} onClose={() => setShowCheckin(false)} />
       <LogDaySheet date={logDate} onClose={() => setLogDate(null)} entries={entries} profile={profile} />
     </SafeAreaView>
   );

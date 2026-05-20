@@ -259,3 +259,76 @@ export function useWeeklyCheckin() {
     error:        mutation.error,
   };
 }
+
+// ── useMonthCheckins ───────────────────────────────────────────────────────────
+export function useMonthCheckins(year: number, month: number) {
+  return useQuery({
+    queryKey: ['daily-checkins', year, month],
+    queryFn: async () => {
+      const userId = await getUserId();
+      const firstOfMonth = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const lastDay      = new Date(year, month + 1, 0).getDate();
+      const lastOfMonth  = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      const { data } = await supabase
+        .from('weekly_checkins')
+        .select('checkin_date')
+        .eq('user_id', userId)
+        .gte('checkin_date', firstOfMonth)
+        .lte('checkin_date', lastOfMonth);
+      return new Set((data ?? []).map(r => r.checkin_date));
+    },
+    staleTime: 30_000,
+  });
+}
+
+// ── useCheckinForDate ──────────────────────────────────────────────────────────
+export interface DailyCheckin {
+  mood: number | null;
+  energy: number | null;
+  sleep_quality: number | null;
+  notes: string | null;
+}
+
+export function useCheckinForDate(date: string | null) {
+  const qc = useQueryClient();
+  const query = useQuery({
+    queryKey: ['daily-checkin', date],
+    queryFn: async () => {
+      if (!date) return null;
+      const userId = await getUserId();
+      const { data } = await supabase
+        .from('weekly_checkins')
+        .select('mood, energy, sleep_quality, notes')
+        .eq('user_id', userId)
+        .eq('checkin_date', date)
+        .maybeSingle();
+      return (data ?? null) as DailyCheckin | null;
+    },
+    enabled: !!date,
+    staleTime: 60_000,
+  });
+  const mutation = useMutation({
+    mutationFn: async (params: { mood: number; energy: number; sleep_quality: number; notes: string }) => {
+      if (!date) return;
+      const userId = await getUserId();
+      const { error } = await supabase
+        .from('weekly_checkins')
+        .upsert(
+          { user_id: userId, checkin_date: date, mood: params.mood, energy: params.energy, sleep_quality: params.sleep_quality, notes: params.notes || null },
+          { onConflict: 'user_id,checkin_date' }
+        );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['daily-checkin', date] });
+      qc.invalidateQueries({ queryKey: ['daily-checkins'] });
+    },
+  });
+  return {
+    checkin:      query.data ?? null,
+    isLoading:    query.isLoading,
+    submit:       mutation.mutateAsync,
+    isSubmitting: mutation.isPending,
+    error:        mutation.error,
+  };
+}

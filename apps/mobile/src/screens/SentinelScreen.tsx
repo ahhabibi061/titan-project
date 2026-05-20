@@ -552,7 +552,7 @@ function WeekNav({ today, selectedDate, onSelect }: {
               key={dateStr}
               onPress={() => !isFuture && onSelect(dateStr)}
               disabled={isFuture}
-              style={{ alignItems: 'center', gap: 2, minWidth: 40 }}
+              style={{ flex: 1, alignItems: 'center', gap: 2 }}
             >
               {/* Today dot */}
               <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: isToday ? COLORS.accent : 'transparent' }} />
