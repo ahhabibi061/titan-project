@@ -1417,21 +1417,35 @@ function HistoryRow({ entry, isLast }: { entry: BiometricEntry; isLast: boolean 
 }
 
 function BiometricHistoryTable({ entries }: { entries: BiometricEntry[] }) {
+  const [visibleCount, setVisibleCount] = useState(5);
+
   if (entries.length === 0) {
     return <View style={ht.empty}><Text style={ht.emptyText}>No entries yet</Text></View>;
   }
+
+  const visible   = entries.slice(0, visibleCount);
+  const remaining = entries.length - visibleCount;
+
   return (
     <View>
+      <Text style={ht.countLabel}>
+        Showing {visible.length} of {entries.length} entries
+      </Text>
       <View style={ht.header}>
         <Text style={[ht.headerCell, ht.dateCell]}>Date</Text>
         <Text style={[ht.headerCell, ht.weightCell]}>Weight</Text>
         <Text style={[ht.headerCell, ht.bfCell]}>BF%</Text>
         <Text style={[ht.headerCell, ht.leanCell]}>Lean</Text>
       </View>
-      {entries.map((e, i) => (
-        <HistoryRow key={e.id} entry={e} isLast={i === entries.length - 1} />
+      {visible.map((e, i) => (
+        <HistoryRow key={e.id} entry={e} isLast={i === visible.length - 1} />
       ))}
       <Text style={ht.hint}>Long-press a row to delete</Text>
+      {remaining > 0 && (
+        <TouchableOpacity style={ht.showMoreBtn} onPress={() => setVisibleCount(prev => prev + 5)}>
+          <Text style={ht.showMoreText}>Show More ({remaining} remaining)</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -1448,7 +1462,10 @@ const ht = StyleSheet.create({
   deleteHint: { fontFamily: FONTS.mono, fontSize: 14, color: COLORS.text700, paddingLeft: SPACING.sm },
   empty:      { paddingVertical: SPACING.xl, alignItems: 'center' },
   emptyText:  { fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1 },
-  hint:       { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1, marginTop: SPACING.md },
+  hint:        { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1, marginTop: SPACING.md },
+  countLabel:  { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1, textAlign: 'right', marginBottom: SPACING.sm },
+  showMoreBtn: { marginTop: SPACING.md, paddingVertical: SPACING.md, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center' },
+  showMoreText:{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text400, textTransform: 'uppercase', letterSpacing: 1 },
 });
 
 // ── MAIN SCREEN ───────────────────────────────────────────────────────────────
