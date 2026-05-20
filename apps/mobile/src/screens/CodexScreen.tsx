@@ -369,8 +369,8 @@ const cd = StyleSheet.create({
   pillRow:          { flexDirection: 'row', flexWrap: 'wrap', gap: 3, marginBottom: SPACING.xs + 2 },
   pillPrimary:      { paddingHorizontal: 5, paddingVertical: 2, backgroundColor: 'rgba(237,122,42,0.15)', borderWidth: 1, borderColor: 'rgba(237,122,42,0.25)' },
   pillPrimaryText:  { fontFamily: FONTS.mono, fontSize: 8, color: COLORS.orange300, textTransform: 'uppercase', letterSpacing: 0.8 },
-  pillSecondary:    { paddingHorizontal: 5, paddingVertical: 2, backgroundColor: 'rgba(41,37,36,0.6)', borderWidth: 1, borderColor: COLORS.border },
-  pillSecondaryText:{ fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 0.8 },
+  pillSecondary:    { paddingHorizontal: 5, paddingVertical: 2, backgroundColor: 'rgba(74,222,128,0.1)', borderWidth: 1, borderColor: 'rgba(74,222,128,0.3)' },
+  pillSecondaryText:{ fontFamily: FONTS.mono, fontSize: 8, color: '#4ade80', textTransform: 'uppercase', letterSpacing: 0.8 },
   pillMore:         { fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text600, alignSelf: 'center' },
   metaRow:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   metaEquip:        { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1 },
@@ -381,7 +381,6 @@ const cd = StyleSheet.create({
 
 const VIDEO_H  = Math.floor(SW * 9 / 16);
 const SHEET_H  = Math.floor(SH * 0.95);
-const FOOTER_H = 76;
 
 function ExerciseDetailSheet({
   ex, visible, onClose, isPro,
@@ -656,6 +655,124 @@ const dt = StyleSheet.create({
   addBtnText:      { fontFamily: FONTS.anton, fontSize: 13, color: COLORS.bg, textTransform: 'uppercase', letterSpacing: 1 },
 });
 
+// ── FILTER SHEET ──────────────────────────────────────────────────────────────
+
+function FilterSheet({
+  visible, onClose, onClear,
+  activeSplit, setActiveSplit,
+  activeMuscles, toggleMuscle,
+  activeEquipment, toggleEquipment,
+  sortBy, setSortBy,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onClear: () => void;
+  activeSplit: string;
+  setActiveSplit: (s: string) => void;
+  activeMuscles: Set<string>;
+  toggleMuscle: (id: string) => void;
+  activeEquipment: Set<string>;
+  toggleEquipment: (id: string) => void;
+  sortBy: string;
+  setSortBy: (s: string) => void;
+}) {
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(10,9,8,0.5)', justifyContent: 'flex-end' }}>
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
+        <View style={fs.sheet}>
+
+          {/* Header */}
+          <View style={fs.sheetHeader}>
+            <Text style={fs.sheetTitle}>FILTERS</Text>
+            <TouchableOpacity onPress={onClose} style={fs.sheetCloseBtn}>
+              <Text style={fs.sheetCloseBtnText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={fs.scrollContent}>
+
+            {/* SPLIT */}
+            <Text style={fs.sectionLabel}>SPLIT</Text>
+            <View style={fs.chipWrap}>
+              {SPLITS.map(s => (
+                <Chip key={s.id} active={activeSplit === s.id} onPress={() => setActiveSplit(s.id)}>
+                  {s.label}
+                </Chip>
+              ))}
+            </View>
+
+            {/* MUSCLE GROUP */}
+            <Text style={[fs.sectionLabel, { marginTop: SPACING.xl }]}>MUSCLE GROUP</Text>
+            <View style={fs.chipWrap}>
+              {Object.entries(MUSCLES).map(([id, label]) => (
+                <Chip key={id} active={activeMuscles.has(id)} onPress={() => toggleMuscle(id)}>
+                  {label}
+                </Chip>
+              ))}
+            </View>
+
+            {/* EQUIPMENT */}
+            <Text style={[fs.sectionLabel, { marginTop: SPACING.xl }]}>EQUIPMENT</Text>
+            <View style={fs.chipWrap}>
+              {EQUIPMENT.map(e => (
+                <Chip key={e.id} active={activeEquipment.has(e.id)} onPress={() => toggleEquipment(e.id)}>
+                  {e.label}
+                </Chip>
+              ))}
+            </View>
+
+            {/* SORT */}
+            <Text style={[fs.sectionLabel, { marginTop: SPACING.xl }]}>SORT</Text>
+            {SORTS.map(s => (
+              <TouchableOpacity key={s.id} style={fs.radioRow} onPress={() => setSortBy(s.id)} activeOpacity={0.7}>
+                <View style={[fs.radioCircle, sortBy === s.id && fs.radioCircleOn]}>
+                  {sortBy === s.id && <View style={fs.radioDot} />}
+                </View>
+                <Text style={[fs.radioLabel, sortBy === s.id && fs.radioLabelOn]}>{s.label}</Text>
+              </TouchableOpacity>
+            ))}
+
+          </ScrollView>
+
+          {/* Footer */}
+          <View style={fs.footer}>
+            <TouchableOpacity style={fs.clearBtn} onPress={onClear}>
+              <Text style={fs.clearBtnText}>CLEAR ALL</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={fs.applyBtn} onPress={onClose}>
+              <Text style={fs.applyBtnText}>APPLY FILTERS</Text>
+            </TouchableOpacity>
+          </View>
+
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const fs = StyleSheet.create({
+  sheet:            { backgroundColor: '#0d0c0a', borderTopWidth: 1, borderTopColor: COLORS.border, maxHeight: SH * 0.85 },
+  sheetHeader:      { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  sheetTitle:       { fontFamily: FONTS.anton, fontSize: 20, color: COLORS.text100, textTransform: 'uppercase', letterSpacing: 1 },
+  sheetCloseBtn:    { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border },
+  sheetCloseBtnText:{ fontFamily: FONTS.mono, fontSize: 14, color: COLORS.text400 },
+  scrollContent:    { padding: SPACING.lg, paddingBottom: SPACING.xl },
+  sectionLabel:     { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: SPACING.sm },
+  chipWrap:         { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
+  radioRow:         { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.sm },
+  radioCircle:      { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
+  radioCircleOn:    { borderColor: COLORS.accent },
+  radioDot:         { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.accent },
+  radioLabel:       { fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1 },
+  radioLabelOn:     { color: COLORS.text100 },
+  footer:           { flexDirection: 'row', gap: SPACING.sm, padding: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.border },
+  clearBtn:         { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
+  clearBtnText:     { fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text400, textTransform: 'uppercase', letterSpacing: 1 },
+  applyBtn:         { flex: 1, paddingVertical: SPACING.md, backgroundColor: COLORS.accent, alignItems: 'center', justifyContent: 'center' },
+  applyBtnText:     { fontFamily: FONTS.anton, fontSize: 14, color: '#0a0908', textTransform: 'uppercase', letterSpacing: 1 },
+});
+
 // ── MAIN SCREEN ───────────────────────────────────────────────────────────────
 
 export default function CodexScreen() {
@@ -667,13 +784,9 @@ export default function CodexScreen() {
   const [activeEquipment, setActiveEquipment] = useState<Set<string>>(new Set());
   const [sortBy,          setSortBy]          = useState('popular');
   const [selected,        setSelected]        = useState<Exercise | null>(null);
+  const [showFilter,      setShowFilter]      = useState(false);
 
   const isPro = false; // wire to subscription hook when available
-
-  const sortIdx = SORTS.findIndex(s => s.id === sortBy);
-  const cycleSort = useCallback(() => {
-    setSortBy(SORTS[(sortIdx + 1) % SORTS.length].id);
-  }, [sortIdx]);
 
   const toggleMuscle = useCallback((id: string) => {
     setActiveMuscles(prev => {
@@ -692,17 +805,11 @@ export default function CodexScreen() {
   }, []);
 
   const clearAll = useCallback(() => {
-    setActiveSplit('all'); setActiveMuscles(new Set()); setActiveEquipment(new Set()); setSearch('');
+    setActiveSplit('all');
+    setActiveMuscles(new Set());
+    setActiveEquipment(new Set());
+    setSearch('');
   }, []);
-
-  const splitGroups = useMemo(() =>
-    SPLITS.reduce<Record<string, typeof SPLITS>>((acc, s) => {
-      if (s.id === 'all') { acc.all = [s]; return acc; }
-      if (!acc[s.group]) acc[s.group] = [];
-      acc[s.group].push(s);
-      return acc;
-    }, {}),
-  []);
 
   const filtered = useMemo(() => {
     let result = exercises.filter(ex => {
@@ -721,87 +828,62 @@ export default function CodexScreen() {
     return result;
   }, [exercises, search, activeSplit, activeMuscles, activeEquipment, sortBy]);
 
-  const totalActive = (activeSplit !== 'all' ? 1 : 0) + activeMuscles.size + activeEquipment.size + (search ? 1 : 0);
+  const filterCount = (activeSplit !== 'all' ? 1 : 0) + activeMuscles.size + activeEquipment.size;
+
+  const activePills = useMemo(() => {
+    const pills: { key: string; label: string; onRemove: () => void }[] = [];
+    if (activeSplit !== 'all') {
+      const s = SPLITS.find(x => x.id === activeSplit);
+      if (s) pills.push({ key: `split_${activeSplit}`, label: s.label, onRemove: () => setActiveSplit('all') });
+    }
+    activeMuscles.forEach(id => {
+      pills.push({ key: `muscle_${id}`, label: MUSCLES[id] ?? id, onRemove: () => toggleMuscle(id) });
+    });
+    activeEquipment.forEach(id => {
+      const e = EQUIPMENT.find(x => x.id === id);
+      pills.push({ key: `equip_${id}`, label: e?.label ?? id, onRemove: () => toggleEquipment(id) });
+    });
+    return pills;
+  }, [activeSplit, activeMuscles, activeEquipment]);
 
   const ListHeader = useCallback(() => (
     <View>
-      {/* HEADER */}
-      <View style={sc.header}>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: SPACING.sm }}>
-          <Text style={sc.titleGray}>Exercise</Text>
-          <Text style={sc.titleOrange}>Codex</Text>
-        </View>
-        <Text style={sc.subtitle}>
-          {exercises.length} exercises · {exercises.filter(e => e.premium).length} pro-gated · {filtered.length} matching
-        </Text>
+      {/* HEADER ROW: CODEX | search | FILTER */}
+      <View style={sc.headerRow}>
+        <Text style={sc.titleMain}>CODEX</Text>
+        <TextInput
+          style={sc.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search exercises…"
+          placeholderTextColor={COLORS.text700}
+        />
+        <TouchableOpacity
+          style={[sc.filterBtn, filterCount > 0 && sc.filterBtnActive]}
+          onPress={() => setShowFilter(true)}
+          activeOpacity={0.8}
+        >
+          <Text style={[sc.filterBtnText, filterCount > 0 && sc.filterBtnTextActive]}>
+            {filterCount > 0 ? `FILTER ●${filterCount}` : 'FILTER'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* FILTER BOX */}
-      <View style={sc.filterBox}>
-
-        {/* Row 1 — Splits */}
-        <Text style={sc.filterLabel}>Training Split</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sc.filterRow}>
-          {Object.entries(splitGroups).map(([group, splits]) => (
-            <React.Fragment key={group}>
-              {group !== 'all' && <Text style={sc.groupSep}>{group} ·</Text>}
-              {splits.map(s => (
-                <Chip key={s.id} active={activeSplit === s.id} onPress={() => setActiveSplit(s.id)}>
-                  {s.label}
-                </Chip>
-              ))}
-            </React.Fragment>
+      {/* ACTIVE FILTER PILLS — dismissible */}
+      {activePills.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sc.pillsRow}>
+          {activePills.map(p => (
+            <TouchableOpacity key={p.key} style={sc.activePill} onPress={p.onRemove} activeOpacity={0.7}>
+              <Text style={sc.activePillText}>{p.label} ×</Text>
+            </TouchableOpacity>
           ))}
         </ScrollView>
+      )}
 
-        {/* Row 2 — Muscles */}
-        <Text style={[sc.filterLabel, { marginTop: SPACING.md }]}>
-          Muscle Group
-          <Text style={sc.filterSub}> · {activeMuscles.size > 0 ? `${activeMuscles.size} selected` : 'multi'}</Text>
-        </Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sc.filterRow}>
-          {Object.entries(MUSCLES).map(([id, label]) => (
-            <Chip key={id} active={activeMuscles.has(id)} onPress={() => toggleMuscle(id)}>
-              {label}
-            </Chip>
-          ))}
-        </ScrollView>
-
-        {/* Row 3 — Equipment */}
-        <Text style={[sc.filterLabel, { marginTop: SPACING.md }]}>Equipment</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sc.filterRow}>
-          {EQUIPMENT.map(e => (
-            <Chip key={e.id} active={activeEquipment.has(e.id)} onPress={() => toggleEquipment(e.id)}>
-              {e.label}
-            </Chip>
-          ))}
-        </ScrollView>
-
-        {/* Row 4 — Search + Sort */}
-        <View style={sc.searchRow}>
-          <TextInput
-            style={sc.searchInput}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search exercises…"
-            placeholderTextColor={COLORS.text700}
-          />
-          <TouchableOpacity style={sc.sortBtn} onPress={cycleSort}>
-            <Text style={sc.sortText}>{SORTS[sortIdx]?.label} ▾</Text>
-          </TouchableOpacity>
-        </View>
-
-        {totalActive > 0 && (
-          <TouchableOpacity onPress={clearAll} style={sc.clearRow}>
-            <Text style={sc.clearText}>Clear all ({totalActive})</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Result count */}
+      {/* RESULT COUNT */}
       <Text style={sc.resultCount}>{filtered.length} exercises</Text>
     </View>
-  ), [exercises.length, filtered.length, activeSplit, activeMuscles, activeEquipment, search, sortBy, sortIdx, splitGroups]);
+  ), [search, filterCount, activePills, filtered.length]);
 
   if (isLoading) {
     return (
@@ -838,6 +920,20 @@ export default function CodexScreen() {
         onClose={() => setSelected(null)}
         isPro={isPro}
       />
+
+      <FilterSheet
+        visible={showFilter}
+        onClose={() => setShowFilter(false)}
+        onClear={() => { clearAll(); setShowFilter(false); }}
+        activeSplit={activeSplit}
+        setActiveSplit={setActiveSplit}
+        activeMuscles={activeMuscles}
+        toggleMuscle={toggleMuscle}
+        activeEquipment={activeEquipment}
+        toggleEquipment={toggleEquipment}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+      />
     </SafeAreaView>
   );
 }
@@ -845,32 +941,26 @@ export default function CodexScreen() {
 // ── STYLES ────────────────────────────────────────────────────────────────────
 
 const sc = StyleSheet.create({
-  root:          { flex: 1, backgroundColor: COLORS.bg },
-  loadingWrap:   { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  listContent:   { paddingHorizontal: SPACING.lg, paddingBottom: 48 },
-  columnWrapper: { gap: CARD_GAP, justifyContent: 'space-between' },
+  root:              { flex: 1, backgroundColor: COLORS.bg },
+  loadingWrap:       { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  listContent:       { paddingHorizontal: SPACING.lg, paddingBottom: 48 },
+  columnWrapper:     { gap: CARD_GAP, justifyContent: 'space-between' },
 
-  header:        { paddingTop: SPACING.lg, paddingBottom: SPACING.lg, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginBottom: SPACING.lg },
-  titleGray:     { fontFamily: FONTS.anton, fontSize: 32, color: COLORS.text100, textTransform: 'uppercase' },
-  titleOrange:   { fontFamily: FONTS.anton, fontSize: 32, color: COLORS.accent, textTransform: 'uppercase' },
-  subtitle:      { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, marginTop: 4, textTransform: 'uppercase', letterSpacing: 1 },
+  headerRow:         { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingTop: SPACING.lg, paddingBottom: SPACING.sm },
+  titleMain:         { fontFamily: FONTS.anton, fontSize: 28, color: COLORS.accent, textTransform: 'uppercase' },
+  searchInput:       { flex: 1, fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text100, backgroundColor: 'rgba(12,11,10,0.6)', borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: SPACING.sm, paddingVertical: Platform.OS === 'ios' ? SPACING.xs : 5, height: 36 },
+  filterBtn:         { paddingHorizontal: SPACING.sm, height: 36, borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,11,10,0.6)', alignItems: 'center', justifyContent: 'center' },
+  filterBtnActive:   { borderColor: COLORS.accentBorder, backgroundColor: COLORS.accentMuted },
+  filterBtnText:     { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400, textTransform: 'uppercase', letterSpacing: 1 },
+  filterBtnTextActive:{ color: COLORS.orange300 },
 
-  filterBox:     { borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.bgCard, padding: SPACING.md, marginBottom: SPACING.md },
-  filterLabel:   { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: SPACING.xs },
-  filterSub:     { color: COLORS.text700 },
-  filterRow:     { flexDirection: 'row', gap: SPACING.xs, paddingBottom: 2 },
-  groupSep:      { fontFamily: FONTS.mono, fontSize: 8, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1, alignSelf: 'center', marginHorizontal: 3 },
+  pillsRow:          { flexDirection: 'row', gap: SPACING.xs, paddingBottom: SPACING.sm },
+  activePill:        { paddingHorizontal: SPACING.sm, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(237,122,42,0.5)', backgroundColor: 'rgba(237,122,42,0.1)' },
+  activePillText:    { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.orange300, textTransform: 'uppercase', letterSpacing: 0.8 },
 
-  searchRow:     { flexDirection: 'row', gap: SPACING.sm, marginTop: SPACING.md },
-  searchInput:   { flex: 1, fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text100, backgroundColor: 'rgba(12,11,10,0.6)', borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: SPACING.md, paddingVertical: Platform.OS === 'ios' ? SPACING.sm : SPACING.xs },
-  sortBtn:       { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm, borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,11,10,0.6)', justifyContent: 'center' },
-  sortText:      { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text400, textTransform: 'uppercase', letterSpacing: 1 },
-  clearRow:      { alignSelf: 'flex-end', marginTop: SPACING.xs },
-  clearText:     { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1 },
+  resultCount:       { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: SPACING.sm },
 
-  resultCount:   { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: SPACING.sm },
-
-  empty:         { paddingVertical: 80, alignItems: 'center' },
-  emptyTitle:    { fontFamily: FONTS.anton, fontSize: 28, color: COLORS.text700, textTransform: 'uppercase', marginBottom: SPACING.xs },
-  emptyHint:     { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1 },
+  empty:             { paddingVertical: 80, alignItems: 'center' },
+  emptyTitle:        { fontFamily: FONTS.anton, fontSize: 28, color: COLORS.text700, textTransform: 'uppercase', marginBottom: SPACING.xs },
+  emptyHint:         { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text700, textTransform: 'uppercase', letterSpacing: 1 },
 });
