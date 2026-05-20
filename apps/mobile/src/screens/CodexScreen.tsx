@@ -655,10 +655,16 @@ const dt = StyleSheet.create({
   addBtnText:      { fontFamily: FONTS.anton, fontSize: 13, color: COLORS.bg, textTransform: 'uppercase', letterSpacing: 1 },
 });
 
-// ── FILTER ROW SUBSETS ────────────────────────────────────────────────────────
+// ── SPLIT GROUPS (for grouped label display) ──────────────────────────────────
 
-const MAIN_SPLITS = SPLITS.filter(s => ['all','push','pull','legs','upper','lower'].includes(s.id));
-const BRO_SPLITS  = SPLITS.filter(s => s.group === 'Bro');
+const SPLIT_GROUPS: [string, typeof SPLITS][] = (() => {
+  const map = new Map<string, typeof SPLITS>();
+  for (const s of SPLITS) {
+    if (!map.has(s.group)) map.set(s.group, []);
+    map.get(s.group)!.push(s);
+  }
+  return [...map.entries()];
+})();
 
 // ── MAIN SCREEN ───────────────────────────────────────────────────────────────
 
@@ -673,11 +679,6 @@ export default function CodexScreen() {
   const [selected,        setSelected]        = useState<Exercise | null>(null);
 
   const isPro = false; // wire to subscription hook when available
-
-  const sortIdx   = SORTS.findIndex(s => s.id === sortBy);
-  const cycleSort = useCallback(() => {
-    setSortBy(SORTS[(sortIdx + 1) % SORTS.length].id);
-  }, [sortIdx]);
 
   const toggleMuscle = useCallback((id: string) => {
     setActiveMuscles(prev => {
@@ -719,63 +720,37 @@ export default function CodexScreen() {
     return result;
   }, [exercises, search, activeSplit, activeMuscles, activeEquipment, sortBy]);
 
-  const activePills = useMemo(() => {
-    const pills: { key: string; label: string; onRemove: () => void }[] = [];
-    if (activeSplit !== 'all') {
-      const s = SPLITS.find(x => x.id === activeSplit);
-      if (s) pills.push({ key: `split_${activeSplit}`, label: s.label, onRemove: () => setActiveSplit('all') });
-    }
-    activeMuscles.forEach(id => {
-      pills.push({ key: `muscle_${id}`, label: MUSCLES[id] ?? id, onRemove: () => toggleMuscle(id) });
-    });
-    activeEquipment.forEach(id => {
-      const e = EQUIPMENT.find(x => x.id === id);
-      pills.push({ key: `equip_${id}`, label: e?.label ?? id, onRemove: () => toggleEquipment(id) });
-    });
-    return pills;
-  }, [activeSplit, activeMuscles, activeEquipment]);
-
   const ListHeader = useCallback(() => (
     <View>
-      {/* HEADER ROW: CODEX | search | SORT ▾ */}
-      <View style={sc.headerRow}>
-        <Text style={sc.titleMain}>CODEX</Text>
-        <TextInput
-          style={sc.searchInput}
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search exercises…"
-          placeholderTextColor={COLORS.text700}
-        />
-        <TouchableOpacity style={sc.sortBtn} onPress={cycleSort} activeOpacity={0.8}>
-          <Text style={sc.sortBtnText}>{SORTS[sortIdx]?.label ?? 'Sort'} ▾</Text>
-        </TouchableOpacity>
-      </View>
+      {/* TITLE */}
+      <Text style={sc.titleMain}>CODEX</Text>
 
-      {/* ROW 1 — SPLIT: All + main 5, horizontal scroll */}
+      {/* ROW 1 — SEARCH (full width) */}
+      <TextInput
+        style={sc.searchInput}
+        value={search}
+        onChangeText={setSearch}
+        placeholder="Search exercises…"
+        placeholderTextColor={COLORS.text700}
+      />
+
+      {/* ROW 2 — SPLITS with group labels */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sc.filterRow}>
-        {MAIN_SPLITS.map(s => (
-          <Chip key={s.id} active={activeSplit === s.id} onPress={() => setActiveSplit(s.id)}>
-            {s.label}
-          </Chip>
+        {SPLIT_GROUPS.map(([group, splits]) => (
+          <React.Fragment key={group}>
+            {group !== 'all' && (
+              <Text style={sc.groupLabel}>{group} ·</Text>
+            )}
+            {splits.map(s => (
+              <Chip key={s.id} active={activeSplit === s.id} onPress={() => setActiveSplit(s.id)}>
+                {s.label}
+              </Chip>
+            ))}
+          </React.Fragment>
         ))}
       </ScrollView>
 
-      {/* ROW 2 — EQUIPMENT + BRO SPLITS: wrap, no scroll, all visible */}
-      <View style={sc.wrapRow}>
-        {EQUIPMENT.map(e => (
-          <Chip key={e.id} active={activeEquipment.has(e.id)} onPress={() => toggleEquipment(e.id)}>
-            {e.label}
-          </Chip>
-        ))}
-        {BRO_SPLITS.map(s => (
-          <Chip key={s.id} active={activeSplit === s.id} onPress={() => setActiveSplit(s.id)}>
-            {s.label}
-          </Chip>
-        ))}
-      </View>
-
-      {/* ROW 3 — MUSCLE GROUP: horizontal scroll */}
+      {/* ROW 3 — MUSCLES */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sc.filterRow}>
         {Object.entries(MUSCLES).map(([id, label]) => (
           <Chip key={id} active={activeMuscles.has(id)} onPress={() => toggleMuscle(id)}>
@@ -784,26 +759,28 @@ export default function CodexScreen() {
         ))}
       </ScrollView>
 
-      {/* ACTIVE FILTER PILLS + CLEAR ALL */}
-      {activePills.length > 0 && (
-        <View style={sc.activePillsWrap}>
-          {activePills.map(p => (
-            <TouchableOpacity key={p.key} style={sc.activePill} onPress={p.onRemove} activeOpacity={0.7}>
-              <Text style={sc.activePillText}>{p.label} ×</Text>
-            </TouchableOpacity>
-          ))}
-          {activePills.length > 1 && (
-            <TouchableOpacity onPress={clearAll} activeOpacity={0.7} style={sc.clearAllBtn}>
-              <Text style={sc.clearAllText}>CLEAR ALL</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
+      {/* ROW 4 — EQUIPMENT */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={sc.filterRow}>
+        {EQUIPMENT.map(e => (
+          <Chip key={e.id} active={activeEquipment.has(e.id)} onPress={() => toggleEquipment(e.id)}>
+            {e.label}
+          </Chip>
+        ))}
+      </ScrollView>
 
-      {/* RESULT COUNT */}
-      <Text style={sc.resultCount}>{filtered.length} exercises</Text>
+      {/* ROW 5 — SORT chips + result count right-aligned */}
+      <View style={sc.sortRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flex: 1 }} contentContainerStyle={sc.filterRow}>
+          {SORTS.map(s => (
+            <Chip key={s.id} active={sortBy === s.id} onPress={() => setSortBy(s.id)}>
+              {s.label}
+            </Chip>
+          ))}
+        </ScrollView>
+        <Text style={sc.resultCount}>{filtered.length} exercises</Text>
+      </View>
     </View>
-  ), [search, activeSplit, activeMuscles, activeEquipment, sortIdx, cycleSort, filtered.length, activePills]);
+  ), [search, activeSplit, activeMuscles, activeEquipment, sortBy, filtered.length, toggleMuscle, toggleEquipment]);
 
   if (isLoading) {
     return (
@@ -852,22 +829,12 @@ const sc = StyleSheet.create({
   listContent:     { paddingHorizontal: SPACING.lg, paddingBottom: 48 },
   columnWrapper:   { gap: CARD_GAP, justifyContent: 'space-between' },
 
-  headerRow:       { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingTop: SPACING.lg, paddingBottom: SPACING.sm },
-  titleMain:       { fontFamily: FONTS.anton, fontSize: 28, color: COLORS.accent, textTransform: 'uppercase' },
-  searchInput:     { flex: 1, fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text100, backgroundColor: 'rgba(12,11,10,0.6)', borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: SPACING.sm, paddingVertical: Platform.OS === 'ios' ? SPACING.xs : 5, height: 36 },
-  sortBtn:         { paddingHorizontal: SPACING.sm, height: 36, borderWidth: 1, borderColor: COLORS.border, backgroundColor: 'rgba(12,11,10,0.6)', alignItems: 'center', justifyContent: 'center' },
-  sortBtnText:     { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text400, textTransform: 'uppercase', letterSpacing: 1 },
-
-  filterRow:       { flexDirection: 'row', gap: SPACING.xs, paddingBottom: SPACING.sm },
-  wrapRow:         { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs, marginBottom: SPACING.sm },
-
-  activePillsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs, marginBottom: SPACING.xs, alignItems: 'center' },
-  activePill:      { paddingHorizontal: SPACING.sm, paddingVertical: 4, borderWidth: 1, borderColor: 'rgba(237,122,42,0.5)', backgroundColor: 'rgba(237,122,42,0.1)' },
-  activePillText:  { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.orange300, textTransform: 'uppercase', letterSpacing: 0.8 },
-  clearAllBtn:     { paddingHorizontal: SPACING.xs, paddingVertical: 4 },
-  clearAllText:    { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, textTransform: 'uppercase', letterSpacing: 1 },
-
-  resultCount:     { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1, marginBottom: SPACING.sm },
+  titleMain:    { fontFamily: FONTS.anton, fontSize: 28, color: COLORS.accent, textTransform: 'uppercase', paddingTop: SPACING.lg, paddingBottom: SPACING.sm },
+  searchInput:  { fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text100, backgroundColor: 'rgba(12,11,10,0.6)', borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: SPACING.sm, paddingVertical: Platform.OS === 'ios' ? SPACING.xs : 5, height: 36, marginBottom: SPACING.sm },
+  filterRow:    { flexDirection: 'row', gap: SPACING.xs, paddingBottom: SPACING.sm, alignItems: 'center' },
+  groupLabel:   { fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1.5, marginLeft: SPACING.xs, marginRight: 2, alignSelf: 'center' },
+  sortRow:      { flexDirection: 'row', alignItems: 'center' },
+  resultCount:  { fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600, textTransform: 'uppercase', letterSpacing: 1, marginLeft: SPACING.sm, flexShrink: 0 },
 
   empty:           { paddingVertical: 80, alignItems: 'center' },
   emptyTitle:      { fontFamily: FONTS.anton, fontSize: 28, color: COLORS.text700, textTransform: 'uppercase', marginBottom: SPACING.xs },
