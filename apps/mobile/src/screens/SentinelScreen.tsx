@@ -1,4 +1,6 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import { supabase } from '../lib/supabase';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput,
   Modal, StyleSheet, ActivityIndicator, Alert, KeyboardAvoidingView,
@@ -931,55 +933,83 @@ function MealItem({ item, onDelete }: { item: NutritionLog; onDelete: (id: strin
 
 // ── MealSection ────────────────────────────────────────────────────────────
 
-function MealSection({ type, items, onAdd, onScan, onDelete, isPro }: {
+function MealSection({ type, items, onAdd, onScanPlate, onBarcode, onDelete, isPro, defaultExpanded }: {
   type: MealType;
   items: NutritionLog[];
   onAdd: () => void;
-  onScan: () => void;
+  onScanPlate: () => void;
+  onBarcode: () => void;
   onDelete: (id: string) => void;
   isPro: boolean;
+  defaultExpanded: boolean;
 }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const color = MEAL_COLORS[type];
   const icon  = MEAL_ICONS[type];
   const kcal  = items.reduce((s, i) => s + (i.kcal ?? 0), 0);
 
   return (
     <View style={s.card}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+      <TouchableOpacity
+        onPress={() => setExpanded(v => !v)}
+        activeOpacity={0.7}
+        style={{ flexDirection: 'row', alignItems: 'center', marginBottom: expanded ? 10 : 0 }}
+      >
         <View style={{ width: 3, height: 16, backgroundColor: color, marginRight: 8 }} />
         <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color, letterSpacing: 1, textTransform: 'uppercase', flex: 1 }}>
           {icon}  {type}
         </Text>
         {kcal > 0 && (
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500 }}>{kcal} kcal</Text>
-        )}
-      </View>
-
-      {items.map(item => (
-        <MealItem key={item.id} item={item} onDelete={onDelete} />
-      ))}
-
-      {items.length === 0 && (
-        <Text style={{ fontFamily: FONTS.sans, fontSize: 12, color: COLORS.text600, marginBottom: 10 }}>
-          Nothing logged yet
-        </Text>
-      )}
-
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
-        <TouchableOpacity style={s.addBtn} onPress={onAdd}>
-          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, letterSpacing: 1 }}>
-            + ADD FOOD
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, marginRight: 8 }}>
+            {kcal} kcal
           </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.addBtn, { paddingHorizontal: 10 }]} onPress={onScan}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            {!isPro && <CrownIcon size={12} color="#fbbf24" />}
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: isPro ? COLORS.text400 : COLORS.text600, letterSpacing: 1 }}>
-              SCAN BARCODE
+        )}
+        {items.length > 0 && !expanded && (
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, marginRight: 6 }}>
+            {items.length} item{items.length !== 1 ? 's' : ''}
+          </Text>
+        )}
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={12}
+          color={COLORS.text600}
+        />
+      </TouchableOpacity>
+
+      {expanded && (
+        <>
+          {items.map(item => (
+            <MealItem key={item.id} item={item} onDelete={onDelete} />
+          ))}
+
+          {items.length === 0 && (
+            <Text style={{ fontFamily: FONTS.sans, fontSize: 12, color: COLORS.text600, marginBottom: 10 }}>
+              Nothing logged yet
             </Text>
+          )}
+
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
+            <TouchableOpacity style={s.addBtn} onPress={onAdd}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent, letterSpacing: 1 }}>
+                + ADD FOOD
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.addBtn, { paddingHorizontal: 10 }]} onPress={onBarcode}>
+              <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text300, letterSpacing: 1 }}>
+                BARCODE
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.addBtn, { paddingHorizontal: 10 }]} onPress={onScanPlate}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                {!isPro && <CrownIcon size={12} color="#fbbf24" />}
+                <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: isPro ? COLORS.text400 : COLORS.text600, letterSpacing: 1 }}>
+                  SCAN PLATE
+                </Text>
+              </View>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
-      </View>
+        </>
+      )}
     </View>
   );
 }
@@ -1965,6 +1995,121 @@ function TemplatesModal({ visible, mealType, onClose, startMode = 'list' }: {
   );
 }
 
+// ── BarcodeModal ───────────────────────────────────────────────────────────
+
+function BarcodeModal({ visible, mealType, onClose, onResult }: {
+  visible: boolean;
+  mealType: MealType;
+  onClose: () => void;
+  onResult: (result: ScanResult) => void;
+}) {
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanning, setScanning] = useState(false);
+  const scannedRef = useRef(false);
+
+  useEffect(() => {
+    if (visible) {
+      scannedRef.current = false;
+      setScanning(false);
+    }
+  }, [visible]);
+
+  async function handleBarcode({ data }: { data: string }) {
+    if (scannedRef.current || scanning) return;
+    scannedRef.current = true;
+    setScanning(true);
+    try {
+      const { data: res, error } = await supabase.functions.invoke('search-fatsecret', {
+        body: { barcode: data },
+      });
+      if (error) throw error;
+      if (!res || !res.name) throw new Error('Product not found in database.');
+      onResult({
+        meal_name:  res.name,
+        kcal:       Math.round(res.kcal       ?? 0),
+        protein_g:  Math.round(res.protein_g  ?? 0),
+        carbs_g:    Math.round(res.carbs_g    ?? 0),
+        fat_g:      Math.round(res.fat_g      ?? 0),
+        confidence: 100,
+      } as ScanResult);
+      onClose();
+    } catch (e: any) {
+      Alert.alert('Not Found', e?.message ?? 'Barcode not recognised. Try manual entry.');
+      scannedRef.current = false;
+      setScanning(false);
+    }
+  }
+
+  if (!visible) return null;
+
+  if (!permission) {
+    return (
+      <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color={COLORS.accent} />
+        </SafeAreaView>
+      </Modal>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.bg, padding: 24, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 13, color: COLORS.text300, textAlign: 'center', marginBottom: 20, lineHeight: 20 }}>
+            Camera access is required to scan barcodes.
+          </Text>
+          <TouchableOpacity style={s.addBtn} onPress={requestPermission}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.accent }}>ALLOW CAMERA</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={{ marginTop: 16 }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text600 }}>CANCEL</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: COLORS.bg }}>
+          <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text300, letterSpacing: 1, flex: 1 }}>
+            SCAN BARCODE · {mealType.toUpperCase()}
+          </Text>
+          <TouchableOpacity onPress={onClose}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: COLORS.text500 }}>✕</Text>
+          </TouchableOpacity>
+        </View>
+
+        <CameraView
+          style={{ flex: 1 }}
+          facing="back"
+          barcodeScannerSettings={{ barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'] }}
+          onBarcodeScanned={scanning ? undefined : handleBarcode}
+        />
+
+        {scanning && (
+          <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, backgroundColor: 'rgba(10,9,8,0.85)', alignItems: 'center' }}>
+            <ActivityIndicator color={COLORS.accent} />
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 11, color: COLORS.text300, marginTop: 10, letterSpacing: 1 }}>
+              LOOKING UP PRODUCT…
+            </Text>
+          </View>
+        )}
+
+        {!scanning && (
+          <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 24, backgroundColor: 'rgba(10,9,8,0.7)', alignItems: 'center' }}>
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: COLORS.text500, letterSpacing: 1 }}>
+              Point camera at barcode
+            </Text>
+          </View>
+        )}
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
 // ── SentinelScreen ─────────────────────────────────────────────────────────
 
 export default function SentinelScreen() {
@@ -1980,6 +2125,9 @@ export default function SentinelScreen() {
   const [scanResult, setScanResult]               = useState<ScanResult | null>(null);
   const [templatesMealType, setTemplatesMealType] = useState<MealType>('breakfast');
   const [showTemplates, setShowTemplates]         = useState(false);
+  const [barcodeMealType, setBarcodeMealType]     = useState<MealType>('breakfast');
+  const [showBarcode, setShowBarcode]             = useState(false);
+  const [barcodeResult, setBarcodeResult]         = useState<ScanResult | null>(null);
 
   const { data: nutrition, isLoading } = useDailyNutrition(selectedDate);
   const { data: profile }              = useProfile();
@@ -1994,6 +2142,19 @@ export default function SentinelScreen() {
   const isPro   = profile?.subscription_tier === 'pro' || profile?.subscription_tier === 'elite';
   const streak  = (profile as any)?.current_streak ?? 0;
   const goal    = profile?.goal;
+
+  const eatBackCalories = (profile?.settings?.eatBackCalories as boolean | undefined) ?? false;
+  const adjustedTarget  = eatBackCalories && caloriesBurned > 0
+    ? macros.kcal + caloriesBurned
+    : macros.kcal;
+
+  // Default-expand the last meal type that has logged items (or breakfast if none)
+  const lastNonEmptyMealType = useMemo<MealType>(() => {
+    const mealTypesWithItems = MEAL_TYPES.filter(mt => logs.some(l => l.meal_type === mt));
+    return mealTypesWithItems.length > 0
+      ? mealTypesWithItems[mealTypesWithItems.length - 1]
+      : 'breakfast';
+  }, [logs]);
 
   function prevDay() {
     const d = new Date(selectedDate + 'T12:00:00');
@@ -2010,9 +2171,10 @@ export default function SentinelScreen() {
 
   function openSearch(mt: MealType) { setSearchMealType(mt); setShowSearch(true); }
   function openBuilder(mt: MealType) { setTemplatesMealType(mt); setShowTemplates(true); }
+  function openBarcode(mt: MealType) { setBarcodeMealType(mt); setShowBarcode(true); }
 
-  async function openScan(mt: MealType) {
-    if (!isPro) { setProModal({ visible: true, feature: 'Meal scanning' }); return; }
+  async function openScanPlate(mt: MealType) {
+    if (!isPro) { setProModal({ visible: true, feature: 'Plate scanning' }); return; }
     setScanMealType(mt);
     try {
       const result = await scanMeal();
@@ -2086,7 +2248,7 @@ export default function SentinelScreen() {
 
           {/* Ring + macro bars */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 6 }}>
-            <CalorieRing consumed={netDisplay ? netKcal : totals.kcal} target={macros.kcal} onPress={() => setBreakdownMacro('kcal')} />
+            <CalorieRing consumed={netDisplay ? netKcal : totals.kcal} target={adjustedTarget} onPress={() => setBreakdownMacro('kcal')} />
             <View style={{ flex: 1 }}>
               <MacroBar label="PROTEIN" consumed={totals.protein} target={macros.protein} color={COLORS.red400}  onPress={() => setBreakdownMacro('protein')} />
               <MacroBar label="CARBS"   consumed={totals.carbs}   target={macros.carbs}   color={COLORS.blue400} onPress={() => setBreakdownMacro('carbs')} />
@@ -2110,6 +2272,12 @@ export default function SentinelScreen() {
             )}
           </View>
 
+          {eatBackCalories && caloriesBurned > 0 && (
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: '#4ade80', marginTop: 4, letterSpacing: 0.5 }}>
+              +{caloriesBurned} kcal from training · earned back
+            </Text>
+          )}
+
           {netDisplay && (
             <Text style={{ fontFamily: FONTS.mono, fontSize: 9, color: COLORS.text600, marginTop: 6, letterSpacing: 0.5 }}>
               Ring shows net kcal (consumed − burned). Raw: {totals.kcal} consumed.
@@ -2127,9 +2295,11 @@ export default function SentinelScreen() {
             type={mt}
             items={logs.filter(l => l.meal_type === mt)}
             onAdd={() => openSearch(mt)}
-            onScan={() => openScan(mt)}
+            onScanPlate={() => openScanPlate(mt)}
+            onBarcode={() => openBarcode(mt)}
             onDelete={handleDelete}
             isPro={isPro}
+            defaultExpanded={mt === lastNonEmptyMealType}
           />
         ))}
 
@@ -2183,6 +2353,18 @@ export default function SentinelScreen() {
         mealType={scanMealType}
         onConfirm={logMeal}
         onClose={() => setScanResult(null)}
+      />
+      <BarcodeModal
+        visible={showBarcode}
+        mealType={barcodeMealType}
+        onClose={() => setShowBarcode(false)}
+        onResult={result => { setBarcodeResult(result); setScanMealType(barcodeMealType); }}
+      />
+      <ScanResultModal
+        result={barcodeResult}
+        mealType={barcodeMealType}
+        onConfirm={logMeal}
+        onClose={() => setBarcodeResult(null)}
       />
       <MacroBreakdownSheet
         visible={breakdownMacro !== null}
